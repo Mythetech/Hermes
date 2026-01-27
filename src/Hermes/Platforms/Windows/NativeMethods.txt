@@ -1,0 +1,155 @@
+// Window Registration and Creation
+RegisterClassExW
+UnregisterClassW
+CreateWindowExW
+DestroyWindow
+DefWindowProcW
+ShowWindow
+UpdateWindow
+SetWindowTextW
+GetWindowTextW
+GetWindowTextLengthW
+SetWindowPos
+GetWindowRect
+GetClientRect
+GetWindowLongPtrW
+SetWindowLongPtrW
+LoadImageW
+LoadCursorW
+CreateSolidBrush
+DeleteObject
+GetModuleHandleW
+
+// Message Loop
+GetMessageW
+TranslateMessage
+DispatchMessageW
+PostMessageW
+SendMessageW
+PostQuitMessage
+PeekMessageW
+
+// DPI Awareness
+SetThreadDpiAwarenessContext
+GetDpiForWindow
+GetSystemMetricsForDpi
+
+// Monitor Info
+GetSystemMetrics
+MonitorFromWindow
+GetMonitorInfoW
+
+// Menu APIs
+CreateMenu
+CreatePopupMenu
+DestroyMenu
+AppendMenuW
+InsertMenuW
+RemoveMenu
+SetMenu
+DrawMenuBar
+GetMenu
+GetSubMenu
+GetMenuItemCount
+EnableMenuItem
+CheckMenuItem
+ModifyMenuW
+GetMenuItemInfoW
+SetMenuItemInfoW
+
+// Dialogs - COM
+IFileOpenDialog
+IFileSaveDialog
+IShellItem
+IShellItemArray
+SHCreateItemFromParsingName
+CoCreateInstance
+CoTaskMemFree
+
+// MessageBox
+MessageBoxW
+
+// Window Messages (constants)
+WM_CREATE
+WM_DESTROY
+WM_CLOSE
+WM_SIZE
+WM_MOVE
+WM_ACTIVATE
+WM_SETFOCUS
+WM_KILLFOCUS
+WM_PAINT
+WM_COMMAND
+WM_USER
+WM_GETMINMAXINFO
+WM_DPICHANGED
+
+// Window Styles
+WS_OVERLAPPEDWINDOW
+WS_POPUP
+WS_VISIBLE
+WS_THICKFRAME
+WS_MINIMIZEBOX
+WS_MAXIMIZEBOX
+WS_MINIMIZE
+WS_MAXIMIZE
+
+// Extended Window Styles
+WS_EX_APPWINDOW
+WS_EX_TOPMOST
+
+// Show Window Commands
+SW_SHOW
+SW_HIDE
+SW_SHOWDEFAULT
+SW_MAXIMIZE
+SW_MINIMIZE
+SW_RESTORE
+
+// SetWindowPos Flags
+SWP_NOMOVE
+SWP_NOSIZE
+SWP_NOZORDER
+SWP_NOACTIVATE
+
+// Window Activate States
+WA_INACTIVE
+WA_ACTIVE
+WA_CLICKACTIVE
+
+// Menu Flags
+MF_POPUP
+MF_STRING
+MF_SEPARATOR
+MF_ENABLED
+MF_GRAYED
+MF_CHECKED
+MF_UNCHECKED
+MF_BYCOMMAND
+MF_BYPOSITION
+
+// MessageBox Styles
+MB_OK
+MB_OKCANCEL
+MB_YESNO
+MB_YESNOCANCEL
+MB_ICONINFORMATION
+MB_ICONWARNING
+MB_ICONERROR
+MB_ICONQUESTION
+
+// MessageBox Return Values
+IDOK
+IDCANCEL
+IDYES
+IDNO
+
+// Cursors
+IDC_ARROW
+
+// Class Styles
+CS_HREDRAW
+CS_VREDRAW
+
+// Color References
+COLOR_WINDOW

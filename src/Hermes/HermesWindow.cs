@@ -16,6 +16,22 @@ public sealed class HermesWindow : IDisposable
     private bool _disposed;
 
     /// <summary>
+    /// Pre-warm platform resources for faster first-window creation.
+    /// Call this early in application startup (e.g., at the start of Main()).
+    /// On Windows, this begins WebView2 environment creation on a background thread.
+    /// </summary>
+    public static void Prewarm()
+    {
+#if WINDOWS
+        if (OperatingSystem.IsWindows())
+        {
+            Platforms.Windows.WebView2EnvironmentPool.Instance.BeginPrewarm();
+        }
+#endif
+        // Linux and macOS: no pre-warming needed (GTK init is fast, macOS uses native WebKit)
+    }
+
+    /// <summary>
     /// Create a new Hermes window for the current platform.
     /// </summary>
     public HermesWindow()
@@ -426,6 +442,15 @@ public sealed class HermesWindow : IDisposable
 
     #endregion
 
+    #region Internal
+
+    /// <summary>
+    /// Gets the underlying platform backend. Used by Hermes.Blazor for threading.
+    /// </summary>
+    internal IHermesWindowBackend Backend => _backend;
+
+    #endregion
+
     #region Private Helpers
 
     private void EnsureInitialized()
@@ -443,38 +468,77 @@ public sealed class HermesWindow : IDisposable
 
     private static IHermesWindowBackend CreatePlatformBackend()
     {
+#if WINDOWS
         if (OperatingSystem.IsWindows())
-            throw new NotImplementedException("Windows backend not yet implemented");
+            return new Platforms.Windows.WindowsWindowBackend();
+#endif
+#if LINUX
         if (OperatingSystem.IsLinux())
-            throw new NotImplementedException("Linux backend not yet implemented");
+            return new Platforms.Linux.LinuxWindowBackend();
+#endif
+#if MACOS
         if (OperatingSystem.IsMacOS())
-            throw new NotImplementedException("macOS backend not yet implemented");
-
-        throw new PlatformNotSupportedException("Hermes only supports Windows, Linux, and macOS.");
+            return new Platforms.macOS.MacWindowBackend();
+#endif
+        throw new PlatformNotSupportedException($"Hermes is not supported on this platform. Current OS: {Environment.OSVersion}");
     }
 
-    private static IMenuBackend CreatePlatformMenuBackend()
+    private IMenuBackend CreatePlatformMenuBackend()
     {
+#if WINDOWS
         if (OperatingSystem.IsWindows())
-            throw new NotImplementedException("Windows menu backend not yet implemented");
+        {
+            EnsureInitialized();
+            var winBackend = (Platforms.Windows.WindowsWindowBackend)_backend;
+            return winBackend.CreateMenuBackend();
+        }
+#endif
+#if LINUX
         if (OperatingSystem.IsLinux())
-            throw new NotImplementedException("Linux menu backend not yet implemented");
+        {
+            EnsureInitialized();
+            var linuxBackend = (Platforms.Linux.LinuxWindowBackend)_backend;
+            return linuxBackend.CreateMenuBackend();
+        }
+#endif
+#if MACOS
         if (OperatingSystem.IsMacOS())
-            throw new NotImplementedException("macOS menu backend not yet implemented");
-
-        throw new PlatformNotSupportedException("Hermes only supports Windows, Linux, and macOS.");
+        {
+            EnsureInitialized();
+            var macBackend = (Platforms.macOS.MacWindowBackend)_backend;
+            return macBackend.CreateMenuBackend();
+        }
+#endif
+        throw new PlatformNotSupportedException($"Menu backend not supported on this platform. Current OS: {Environment.OSVersion}");
     }
 
-    private static IDialogBackend CreatePlatformDialogBackend()
+    private IDialogBackend CreatePlatformDialogBackend()
     {
+#if WINDOWS
         if (OperatingSystem.IsWindows())
-            throw new NotImplementedException("Windows dialog backend not yet implemented");
+        {
+            EnsureInitialized();
+            var winBackend = (Platforms.Windows.WindowsWindowBackend)_backend;
+            return winBackend.CreateDialogBackend();
+        }
+#endif
+#if LINUX
         if (OperatingSystem.IsLinux())
-            throw new NotImplementedException("Linux dialog backend not yet implemented");
+        {
+            EnsureInitialized();
+            var linuxBackend = (Platforms.Linux.LinuxWindowBackend)_backend;
+            return linuxBackend.CreateDialogBackend();
+        }
+#endif
+#if MACOS
         if (OperatingSystem.IsMacOS())
-            throw new NotImplementedException("macOS dialog backend not yet implemented");
-
-        throw new PlatformNotSupportedException("Hermes only supports Windows, Linux, and macOS.");
+        {
+            EnsureInitialized();
+            var macBackend = (Platforms.macOS.MacWindowBackend)_backend;
+            return macBackend.CreateDialogBackend();
+        }
+#endif
+        throw new PlatformNotSupportedException($"Dialog backend not supported on this platform. Current OS: {Environment.OSVersion}");
     }
 
     #endregion

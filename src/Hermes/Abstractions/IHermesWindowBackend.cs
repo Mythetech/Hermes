@@ -89,10 +89,27 @@ public interface IHermesWindowBackend : IDisposable
     #region Threading
 
     /// <summary>
-    /// Execute an action on the UI thread.
-    /// If already on the UI thread, executes synchronously.
+    /// Gets the managed thread ID of the UI thread.
+    /// Used by Blazor's SynchronizationContext to avoid reflection.
+    /// </summary>
+    int UIThreadId { get; }
+
+    /// <summary>
+    /// Returns true if the calling thread is the UI thread.
+    /// </summary>
+    bool CheckAccess();
+
+    /// <summary>
+    /// Execute an action on the UI thread synchronously.
+    /// If already on the UI thread, executes immediately.
     /// </summary>
     void Invoke(Action action);
+
+    /// <summary>
+    /// Execute an action on the UI thread asynchronously.
+    /// Returns immediately without waiting for execution.
+    /// </summary>
+    void BeginInvoke(Action action);
 
     #endregion
 

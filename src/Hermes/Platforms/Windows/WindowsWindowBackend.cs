@@ -1,0 +1,660 @@
+using System.Collections.Concurrent;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using Hermes.Abstractions;
+using Microsoft.Web.WebView2.Core;
+using Windows.Win32;
+using Windows.Win32.Foundation;
+using Windows.Win32.Graphics.Gdi;
+using Windows.Win32.UI.WindowsAndMessaging;
+
+namespace Hermes.Platforms.Windows;
+
+[SupportedOSPlatform("windows")]
+internal sealed class WindowsWindowBackend : IHermesWindowBackend
+{
+    private const uint WM_USER_INVOKE = PInvoke.WM_USER + 0x0002;
+    private const string WindowClassName = "HermesWindow";
+
+    private static readonly ConcurrentDictionary<HWND, WindowsWindowBackend> s_hwndToInstance = new();
+    private static HINSTANCE s_hInstance;
+    private static bool s_classRegistered;
+    private static readonly object s_registrationLock = new();
+
+    private HWND _hwnd;
+    private HermesWindowOptions _options = null!;
+    private bool _isInitialized;
+    private bool _isDisposed;
+    private int _uiThreadId;
+
+    private CoreWebView2Environment? _webViewEnvironment;
+    private CoreWebView2Controller? _webViewController;
+    private CoreWebView2? _webView;
+    private TaskCompletionSource? _webViewReady;
+
+    private readonly ConcurrentQueue<(Action Action, TaskCompletionSource Tcs)> _invokeQueue = new();
+    private readonly Dictionary<string, Func<string, Stream?>> _customSchemeHandlers = new();
+
+    private WindowsMenuBackend? _menuBackend;
+
+    public event Action? Closing;
+    public event Action<int, int>? Resized;
+    public event Action<int, int>? Moved;
+    public event Action? FocusIn;
+    public event Action? FocusOut;
+    public event Action<string>? WebMessageReceived;
+
+    public void Initialize(HermesWindowOptions options)
+    {
+        if (_isInitialized)
+            throw new InvalidOperationException("Window already initialized");
+
+        _options = options;
+        _uiThreadId = Environment.CurrentManagedThreadId;
+
+        EnsureWindowClassRegistered();
+
+        var style = CalculateWindowStyle(options);
+        var exStyle = CalculateExtendedStyle(options);
+
+        int x = options.X ?? PInvoke.CW_USEDEFAULT;
+        int y = options.Y ?? PInvoke.CW_USEDEFAULT;
+
+        if (options.CenterOnScreen)
+        {
+            x = PInvoke.CW_USEDEFAULT;
+            y = PInvoke.CW_USEDEFAULT;
+        }
+
+        unsafe
+        {
+            fixed (char* className = WindowClassName)
+            fixed (char* title = options.Title)
+            {
+                _hwnd = PInvoke.CreateWindowEx(
+                    exStyle,
+                    className,
+                    title,
+                    style,
+                    x, y,
+                    options.Width, options.Height,
+                    HWND.Null,
+                    HMENU.Null,
+                    s_hInstance,
+                    null);
+            }
+        }
+
+        if (_hwnd.IsNull)
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to create window");
+
+        s_hwndToInstance[_hwnd] = this;
+
+        if (!string.IsNullOrEmpty(options.IconPath))
+            SetIcon(options.IconPath);
+
+        if (options.CenterOnScreen)
+            CenterWindow();
+
+        _isInitialized = true;
+    }
+
+    public void Show()
+    {
+        ThrowIfNotInitialized();
+
+        var showCmd = _options.Maximized ? SHOW_WINDOW_CMD.SW_MAXIMIZE
+            : _options.Minimized ? SHOW_WINDOW_CMD.SW_MINIMIZE
+            : SHOW_WINDOW_CMD.SW_SHOW;
+
+        PInvoke.ShowWindow(_hwnd, showCmd);
+        PInvoke.UpdateWindow(_hwnd);
+
+        _ = InitializeWebViewAsync();
+    }
+
+    public void WaitForClose()
+    {
+        Show();
+        RunMessageLoop();
+    }
+
+    public void Close()
+    {
+        if (_isInitialized && !_hwnd.IsNull)
+        {
+            PInvoke.PostMessage(_hwnd, PInvoke.WM_CLOSE, 0, 0);
+        }
+    }
+
+    public string Title
+    {
+        get
+        {
+            ThrowIfNotInitialized();
+            int length = PInvoke.GetWindowTextLength(_hwnd) + 1;
+            if (length <= 1) return string.Empty;
+
+            unsafe
+            {
+                Span<char> buffer = stackalloc char[length];
+                fixed (char* ptr = buffer)
+                {
+                    PInvoke.GetWindowText(_hwnd, ptr, length);
+                }
+                return new string(buffer.TrimEnd('\0'));
+            }
+        }
+        set
+        {
+            ThrowIfNotInitialized();
+            PInvoke.SetWindowText(_hwnd, value);
+        }
+    }
+
+    public (int Width, int Height) Size
+    {
+        get
+        {
+            ThrowIfNotInitialized();
+            PInvoke.GetWindowRect(_hwnd, out var rect);
+            return (rect.right - rect.left, rect.bottom - rect.top);
+        }
+        set
+        {
+            ThrowIfNotInitialized();
+            PInvoke.SetWindowPos(_hwnd, HWND.Null, 0, 0, value.Width, value.Height,
+                SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOZORDER);
+        }
+    }
+
+    public (int X, int Y) Position
+    {
+        get
+        {
+            ThrowIfNotInitialized();
+            PInvoke.GetWindowRect(_hwnd, out var rect);
+            return (rect.left, rect.top);
+        }
+        set
+        {
+            ThrowIfNotInitialized();
+            PInvoke.SetWindowPos(_hwnd, HWND.Null, value.X, value.Y, 0, 0,
+                SET_WINDOW_POS_FLAGS.SWP_NOSIZE | SET_WINDOW_POS_FLAGS.SWP_NOZORDER);
+        }
+    }
+
+    public bool IsMaximized
+    {
+        get
+        {
+            ThrowIfNotInitialized();
+            var style = PInvoke.GetWindowLongPtr(_hwnd, WINDOW_LONG_PTR_INDEX.GWL_STYLE);
+            return ((WINDOW_STYLE)style & WINDOW_STYLE.WS_MAXIMIZE) != 0;
+        }
+        set
+        {
+            ThrowIfNotInitialized();
+            PInvoke.ShowWindow(_hwnd, value ? SHOW_WINDOW_CMD.SW_MAXIMIZE : SHOW_WINDOW_CMD.SW_RESTORE);
+        }
+    }
+
+    public bool IsMinimized
+    {
+        get
+        {
+            ThrowIfNotInitialized();
+            var style = PInvoke.GetWindowLongPtr(_hwnd, WINDOW_LONG_PTR_INDEX.GWL_STYLE);
+            return ((WINDOW_STYLE)style & WINDOW_STYLE.WS_MINIMIZE) != 0;
+        }
+        set
+        {
+            ThrowIfNotInitialized();
+            PInvoke.ShowWindow(_hwnd, value ? SHOW_WINDOW_CMD.SW_MINIMIZE : SHOW_WINDOW_CMD.SW_RESTORE);
+        }
+    }
+
+    public void NavigateToUrl(string url)
+    {
+        ThrowIfNotInitialized();
+        if (_webView is not null)
+        {
+            _webView.Navigate(url);
+        }
+        else
+        {
+            _options.StartUrl = url;
+            _options.StartHtml = null;
+        }
+    }
+
+    public void NavigateToString(string html)
+    {
+        ThrowIfNotInitialized();
+        if (_webView is not null)
+        {
+            _webView.NavigateToString(html);
+        }
+        else
+        {
+            _options.StartHtml = html;
+            _options.StartUrl = null;
+        }
+    }
+
+    public void SendWebMessage(string message)
+    {
+        ThrowIfNotInitialized();
+        _webView?.PostWebMessageAsString(message);
+    }
+
+    public void RegisterCustomScheme(string scheme, Func<string, Stream?> handler)
+    {
+        _customSchemeHandlers[scheme] = handler;
+
+        if (_webView is not null)
+        {
+            _webView.AddWebResourceRequestedFilter($"{scheme}:*", CoreWebView2WebResourceContext.All);
+        }
+    }
+
+    public int UIThreadId => _uiThreadId;
+
+    public bool CheckAccess() => Environment.CurrentManagedThreadId == _uiThreadId;
+
+    public void Invoke(Action action)
+    {
+        if (CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _invokeQueue.Enqueue((action, tcs));
+
+        PInvoke.PostMessage(_hwnd, WM_USER_INVOKE, 0, 0);
+
+        tcs.Task.GetAwaiter().GetResult();
+    }
+
+    public void BeginInvoke(Action action)
+    {
+        if (CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        // Fire-and-forget: enqueue without waiting
+        _invokeQueue.Enqueue((action, new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)));
+        PInvoke.PostMessage(_hwnd, WM_USER_INVOKE, 0, 0);
+    }
+
+    public void Dispose()
+    {
+        if (_isDisposed) return;
+        _isDisposed = true;
+
+        _webViewController?.Close();
+        _webViewController = null;
+        _webView = null;
+        _webViewEnvironment = null;
+
+        if (!_hwnd.IsNull)
+        {
+            s_hwndToInstance.TryRemove(_hwnd, out _);
+            if (_isInitialized)
+            {
+                PInvoke.DestroyWindow(_hwnd);
+            }
+            _hwnd = HWND.Null;
+        }
+    }
+
+    internal WindowsMenuBackend CreateMenuBackend()
+    {
+        ThrowIfNotInitialized();
+        _menuBackend ??= new WindowsMenuBackend(_hwnd);
+        return _menuBackend;
+    }
+
+    internal WindowsDialogBackend CreateDialogBackend()
+    {
+        ThrowIfNotInitialized();
+        return new WindowsDialogBackend(_hwnd);
+    }
+
+    internal HWND Handle => _hwnd;
+
+    private static void EnsureWindowClassRegistered()
+    {
+        if (s_classRegistered) return;
+
+        lock (s_registrationLock)
+        {
+            if (s_classRegistered) return;
+
+            s_hInstance = PInvoke.GetModuleHandle((PCWSTR)null);
+
+            PInvoke.SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
+            unsafe
+            {
+                fixed (char* className = WindowClassName)
+                {
+                    var wcx = new WNDCLASSEXW
+                    {
+                        cbSize = (uint)sizeof(WNDCLASSEXW),
+                        style = WNDCLASS_STYLES.CS_HREDRAW | WNDCLASS_STYLES.CS_VREDRAW,
+                        lpfnWndProc = &WindowProc,
+                        hInstance = s_hInstance,
+                        hCursor = PInvoke.LoadCursor(HINSTANCE.Null, PInvoke.IDC_ARROW),
+                        hbrBackground = new HBRUSH((nint)(PInvoke.COLOR_WINDOW + 1)),
+                        lpszClassName = className
+                    };
+
+                    var atom = PInvoke.RegisterClassEx(in wcx);
+                    if (atom == 0)
+                        throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to register window class");
+                }
+            }
+
+            s_classRegistered = true;
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
+    private static LRESULT WindowProc(HWND hwnd, uint uMsg, WPARAM wParam, LPARAM lParam)
+    {
+        if (!s_hwndToInstance.TryGetValue(hwnd, out var instance))
+            return PInvoke.DefWindowProc(hwnd, uMsg, wParam, lParam);
+
+        return uMsg switch
+        {
+            PInvoke.WM_CLOSE => instance.HandleClose(),
+            PInvoke.WM_DESTROY => instance.HandleDestroy(),
+            PInvoke.WM_SIZE => instance.HandleSize(lParam),
+            PInvoke.WM_MOVE => instance.HandleMove(lParam),
+            PInvoke.WM_ACTIVATE => instance.HandleActivate(wParam),
+            PInvoke.WM_GETMINMAXINFO => instance.HandleGetMinMaxInfo(lParam),
+            PInvoke.WM_COMMAND => instance.HandleCommand(wParam),
+            WM_USER_INVOKE => instance.HandleUserInvoke(),
+            _ => PInvoke.DefWindowProc(hwnd, uMsg, wParam, lParam)
+        };
+    }
+
+    private LRESULT HandleClose()
+    {
+        Closing?.Invoke();
+        PInvoke.DestroyWindow(_hwnd);
+        return new LRESULT(0);
+    }
+
+    private LRESULT HandleDestroy()
+    {
+        s_hwndToInstance.TryRemove(_hwnd, out _);
+
+        _webViewController?.Close();
+        _webViewController = null;
+        _webView = null;
+
+        PInvoke.PostQuitMessage(0);
+        return new LRESULT(0);
+    }
+
+    private LRESULT HandleSize(LPARAM lParam)
+    {
+        RefitContent();
+
+        int width = (int)(lParam.Value & 0xFFFF);
+        int height = (int)((lParam.Value >> 16) & 0xFFFF);
+        Resized?.Invoke(width, height);
+
+        return new LRESULT(0);
+    }
+
+    private LRESULT HandleMove(LPARAM lParam)
+    {
+        int x = (int)(short)(lParam.Value & 0xFFFF);
+        int y = (int)(short)((lParam.Value >> 16) & 0xFFFF);
+        Moved?.Invoke(x, y);
+
+        return new LRESULT(0);
+    }
+
+    private LRESULT HandleActivate(WPARAM wParam)
+    {
+        var activateState = (int)(wParam.Value & 0xFFFF);
+
+        if (activateState == PInvoke.WA_INACTIVE)
+            FocusOut?.Invoke();
+        else
+            FocusIn?.Invoke();
+
+        return PInvoke.DefWindowProc(_hwnd, PInvoke.WM_ACTIVATE, wParam, 0);
+    }
+
+    private LRESULT HandleGetMinMaxInfo(LPARAM lParam)
+    {
+        unsafe
+        {
+            var mmi = (MINMAXINFO*)lParam.Value;
+
+            if (_options.MinWidth.HasValue)
+                mmi->ptMinTrackSize.X = _options.MinWidth.Value;
+            if (_options.MinHeight.HasValue)
+                mmi->ptMinTrackSize.Y = _options.MinHeight.Value;
+            if (_options.MaxWidth.HasValue)
+                mmi->ptMaxTrackSize.X = _options.MaxWidth.Value;
+            if (_options.MaxHeight.HasValue)
+                mmi->ptMaxTrackSize.Y = _options.MaxHeight.Value;
+        }
+
+        return new LRESULT(0);
+    }
+
+    private LRESULT HandleCommand(WPARAM wParam)
+    {
+        uint menuId = (uint)(wParam.Value & 0xFFFF);
+        _menuBackend?.HandleMenuCommand(menuId);
+
+        return new LRESULT(0);
+    }
+
+    private LRESULT HandleUserInvoke()
+    {
+        while (_invokeQueue.TryDequeue(out var item))
+        {
+            try
+            {
+                item.Action();
+                item.Tcs.SetResult();
+            }
+            catch (Exception ex)
+            {
+                item.Tcs.SetException(ex);
+            }
+        }
+        return new LRESULT(0);
+    }
+
+    private async Task InitializeWebViewAsync()
+    {
+        _webViewReady = new TaskCompletionSource();
+
+        try
+        {
+            // Use pre-warmed environment from pool (instant if Prewarm() was called)
+            _webViewEnvironment = await WebView2EnvironmentPool.Instance
+                .GetOrCreateEnvironmentAsync()
+                .ConfigureAwait(false);
+
+            _webViewController = await _webViewEnvironment.CreateCoreWebView2ControllerAsync(_hwnd);
+            _webView = _webViewController.CoreWebView2;
+
+            var settings = _webView.Settings;
+            settings.AreDefaultContextMenusEnabled = _options.ContextMenuEnabled;
+            settings.AreDevToolsEnabled = _options.DevToolsEnabled;
+            settings.IsScriptEnabled = true;
+            settings.IsWebMessageEnabled = true;
+
+            await _webView.AddScriptToExecuteOnDocumentCreatedAsync(
+                """
+                window.external = {
+                    sendMessage: function(message) { window.chrome.webview.postMessage(message); },
+                    receiveMessage: function(callback) {
+                        window.chrome.webview.addEventListener('message', function(e) { callback(e.data); });
+                    }
+                };
+                """);
+
+            _webView.WebMessageReceived += (sender, args) =>
+            {
+                WebMessageReceived?.Invoke(args.TryGetWebMessageAsString());
+            };
+
+            _webView.WebResourceRequested += HandleWebResourceRequested;
+            foreach (var scheme in _customSchemeHandlers.Keys)
+            {
+                _webView.AddWebResourceRequestedFilter($"{scheme}:*", CoreWebView2WebResourceContext.All);
+            }
+
+            RefitContent();
+
+            if (!string.IsNullOrEmpty(_options.StartUrl))
+                _webView.Navigate(_options.StartUrl);
+            else if (!string.IsNullOrEmpty(_options.StartHtml))
+                _webView.NavigateToString(_options.StartHtml);
+
+            _webViewReady.SetResult();
+        }
+        catch (Exception ex)
+        {
+            _webViewReady.SetException(ex);
+        }
+    }
+
+    private void HandleWebResourceRequested(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
+    {
+        var uri = new Uri(e.Request.Uri);
+        var scheme = uri.Scheme;
+
+        if (_customSchemeHandlers.TryGetValue(scheme, out var handler))
+        {
+            var stream = handler(e.Request.Uri);
+            if (stream is not null)
+            {
+                var response = _webViewEnvironment!.CreateWebResourceResponse(
+                    stream,
+                    200,
+                    "OK",
+                    "Content-Type: application/octet-stream");
+                e.Response = response;
+            }
+            else
+            {
+                var response = _webViewEnvironment!.CreateWebResourceResponse(
+                    null,
+                    404,
+                    "Not Found",
+                    string.Empty);
+                e.Response = response;
+            }
+        }
+    }
+
+    private void RefitContent()
+    {
+        if (_webViewController is null || _hwnd.IsNull) return;
+
+        PInvoke.GetClientRect(_hwnd, out var rect);
+        _webViewController.Bounds = new System.Drawing.Rectangle(
+            0, 0, rect.right - rect.left, rect.bottom - rect.top);
+    }
+
+    private void RunMessageLoop()
+    {
+        MSG msg;
+        while (PInvoke.GetMessage(out msg, HWND.Null, 0, 0))
+        {
+            PInvoke.TranslateMessage(in msg);
+            PInvoke.DispatchMessage(in msg);
+        }
+    }
+
+    private static WINDOW_STYLE CalculateWindowStyle(HermesWindowOptions options)
+    {
+        if (options.Chromeless)
+            return WINDOW_STYLE.WS_POPUP | WINDOW_STYLE.WS_VISIBLE;
+
+        var style = WINDOW_STYLE.WS_OVERLAPPEDWINDOW;
+
+        if (!options.Resizable)
+        {
+            style &= ~(WINDOW_STYLE.WS_THICKFRAME |
+                       WINDOW_STYLE.WS_MINIMIZEBOX |
+                       WINDOW_STYLE.WS_MAXIMIZEBOX);
+        }
+
+        return style;
+    }
+
+    private static WINDOW_EX_STYLE CalculateExtendedStyle(HermesWindowOptions options)
+    {
+        var exStyle = WINDOW_EX_STYLE.WS_EX_APPWINDOW;
+
+        if (options.TopMost)
+            exStyle |= WINDOW_EX_STYLE.WS_EX_TOPMOST;
+
+        return exStyle;
+    }
+
+    private void SetIcon(string iconPath)
+    {
+        if (!File.Exists(iconPath)) return;
+
+        unsafe
+        {
+            fixed (char* path = iconPath)
+            {
+                var hIcon = PInvoke.LoadImage(
+                    HINSTANCE.Null,
+                    path,
+                    GDI_IMAGE_TYPE.IMAGE_ICON,
+                    0, 0,
+                    IMAGE_FLAGS.LR_LOADFROMFILE | IMAGE_FLAGS.LR_DEFAULTSIZE);
+
+                if (!hIcon.IsNull)
+                {
+                    PInvoke.SendMessage(_hwnd, PInvoke.WM_SETICON, 1, hIcon.Value);
+                    PInvoke.SendMessage(_hwnd, PInvoke.WM_SETICON, 0, hIcon.Value);
+                }
+            }
+        }
+    }
+
+    private void CenterWindow()
+    {
+        PInvoke.GetWindowRect(_hwnd, out var rect);
+        int width = rect.right - rect.left;
+        int height = rect.bottom - rect.top;
+
+        int screenWidth = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CXSCREEN);
+        int screenHeight = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CYSCREEN);
+
+        int x = (screenWidth - width) / 2;
+        int y = (screenHeight - height) / 2;
+
+        PInvoke.SetWindowPos(_hwnd, HWND.Null, x, y, 0, 0,
+            SET_WINDOW_POS_FLAGS.SWP_NOSIZE | SET_WINDOW_POS_FLAGS.SWP_NOZORDER);
+    }
+
+    private void ThrowIfNotInitialized()
+    {
+        if (!_isInitialized)
+            throw new InvalidOperationException("Window not initialized. Call Initialize() first.");
+    }
+}
