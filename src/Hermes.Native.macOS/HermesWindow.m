@@ -86,6 +86,15 @@
             [prefs setValue:@YES forKey:@"developerExtrasEnabled"];
         }
 
+        // Register custom schemes BEFORE creating WebView
+        // macOS WebKit requires schemes to be registered at configuration time
+        for (int i = 0; i < 16; i++) {
+            if (params->CustomSchemeNames[i] != NULL) {
+                NSString* scheme = [NSString stringWithUTF8String:params->CustomSchemeNames[i]];
+                [_pendingSchemes addObject:scheme];
+            }
+        }
+
         // Store initial content for later
         NSString* startUrl = params->StartUrl ? [NSString stringWithUTF8String:params->StartUrl] : nil;
         NSString* startHtml = params->StartHtml ? [NSString stringWithUTF8String:params->StartHtml] : nil;

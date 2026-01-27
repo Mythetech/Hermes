@@ -143,6 +143,43 @@ void Hermes_Menu_SetItemLabel(void* menu, const char* menuLabel, const char* ite
 void Hermes_Menu_SetItemAccelerator(void* menu, const char* menuLabel, const char* itemId, const char* accelerator);
 
 // ============================================================================
+// Context Menu Operations
+// ============================================================================
+
+/// Create a context menu for the window
+void* Hermes_ContextMenu_Create(void* window, MenuItemCallback callback);
+
+/// Destroy the context menu
+void Hermes_ContextMenu_Destroy(void* contextMenu);
+
+/// Add an item to the context menu
+void Hermes_ContextMenu_AddItem(void* contextMenu, const char* itemId, const char* label, const char* accelerator);
+
+/// Add a separator to the context menu
+void Hermes_ContextMenu_AddSeparator(void* contextMenu);
+
+/// Remove an item from the context menu
+void Hermes_ContextMenu_RemoveItem(void* contextMenu, const char* itemId);
+
+/// Clear all items from the context menu
+void Hermes_ContextMenu_Clear(void* contextMenu);
+
+/// Set whether a context menu item is enabled
+void Hermes_ContextMenu_SetItemEnabled(void* contextMenu, const char* itemId, bool enabled);
+
+/// Set whether a context menu item is checked
+void Hermes_ContextMenu_SetItemChecked(void* contextMenu, const char* itemId, bool checked);
+
+/// Set the label of a context menu item
+void Hermes_ContextMenu_SetItemLabel(void* contextMenu, const char* itemId, const char* label);
+
+/// Show the context menu at the specified screen coordinates
+void Hermes_ContextMenu_Show(void* contextMenu, int x, int y);
+
+/// Hide the context menu
+void Hermes_ContextMenu_Hide(void* contextMenu);
+
+// ============================================================================
 // Dialog Operations
 // ============================================================================
 

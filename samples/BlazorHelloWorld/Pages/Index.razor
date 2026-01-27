@@ -1,0 +1,35 @@
+@page "/"
+@using Hermes.Blazor.Diagnostics
+@inject StartupMetrics Metrics
+
+<h1>Hermes Blazor</h1>
+<p class="subtitle">Lightning-fast desktop apps with .NET and Blazor</p>
+
+<div class="metrics">
+    <h2>Startup Performance</h2>
+    <div class="metric">
+        <span class="metric-value">@_renderTime.TotalMilliseconds.ToString("F1")</span>
+        <span class="metric-unit">ms</span>
+        <span class="metric-label">to first render</span>
+    </div>
+</div>
+
+@code {
+    private TimeSpan _renderTime;
+
+    protected override void OnInitialized()
+    {
+        StartupLog.Log("Component", "Index.OnInitialized()");
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            StartupLog.Log("Component", "Index.OnAfterRender(firstRender: true)");
+            _renderTime = Metrics.Elapsed;
+            Metrics.ReportFirstRender();
+            StateHasChanged();
+        }
+    }
+}

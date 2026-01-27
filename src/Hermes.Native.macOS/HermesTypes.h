@@ -52,6 +52,9 @@ typedef struct {
     WebMessageCallback OnWebMessage;
     CustomSchemeCallback OnCustomScheme;
 
+    // Custom URL schemes to register (must be set before WebView creation)
+    const char* CustomSchemeNames[16];
+
 } HermesWindowParams;
 
 // Dialog button configurations

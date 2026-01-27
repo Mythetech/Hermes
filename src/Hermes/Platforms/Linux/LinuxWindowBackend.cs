@@ -322,7 +322,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         var script = $"if(window.__hermesReceiveCallback) window.__hermesReceiveCallback('{escaped}');";
 
         // Use modern EvaluateJavascript API (not deprecated RunJavascript)
-        _webView.RunJavascript(script, null, null);
+        _webView.EvaluateJavascript(script, null, null);
     }
 
     public void RegisterCustomScheme(string scheme, Func<string, Stream?> handler)
@@ -495,6 +495,12 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     {
         ThrowIfNotInitialized();
         return new LinuxDialogBackend(_window);
+    }
+
+    internal LinuxContextMenuBackend CreateContextMenuBackend()
+    {
+        ThrowIfNotInitialized();
+        return new LinuxContextMenuBackend(_window);
     }
 
     internal Gtk.Window Window => _window;

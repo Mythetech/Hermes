@@ -416,3 +416,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# macOS native library build output
+src/Hermes.Native.macOS/lib/

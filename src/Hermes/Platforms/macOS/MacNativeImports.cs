@@ -152,6 +152,45 @@ internal static partial class MacNative
 
     #endregion
 
+    #region Context Menu Operations
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_ContextMenu_Create")]
+    internal static partial IntPtr ContextMenuCreate(IntPtr window, IntPtr callback);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_ContextMenu_Destroy")]
+    internal static partial void ContextMenuDestroy(IntPtr contextMenu);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_ContextMenu_AddItem", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void ContextMenuAddItem(IntPtr contextMenu, string itemId, string label, string? accelerator);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_ContextMenu_AddSeparator")]
+    internal static partial void ContextMenuAddSeparator(IntPtr contextMenu);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_ContextMenu_RemoveItem", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void ContextMenuRemoveItem(IntPtr contextMenu, string itemId);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_ContextMenu_Clear")]
+    internal static partial void ContextMenuClear(IntPtr contextMenu);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_ContextMenu_SetItemEnabled", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void ContextMenuSetItemEnabled(IntPtr contextMenu, string itemId,
+                                                            [MarshalAs(UnmanagedType.U1)] bool enabled);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_ContextMenu_SetItemChecked", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void ContextMenuSetItemChecked(IntPtr contextMenu, string itemId,
+                                                            [MarshalAs(UnmanagedType.U1)] bool isChecked);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_ContextMenu_SetItemLabel", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void ContextMenuSetItemLabel(IntPtr contextMenu, string itemId, string label);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_ContextMenu_Show")]
+    internal static partial void ContextMenuShow(IntPtr contextMenu, int x, int y);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_ContextMenu_Hide")]
+    internal static partial void ContextMenuHide(IntPtr contextMenu);
+
+    #endregion
+
     #region Dialog Operations
 
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Dialog_ShowOpenFile", StringMarshalling = StringMarshalling.Utf8)]

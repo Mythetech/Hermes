@@ -1,8 +1,10 @@
 using System.Diagnostics.CodeAnalysis;
 using Hermes.Abstractions;
+using Hermes.Blazor.Diagnostics;
 using Hermes.Blazor.Threading;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 
@@ -14,6 +16,7 @@ namespace Hermes.Blazor;
 public sealed class HermesBlazorApp : IAsyncDisposable
 {
     private readonly IServiceProvider _services;
+    private readonly IConfiguration _configuration;
     private readonly HermesWindow _window;
     private readonly HermesWebViewManager _webViewManager;
     private readonly HermesSynchronizationContext _syncContext;
@@ -21,11 +24,13 @@ public sealed class HermesBlazorApp : IAsyncDisposable
 
     internal HermesBlazorApp(
         IServiceProvider services,
+        IConfiguration configuration,
         HermesWindow window,
         HermesWebViewManager webViewManager,
         HermesSynchronizationContext syncContext)
     {
         _services = services;
+        _configuration = configuration;
         _window = window;
         _webViewManager = webViewManager;
         _syncContext = syncContext;
@@ -49,16 +54,29 @@ public sealed class HermesBlazorApp : IAsyncDisposable
     public IServiceProvider Services => _services;
 
     /// <summary>
+    /// Gets the configuration for this application.
+    /// </summary>
+    public IConfiguration Configuration => _configuration;
+
+    /// <summary>
     /// Run the application. This method blocks until the window is closed.
     /// </summary>
     public void Run()
     {
+        StartupLog.Log("Blazor", "Installing SynchronizationContext");
         // Install synchronization context
         SynchronizationContext.SetSynchronizationContext(_syncContext);
 
+        StartupLog.Log("Blazor", "Initializing root components...");
+        // Initialize pending root components (adds them to WebViewManager)
+        RootComponents.InitializeAsync().GetAwaiter().GetResult();
+        StartupLog.Log("Blazor", "Root components initialized");
+
         // Navigate to the root URL
+        StartupLog.Log("Blazor", "Navigating to /");
         _webViewManager.Navigate("/");
 
+        StartupLog.Log("Blazor", "Entering message loop (waiting for close)");
         // Run the window message loop (blocking)
         _window.WaitForClose();
     }
@@ -134,8 +152,10 @@ public sealed class HermesRootComponents
         if (_initialized) return;
         _initialized = true;
 
+        StartupLog.Log("Blazor", $"Adding {_pendingComponents.Count} root component(s) to WebViewManager");
         foreach (var registration in _pendingComponents)
         {
+            StartupLog.Log("Blazor", $"  - {registration.ComponentType.Name} -> {registration.Selector}");
             await _webViewManager.AddRootComponentAsync(
                 registration.ComponentType,
                 registration.Selector,

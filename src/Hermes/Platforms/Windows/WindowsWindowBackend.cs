@@ -327,6 +327,12 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         return new WindowsDialogBackend(_hwnd);
     }
 
+    internal WindowsContextMenuBackend CreateContextMenuBackend()
+    {
+        ThrowIfNotInitialized();
+        return new WindowsContextMenuBackend(_hwnd);
+    }
+
     internal HWND Handle => _hwnd;
 
     private static void EnsureWindowClassRegistered()
@@ -547,11 +553,12 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
             var stream = handler(e.Request.Uri);
             if (stream is not null)
             {
+                var contentType = GetContentType(uri.AbsolutePath);
                 var response = _webViewEnvironment!.CreateWebResourceResponse(
                     stream,
                     200,
                     "OK",
-                    "Content-Type: application/octet-stream");
+                    $"Content-Type: {contentType}");
                 e.Response = response;
             }
             else
@@ -564,6 +571,33 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
                 e.Response = response;
             }
         }
+    }
+
+    private static string GetContentType(string path)
+    {
+        var extension = Path.GetExtension(path).ToLowerInvariant();
+        return extension switch
+        {
+            ".html" or ".htm" => "text/html",
+            ".css" => "text/css",
+            ".js" => "application/javascript",
+            ".json" => "application/json",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".svg" => "image/svg+xml",
+            ".woff" => "font/woff",
+            ".woff2" => "font/woff2",
+            ".ttf" => "font/ttf",
+            ".eot" => "application/vnd.ms-fontobject",
+            ".ico" => "image/x-icon",
+            ".wasm" => "application/wasm",
+            ".dll" => "application/octet-stream",
+            ".pdb" => "application/octet-stream",
+            ".dat" => "application/octet-stream",
+            ".blat" => "application/octet-stream",
+            _ => "application/octet-stream"
+        };
     }
 
     private void RefitContent()

@@ -1,4 +1,5 @@
 using Hermes.Abstractions;
+using Hermes.Menu;
 
 namespace Hermes;
 
@@ -10,7 +11,7 @@ public sealed class HermesWindow : IDisposable
 {
     private readonly IHermesWindowBackend _backend;
     private readonly HermesWindowOptions _options = new();
-    private IMenuBackend? _menuBackend;
+    private NativeMenuBar? _nativeMenuBar;
     private IDialogBackend? _dialogBackend;
     private bool _initialized;
     private bool _disposed;
@@ -299,13 +300,18 @@ public sealed class HermesWindow : IDisposable
 
     /// <summary>
     /// Access the native menu bar for this window.
+    /// Provides a fluent API for building menus with runtime modification support.
     /// </summary>
-    public IMenuBackend MenuBar
+    public NativeMenuBar MenuBar
     {
         get
         {
-            _menuBackend ??= CreatePlatformMenuBackend();
-            return _menuBackend;
+            if (_nativeMenuBar is null)
+            {
+                var backend = CreatePlatformMenuBackend();
+                _nativeMenuBar = new NativeMenuBar(backend);
+            }
+            return _nativeMenuBar;
         }
     }
 
@@ -319,6 +325,17 @@ public sealed class HermesWindow : IDisposable
             _dialogBackend ??= CreatePlatformDialogBackend();
             return _dialogBackend;
         }
+    }
+
+    /// <summary>
+    /// Create a new context menu for this window.
+    /// Context menus can be shown at any screen position using Show(x, y).
+    /// </summary>
+    /// <returns>A new NativeContextMenu instance.</returns>
+    public NativeContextMenu CreateContextMenu()
+    {
+        var backend = CreatePlatformContextMenuBackend();
+        return new NativeContextMenu(backend);
     }
 
     #endregion
@@ -539,6 +556,35 @@ public sealed class HermesWindow : IDisposable
         }
 #endif
         throw new PlatformNotSupportedException($"Dialog backend not supported on this platform. Current OS: {Environment.OSVersion}");
+    }
+
+    private IContextMenuBackend CreatePlatformContextMenuBackend()
+    {
+#if WINDOWS
+        if (OperatingSystem.IsWindows())
+        {
+            EnsureInitialized();
+            var winBackend = (Platforms.Windows.WindowsWindowBackend)_backend;
+            return winBackend.CreateContextMenuBackend();
+        }
+#endif
+#if LINUX
+        if (OperatingSystem.IsLinux())
+        {
+            EnsureInitialized();
+            var linuxBackend = (Platforms.Linux.LinuxWindowBackend)_backend;
+            return linuxBackend.CreateContextMenuBackend();
+        }
+#endif
+#if MACOS
+        if (OperatingSystem.IsMacOS())
+        {
+            EnsureInitialized();
+            var macBackend = (Platforms.macOS.MacWindowBackend)_backend;
+            return macBackend.CreateContextMenuBackend();
+        }
+#endif
+        throw new PlatformNotSupportedException($"Context menu backend not supported on this platform. Current OS: {Environment.OSVersion}");
     }
 
     #endregion

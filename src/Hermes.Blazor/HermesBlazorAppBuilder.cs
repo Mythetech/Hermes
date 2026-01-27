@@ -3,41 +3,98 @@ using Hermes.Abstractions;
 using Hermes.Blazor.Threading;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.Metrics;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Components.WebView;
 
 namespace Hermes.Blazor;
 
 /// <summary>
 /// Builder for configuring and creating a Hermes Blazor application.
 /// </summary>
-public sealed class HermesBlazorAppBuilder
+public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
 {
-    private readonly ServiceCollection _services = new();
+    private readonly HostApplicationBuilder _hostBuilder;
     private readonly List<RootComponentRegistration> _rootComponents = new();
     private IFileProvider? _fileProvider;
     private Action<HermesWindowOptions>? _windowConfiguration;
     private string _hostPage = "index.html";
 
-    private HermesBlazorAppBuilder() { }
+    private HermesBlazorAppBuilder(string[]? args, bool addDefaultConfiguration)
+    {
+        _hostBuilder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            Args = args,
+            DisableDefaults = true
+        });
+
+        if (addDefaultConfiguration)
+        {
+            // Add default configuration sources
+            _hostBuilder.Configuration
+                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                .AddJsonFile($"appsettings.{_hostBuilder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
+                .AddEnvironmentVariables()
+                .AddCommandLine(args ?? []);
+        }
+    }
 
     /// <summary>
-    /// Creates a new builder with default configuration.
+    /// Creates a new builder with default configuration including appsettings.json,
+    /// environment variables, and command-line arguments.
     /// </summary>
     public static HermesBlazorAppBuilder CreateDefault(string[]? args = null)
     {
-        var builder = new HermesBlazorAppBuilder();
+        return new HermesBlazorAppBuilder(args, addDefaultConfiguration: true);
+    }
 
-        // Add basic services
-        builder._services.AddLogging();
-
-        return builder;
+    /// <summary>
+    /// Creates a new builder with minimal configuration. No configuration sources
+    /// are added by default; add them manually via the Configuration property.
+    /// </summary>
+    public static HermesBlazorAppBuilder CreateSlimBuilder(string[]? args = null)
+    {
+        return new HermesBlazorAppBuilder(args, addDefaultConfiguration: false);
     }
 
     /// <summary>
     /// Gets the service collection for adding custom services.
     /// </summary>
-    public IServiceCollection Services => _services;
+    public IServiceCollection Services => _hostBuilder.Services;
+
+    /// <summary>
+    /// Gets the configuration manager for adding configuration sources.
+    /// </summary>
+    public IConfigurationManager Configuration => _hostBuilder.Configuration;
+
+    /// <summary>
+    /// Gets the logging builder for configuring logging providers.
+    /// </summary>
+    public ILoggingBuilder Logging => _hostBuilder.Logging;
+
+    /// <summary>
+    /// Gets the metrics builder for configuring metrics.
+    /// </summary>
+    public IMetricsBuilder Metrics => _hostBuilder.Metrics;
+
+    /// <summary>
+    /// Gets the host environment information.
+    /// </summary>
+    public IHostEnvironment Environment => _hostBuilder.Environment;
+
+    /// <inheritdoc />
+    IDictionary<object, object> IHostApplicationBuilder.Properties =>
+        ((IHostApplicationBuilder)_hostBuilder).Properties;
+
+    /// <inheritdoc />
+    void IHostApplicationBuilder.ConfigureContainer<TContainerBuilder>(
+        IServiceProviderFactory<TContainerBuilder> factory,
+        Action<TContainerBuilder>? configure) =>
+        ((IHostApplicationBuilder)_hostBuilder).ConfigureContainer(factory, configure);
 
     /// <summary>
     /// Gets the root components collection for adding Blazor components during build.
@@ -82,7 +139,7 @@ public sealed class HermesBlazorAppBuilder
         var fileProvider = _fileProvider ?? new PhysicalFileProvider(
             Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot"));
 
-        // Create the window
+        // Create the window (backend is created but not initialized yet)
         var window = new HermesWindow();
 
         // Apply window configuration
@@ -93,27 +150,29 @@ public sealed class HermesBlazorAppBuilder
             ApplyOptions(window, options);
         }
 
-        // Get the backend (triggers initialization)
-        window.Show();
+        // Get the backend BEFORE Show() - it exists but is not initialized
         var backend = GetBackend(window);
 
         // Create threading infrastructure
         var syncContext = new HermesSynchronizationContext(backend);
         var dispatcher = new HermesDispatcher(syncContext);
 
-        // Add Blazor services
-        _services.AddSingleton(window);
-        _services.AddSingleton(backend);
-        _services.AddSingleton(syncContext);
-        _services.AddSingleton(dispatcher);
+        // Add Blazor services (includes NavigationManager, etc.)
+        _hostBuilder.Services.AddBlazorWebView();
+        _hostBuilder.Services.AddSingleton(window);
+        _hostBuilder.Services.AddSingleton(backend);
+        _hostBuilder.Services.AddSingleton(syncContext);
+        _hostBuilder.Services.AddSingleton(dispatcher);
+        _hostBuilder.Services.AddSingleton<IConfiguration>(_hostBuilder.Configuration);
 
         // Build service provider
-        var serviceProvider = _services.BuildServiceProvider();
+        var serviceProvider = _hostBuilder.Services.BuildServiceProvider();
 
         // Create JS component store
         var jsComponents = new JSComponentConfigurationStore();
 
-        // Create WebView manager
+        // Create WebView manager BEFORE Show() - this registers the custom scheme
+        // which on macOS must happen before Initialize() is called
         var webViewManager = new HermesWebViewManager(
             backend,
             serviceProvider,
@@ -122,8 +181,11 @@ public sealed class HermesBlazorAppBuilder
             jsComponents,
             _hostPage);
 
+        // NOW show the window (triggers Initialize which processes registered schemes)
+        window.Show();
+
         // Create app
-        var app = new HermesBlazorApp(serviceProvider, window, webViewManager, syncContext);
+        var app = new HermesBlazorApp(serviceProvider, _hostBuilder.Configuration, window, webViewManager, syncContext);
 
         // Add root components
         foreach (var component in RootComponents.GetComponents())

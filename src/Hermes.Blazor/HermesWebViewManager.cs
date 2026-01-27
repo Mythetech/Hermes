@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Threading.Channels;
 using Hermes.Abstractions;
+using Hermes.Blazor.Diagnostics;
 using Hermes.Blazor.Threading;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
@@ -16,9 +17,11 @@ namespace Hermes.Blazor;
 internal sealed class HermesWebViewManager : WebViewManager
 {
     // Platform-specific base URIs
-    internal static string AppBaseUri => OperatingSystem.IsWindows()
-        ? "http://0.0.0.0/"
-        : "app://0.0.0.0/";
+    // On Windows, we use http:// because WebView2 doesn't support custom schemes for top-level navigation
+    // On Linux/Mac, we use app:// custom scheme because their webviews don't intercept http://
+    public static string AppBaseUri => OperatingSystem.IsWindows()
+        ? "http://localhost/"
+        : "app://localhost/";
 
     private readonly IHermesWindowBackend _backend;
     private readonly Channel<string> _messageChannel;
@@ -58,6 +61,7 @@ internal sealed class HermesWebViewManager : WebViewManager
 
     protected override void NavigateCore(Uri absoluteUri)
     {
+        StartupLog.Log("WebView", $"NavigateCore: {absoluteUri}");
         _backend.NavigateToUrl(absoluteUri.ToString());
     }
 
@@ -114,24 +118,36 @@ internal sealed class HermesWebViewManager : WebViewManager
 
     private void OnWebMessageReceived(string message)
     {
+        // Log first message - indicates Blazor JS has loaded and is communicating
+        StartupLog.LogFirstMessage();
+
         // Route message to Blazor
         MessageReceived(new Uri(AppBaseUri), message);
     }
 
     private Stream? HandleWebRequest(string url)
     {
-        // Parse the URL and get the relative path
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-            return null;
-
-        var relativePath = uri.AbsolutePath.TrimStart('/');
-        if (string.IsNullOrEmpty(relativePath))
-            relativePath = "index.html";
-
-        // Try to get the response content
-        if (TryGetResponseContent(relativePath, false, out var statusCode, out var statusMessage,
+        // TryGetResponseContent expects the full URL, not just the path
+        // allowFallbackOnHostPage=true allows "/" to map to the host page (index.html)
+        if (TryGetResponseContent(url, true, out var statusCode, out var statusMessage,
             out var content, out var headers))
         {
+            // Log resource requests for debugging startup timing
+            var uri = new Uri(url);
+            var path = uri.AbsolutePath;
+            if (path == "/" || path.EndsWith("index.html", StringComparison.OrdinalIgnoreCase))
+            {
+                StartupLog.Log("WebView", "Serving index.html (host page)");
+            }
+            else if (path.Contains("blazor.webview.js"))
+            {
+                StartupLog.Log("WebView", "Serving blazor.webview.js");
+            }
+            else if (path.Contains("_framework"))
+            {
+                StartupLog.Log("WebView", $"Serving framework resource: {path}");
+            }
+
             return content;
         }
 

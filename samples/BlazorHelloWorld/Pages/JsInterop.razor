@@ -1,0 +1,54 @@
+@page "/jsinterop"
+@inject IJSRuntime JS
+
+<h1>JavaScript Interop</h1>
+
+<div class="interop-section">
+    <h2>Call JavaScript from C#</h2>
+    <button class="btn-primary" @onclick="ShowAlert">Show Alert</button>
+    <button class="btn-secondary" @onclick="GetWindowSize">Get Window Size</button>
+    @if (!string.IsNullOrEmpty(_windowSize))
+    {
+        <p class="result">Window size: @_windowSize</p>
+    }
+</div>
+
+<div class="interop-section">
+    <h2>Call C# from JavaScript</h2>
+    <p class="instructions">Open DevTools (F12) and run: <code>DotNet.invokeMethodAsync('BlazorHelloWorld', 'ReceiveFromJs', 'Hello from JS!')</code></p>
+    @if (!string.IsNullOrEmpty(_messageFromJs))
+    {
+        <p class="result">Received from JS: @_messageFromJs</p>
+    }
+</div>
+
+@code {
+    private string? _windowSize;
+    private static string? _messageFromJs;
+    private static Action? _stateChanged;
+
+    protected override void OnInitialized()
+    {
+        _stateChanged = () => InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ShowAlert()
+    {
+        await JS.InvokeVoidAsync("alert", "Hello from Blazor!");
+    }
+
+    private async Task GetWindowSize()
+    {
+        var width = await JS.InvokeAsync<int>("eval", "window.innerWidth");
+        var height = await JS.InvokeAsync<int>("eval", "window.innerHeight");
+        _windowSize = $"{width} x {height}";
+    }
+
+    [JSInvokable]
+    public static Task ReceiveFromJs(string message)
+    {
+        _messageFromJs = message;
+        _stateChanged?.Invoke();
+        return Task.CompletedTask;
+    }
+}

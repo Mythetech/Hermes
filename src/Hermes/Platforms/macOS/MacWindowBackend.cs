@@ -65,21 +65,23 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
         parameters.StartHtml = MarshalString(options.StartHtml);
         parameters.IconPath = MarshalString(options.IconPath);
 
+        // Initialize custom scheme names array (must be done before WindowCreate on macOS)
+        parameters.CustomSchemeNames = new IntPtr[16];
+        var schemeNames = _customSchemeHandlers.Keys.ToArray();
+        for (int i = 0; i < Math.Min(schemeNames.Length, 16); i++)
+        {
+            parameters.CustomSchemeNames[i] = MarshalString(schemeNames[i]);
+        }
+
         try
         {
             // Set up callbacks
             SetupCallbacks(ref parameters);
 
-            // Create the window
+            // Create the window (schemes are registered from CustomSchemeNames during creation)
             _windowHandle = MacNative.WindowCreate(ref parameters);
             if (_windowHandle == IntPtr.Zero)
                 throw new InvalidOperationException("Failed to create native window.");
-
-            // Register any pending custom schemes
-            foreach (var scheme in _customSchemeHandlers.Keys)
-            {
-                MacNative.WindowRegisterCustomScheme(_windowHandle, scheme);
-            }
 
             _initialized = true;
         }
@@ -90,6 +92,12 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
             FreeString(parameters.StartUrl);
             FreeString(parameters.StartHtml);
             FreeString(parameters.IconPath);
+
+            // Free scheme name strings
+            foreach (var ptr in parameters.CustomSchemeNames)
+            {
+                FreeString(ptr);
+            }
         }
     }
 
@@ -235,9 +243,16 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
     {
         if (_initialized)
         {
-            throw new InvalidOperationException(
-                "Custom schemes must be registered before Initialize() is called on macOS. " +
-                "Register schemes before calling Show() or WaitForClose().");
+            // After initialization, only allow updating handlers for pre-registered schemes
+            if (!_customSchemeHandlers.ContainsKey(scheme))
+            {
+                throw new InvalidOperationException(
+                    "Custom schemes must be registered before Initialize() is called on macOS. " +
+                    "Register schemes before calling Show() or WaitForClose().");
+            }
+            // Update the handler for an existing scheme
+            _customSchemeHandlers[scheme] = handler;
+            return;
         }
 
         _customSchemeHandlers[scheme] = handler;
@@ -345,6 +360,12 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
         return new MacDialogBackend();
     }
 
+    internal MacContextMenuBackend CreateContextMenuBackend()
+    {
+        EnsureInitialized();
+        return new MacContextMenuBackend(_windowHandle);
+    }
+
     #endregion
 
     #region Private Helpers
@@ -447,7 +468,7 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
                     Marshal.Copy(data, 0, resultPtr, numBytes);
 
                     // Allocate content type string (native code will free)
-                    var contentType = "application/octet-stream";
+                    var contentType = GetContentType(uri.AbsolutePath);
                     contentTypePtr = Marshal.StringToHGlobalAnsi(contentType);
 
                     return resultPtr;
@@ -460,6 +481,38 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
         }
 
         return IntPtr.Zero;
+    }
+
+    private static string GetContentType(string path)
+    {
+        var extension = Path.GetExtension(path).ToLowerInvariant();
+
+        // Root URL (/) serves index.html
+        if (string.IsNullOrEmpty(extension) && (path == "/" || string.IsNullOrEmpty(path)))
+            return "text/html";
+
+        return extension switch
+        {
+            ".html" or ".htm" => "text/html",
+            ".css" => "text/css",
+            ".js" => "application/javascript",
+            ".json" => "application/json",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".svg" => "image/svg+xml",
+            ".woff" => "font/woff",
+            ".woff2" => "font/woff2",
+            ".ttf" => "font/ttf",
+            ".eot" => "application/vnd.ms-fontobject",
+            ".ico" => "image/x-icon",
+            ".wasm" => "application/wasm",
+            ".dll" => "application/octet-stream",
+            ".pdb" => "application/octet-stream",
+            ".dat" => "application/octet-stream",
+            ".blat" => "application/octet-stream",
+            _ => "application/octet-stream"
+        };
     }
 
     private static IntPtr MarshalString(string? str)

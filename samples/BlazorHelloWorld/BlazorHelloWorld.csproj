@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Hermes.Blazor\Hermes.Blazor.csproj" />
+  </ItemGroup>
+
+  <!-- Copy wwwroot content to output -->
+  <ItemGroup>
+    <Content Update="wwwroot\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Copy native library on macOS -->
+  <Target Name="CopyNativeLibrary" AfterTargets="Build" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)..\..\src\Hermes.Native.macOS\lib\libHermes.Native.macOS.dylib"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Copied native macOS library to $(OutputPath)" />
+  </Target>
+
+</Project>

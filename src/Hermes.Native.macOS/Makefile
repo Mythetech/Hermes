@@ -26,6 +26,7 @@ SOURCES = HermesWindow.m \
           HermesUiDelegate.m \
           HermesMenu.m \
           HermesDialogs.m \
+          HermesContextMenu.m \
           Exports.m
 
 # Object directories

@@ -1,6 +1,7 @@
 #import "Exports.h"
 #import "HermesWindow.h"
 #import "HermesMenu.h"
+#import "HermesContextMenu.h"
 #import "HermesDialogs.h"
 #import <Cocoa/Cocoa.h>
 
@@ -311,6 +312,88 @@ void Hermes_Menu_SetItemAccelerator(void* menu, const char* menuLabel, const cha
         [hermesMenu setItemAccelerator:[NSString stringWithUTF8String:menuLabel]
                                 itemId:[NSString stringWithUTF8String:itemId]
                            accelerator:[NSString stringWithUTF8String:accelerator]];
+    }
+}
+
+#pragma mark - Context Menu Operations
+
+void* Hermes_ContextMenu_Create(void* window, MenuItemCallback callback) {
+    @autoreleasepool {
+        HermesWindow* hermesWindow = (__bridge HermesWindow*)window;
+        HermesContextMenu* contextMenu = [[HermesContextMenu alloc] initWithWindow:hermesWindow callback:callback];
+        return (__bridge_retained void*)contextMenu;
+    }
+}
+
+void Hermes_ContextMenu_Destroy(void* contextMenu) {
+    @autoreleasepool {
+        HermesContextMenu* menu = (__bridge_transfer HermesContextMenu*)contextMenu;
+        (void)menu; // Release
+    }
+}
+
+void Hermes_ContextMenu_AddItem(void* contextMenu, const char* itemId, const char* label, const char* accelerator) {
+    @autoreleasepool {
+        HermesContextMenu* menu = (__bridge HermesContextMenu*)contextMenu;
+        [menu addItem:[NSString stringWithUTF8String:itemId]
+                label:[NSString stringWithUTF8String:label]
+          accelerator:accelerator ? [NSString stringWithUTF8String:accelerator] : nil];
+    }
+}
+
+void Hermes_ContextMenu_AddSeparator(void* contextMenu) {
+    @autoreleasepool {
+        HermesContextMenu* menu = (__bridge HermesContextMenu*)contextMenu;
+        [menu addSeparator];
+    }
+}
+
+void Hermes_ContextMenu_RemoveItem(void* contextMenu, const char* itemId) {
+    @autoreleasepool {
+        HermesContextMenu* menu = (__bridge HermesContextMenu*)contextMenu;
+        [menu removeItem:[NSString stringWithUTF8String:itemId]];
+    }
+}
+
+void Hermes_ContextMenu_Clear(void* contextMenu) {
+    @autoreleasepool {
+        HermesContextMenu* menu = (__bridge HermesContextMenu*)contextMenu;
+        [menu clear];
+    }
+}
+
+void Hermes_ContextMenu_SetItemEnabled(void* contextMenu, const char* itemId, bool enabled) {
+    @autoreleasepool {
+        HermesContextMenu* menu = (__bridge HermesContextMenu*)contextMenu;
+        [menu setItemEnabled:[NSString stringWithUTF8String:itemId] enabled:enabled];
+    }
+}
+
+void Hermes_ContextMenu_SetItemChecked(void* contextMenu, const char* itemId, bool checked) {
+    @autoreleasepool {
+        HermesContextMenu* menu = (__bridge HermesContextMenu*)contextMenu;
+        [menu setItemChecked:[NSString stringWithUTF8String:itemId] checked:checked];
+    }
+}
+
+void Hermes_ContextMenu_SetItemLabel(void* contextMenu, const char* itemId, const char* label) {
+    @autoreleasepool {
+        HermesContextMenu* menu = (__bridge HermesContextMenu*)contextMenu;
+        [menu setItemLabel:[NSString stringWithUTF8String:itemId] label:[NSString stringWithUTF8String:label]];
+    }
+}
+
+void Hermes_ContextMenu_Show(void* contextMenu, int x, int y) {
+    @autoreleasepool {
+        HermesContextMenu* menu = (__bridge HermesContextMenu*)contextMenu;
+        [menu showAtX:x y:y];
+    }
+}
+
+void Hermes_ContextMenu_Hide(void* contextMenu) {
+    @autoreleasepool {
+        HermesContextMenu* menu = (__bridge HermesContextMenu*)contextMenu;
+        [menu hide];
     }
 }
 
