@@ -8,6 +8,7 @@ using Microsoft.Web.WebView2.Core;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Gdi;
+using Windows.Win32.UI.HiDpi;
 using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace Hermes.Platforms.Windows;
@@ -346,7 +347,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
             s_hInstance = PInvoke.GetModuleHandle((PCWSTR)null);
 
-            PInvoke.SetThreadDpiAwarenessContext(PInvoke.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            PInvoke.SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
             unsafe
             {
