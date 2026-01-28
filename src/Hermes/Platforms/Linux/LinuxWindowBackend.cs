@@ -140,7 +140,16 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         _userContentManager.RegisterScriptMessageHandler("hermesHost");
         _userContentManager.ScriptMessageReceived += OnScriptMessageReceived;
 
-        // Create WebView with user content manager
+        // Get the default WebContext and register schemes BEFORE creating the WebView
+        // This is required for webkit2gtk-4.1 where scheme registration must happen
+        // before any WebView using that context tries to load the scheme
+        var context = WebKit.WebContext.GetDefault();
+        foreach (var scheme in _customSchemeHandlers.Keys)
+        {
+            RegisterSchemeWithContext(context, scheme);
+        }
+
+        // Create WebView with user content manager (uses default context)
         _webView = new WebKit.WebView(_userContentManager);
 
         // Configure settings
@@ -156,13 +165,6 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
             {
                 args.RetVal = true; // Suppress context menu
             };
-        }
-
-        // Register custom URI schemes
-        var context = _webView.Context;
-        foreach (var scheme in _customSchemeHandlers.Keys)
-        {
-            RegisterSchemeWithContext(context, scheme);
         }
 
         // Inject JavaScript bridge at document start
@@ -329,9 +331,11 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     {
         _customSchemeHandlers[scheme] = handler;
 
+        // If WebView exists, register with the default context immediately
+        // (The WebView uses the default context)
         if (_webView != null)
         {
-            RegisterSchemeWithContext(_webView.Context, scheme);
+            RegisterSchemeWithContext(WebKit.WebContext.GetDefault(), scheme);
         }
     }
 
@@ -344,9 +348,12 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         securityManager.RegisterUriSchemeAsSecure(scheme);
         securityManager.RegisterUriSchemeAsCorsEnabled(scheme);
 
+        HermesLogger.Info($"Registering URI scheme '{scheme}' with WebContext");
+
         context.RegisterUriScheme(scheme, (request) =>
         {
             var uri = request.Uri;
+            HermesLogger.Info($"URI scheme handler called for: {uri}");
 
             if (_customSchemeHandlers.TryGetValue(scheme, out var handler))
             {
@@ -359,6 +366,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
                         var bytes = ReadStreamToBytes(stream);
                         var mimeType = GetMimeType(uri);
 
+                        HermesLogger.Info($"Serving {uri} ({bytes.Length} bytes, {mimeType})");
+
                         // Create GLib input stream from bytes
                         // Allocate unmanaged memory and copy bytes (GLib takes ownership)
                         var ptr = Marshal.AllocHGlobal(bytes.Length);
@@ -369,18 +378,21 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
                         request.Finish(inputStream, bytes.Length, mimeType);
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        HermesLogger.Warning($"Error serving {uri}: {ex.Message}");
                         FinishWithError(request);
                     }
                 }
                 else
                 {
+                    HermesLogger.Warning($"Handler returned null for {uri}");
                     FinishWithError(request);
                 }
             }
             else
             {
+                HermesLogger.Warning($"No handler found for scheme '{scheme}'");
                 FinishWithError(request);
             }
         });

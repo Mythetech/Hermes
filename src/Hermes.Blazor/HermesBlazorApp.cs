@@ -60,7 +60,13 @@ public sealed class HermesBlazorApp : IAsyncDisposable
     public void Run()
     {
         SynchronizationContext.SetSynchronizationContext(_syncContext);
-        RootComponents.InitializeAsync().GetAwaiter().GetResult();
+
+        // Fire-and-forget component initialization - don't block waiting for it.
+        // The actual component rendering happens after Navigate when Blazor's JS boots.
+        // Blocking here would deadlock on Windows because the async continuations
+        // need the message loop, but WaitForClose() hasn't started yet.
+        _ = RootComponents.InitializeAsync();
+
         _webViewManager.Navigate("/");
         _window.WaitForClose();
     }
