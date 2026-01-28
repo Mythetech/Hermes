@@ -159,6 +159,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         settings.EnableDeveloperExtras = _options.DevToolsEnabled;
         settings.JavascriptCanAccessClipboard = true;
         settings.EnableJavascript = true;
+        settings.EnableWriteConsoleMessagesToStdout = true;  // Route console.log to stdout for debugging
 
         // Add load state tracking for diagnostics
         _webView.LoadChanged += (sender, args) =>
@@ -182,14 +183,25 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         // Inject JavaScript bridge at document start
         var bridgeScript = new WebKit.UserScript(
             """
+            console.log('[Hermes JS] Bridge script injecting...');
             window.external = {
                 sendMessage: function(message) {
+                    console.log('[Hermes JS] sendMessage called:', message.substring(0, 100));
                     window.webkit.messageHandlers.hermesHost.postMessage(message);
                 },
                 receiveMessage: function(callback) {
+                    console.log('[Hermes JS] receiveMessage callback registered');
                     window.__hermesReceiveCallback = callback;
                 }
             };
+            console.log('[Hermes JS] Bridge ready, window.external:', typeof window.external);
+            // Test the message channel immediately
+            try {
+                window.webkit.messageHandlers.hermesHost.postMessage('__HERMES_BRIDGE_TEST__');
+                console.log('[Hermes JS] Test message sent successfully');
+            } catch (e) {
+                console.log('[Hermes JS] Test message failed:', e.message);
+            }
             """,
             WebKit.UserContentInjectedFrames.AllFrames,
             WebKit.UserScriptInjectionTime.Start,
@@ -332,6 +344,9 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     public void SendWebMessage(string message)
     {
         ThrowIfNotInitialized();
+
+        Console.WriteLine($"[Hermes] SendWebMessage: {message.Substring(0, Math.Min(100, message.Length))}...");
+        Console.Out.Flush();
 
         // Use JSON serialization for consistent escaping across platforms
         var json = JsonSerializer.Serialize(message);
@@ -706,6 +721,9 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
     private void OnScriptMessageReceived(object? sender, ScriptMessageReceivedArgs args)
     {
+        Console.WriteLine("[Hermes] OnScriptMessageReceived called");
+        Console.Out.Flush();
+
         try
         {
             var jsResult = args.JsResult;
@@ -715,11 +733,20 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
             if (value.IsString)
             {
                 var message = value.ToString();
+                Console.WriteLine($"[Hermes] JS message received: {message.Substring(0, Math.Min(100, message.Length))}...");
+                Console.Out.Flush();
                 WebMessageReceived?.Invoke(message);
+            }
+            else
+            {
+                Console.WriteLine($"[Hermes] JS message is not a string, IsString={value.IsString}");
+                Console.Out.Flush();
             }
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"[Hermes] Failed to parse JavaScript message: {ex.Message}");
+            Console.Out.Flush();
             HermesLogger.Warning($"Failed to parse JavaScript message result: {ex.Message}");
         }
     }

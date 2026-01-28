@@ -298,7 +298,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
         if (_webView is not null)
         {
-            _webView.AddWebResourceRequestedFilter($"{scheme}:*", CoreWebView2WebResourceContext.All);
+            _webView.AddWebResourceRequestedFilter($"{scheme}://*", CoreWebView2WebResourceContext.All);
         }
     }
 
@@ -576,7 +576,9 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
             _webView.WebResourceRequested += HandleWebResourceRequested;
             foreach (var scheme in _customSchemeHandlers.Keys)
             {
-                _webView.AddWebResourceRequestedFilter($"{scheme}:*", CoreWebView2WebResourceContext.All);
+                var filter = $"{scheme}://*";
+                if (isSmokeTest) Console.WriteLine($"WEBVIEW_INIT:adding_filter:{filter}");
+                _webView.AddWebResourceRequestedFilter(filter, CoreWebView2WebResourceContext.All);
             }
 
             RefitContent();
@@ -608,6 +610,9 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
     private void HandleWebResourceRequested(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
     {
+        var isSmokeTest = Environment.GetEnvironmentVariable("HERMES_SMOKE_TEST") == "1";
+        if (isSmokeTest) Console.WriteLine($"RESOURCE_REQUEST:{e.Request.Uri}");
+
         var uri = new Uri(e.Request.Uri);
         var scheme = uri.Scheme;
 
