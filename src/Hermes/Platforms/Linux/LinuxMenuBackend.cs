@@ -13,14 +13,14 @@ internal sealed class LinuxMenuBackend : IMenuBackend
     private readonly MenuBar _menuBar;
     private readonly AccelGroup _accelGroup;
 
-    private readonly Dictionary<string, Menu> _menusByLabel = new();
-    private readonly Dictionary<string, Menu> _submenusByPath = new();
+    private readonly Dictionary<string, Gtk.Menu> _menusByLabel = new();
+    private readonly Dictionary<string, Gtk.Menu> _submenusByPath = new();
     private readonly Dictionary<string, MenuItem> _menuItemsByLabel = new();
     private readonly Dictionary<string, MenuItem> _itemsByCommandId = new();
     private readonly Dictionary<MenuItem, string> _commandIdByItem = new();
 
     private bool _menuBarAttached;
-    private Menu? _appMenu;
+    private Gtk.Menu? _appMenu;
     private MenuItem? _appMenuItem;
     private string? _appName;
 
@@ -268,7 +268,7 @@ internal sealed class LinuxMenuBackend : IMenuBackend
 
     public string AppName => _appName ??= System.Diagnostics.Process.GetCurrentProcess().ProcessName;
 
-    private Menu EnsureAppMenu()
+    private Gtk.Menu EnsureAppMenu()
     {
         if (_appMenu is not null)
             return _appMenu;
@@ -327,7 +327,7 @@ internal sealed class LinuxMenuBackend : IMenuBackend
 
     #endregion
 
-    private Menu? FindMenuByPath(string path)
+    private Gtk.Menu? FindMenuByPath(string path)
     {
         // Check submenu cache first
         if (_submenusByPath.TryGetValue(path, out var submenu))

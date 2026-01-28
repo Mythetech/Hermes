@@ -8,7 +8,7 @@ namespace Hermes.Platforms.Linux;
 internal sealed class LinuxContextMenuBackend : IContextMenuBackend
 {
     private readonly Gtk.Window _window;
-    private readonly Menu _menu;
+    private readonly Gtk.Menu _menu;
 
     private readonly Dictionary<string, MenuItem> _itemsByCommandId = new();
     private readonly Dictionary<MenuItem, string> _commandIdByItem = new();

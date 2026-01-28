@@ -28,17 +28,17 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     private int _lastX;
     private int _lastY;
 
-    private readonly ConcurrentQueue<(Action Action, TaskCompletionSource Tcs)> _invokeQueue = new();
+    private readonly ConcurrentQueue<(System.Action Action, TaskCompletionSource Tcs)> _invokeQueue = new();
     private readonly Dictionary<string, Func<string, Stream?>> _customSchemeHandlers = new();
 
     private LinuxMenuBackend? _menuBackend;
 
-    public event Action? Closing;
-    public event Action<int, int>? Resized;
-    public event Action<int, int>? Moved;
-    public event Action? FocusIn;
-    public event Action? FocusOut;
-    public event Action<string>? WebMessageReceived;
+    public event System.Action? Closing;
+    public event System.Action<int, int>? Resized;
+    public event System.Action<int, int>? Moved;
+    public event System.Action? FocusIn;
+    public event System.Action? FocusOut;
+    public event System.Action<string>? WebMessageReceived;
 
     public void Initialize(HermesWindowOptions options)
     {
@@ -420,7 +420,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
     public bool CheckAccess() => Environment.CurrentManagedThreadId == _uiThreadId;
 
-    public void Invoke(Action action)
+    public void Invoke(System.Action action)
     {
         if (CheckAccess())
         {
@@ -447,7 +447,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         tcs.Task.GetAwaiter().GetResult();
     }
 
-    public void BeginInvoke(Action action)
+    public void BeginInvoke(System.Action action)
     {
         if (CheckAccess())
         {
