@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text.Json;
@@ -542,8 +543,11 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         if (s_resolverRegistered) return;
         s_resolverRegistered = true;
 
-        // Get the WebKitGtkSharp assembly to register the resolver for
-        var webkitAssembly = typeof(WebKit.WebView).Assembly;
+        // IMPORTANT: Do NOT use typeof(WebKit.WebView).Assembly here!
+        // That would trigger loading the assembly before we register the resolver.
+        // Instead, load the assembly by name - this gives us a reference without
+        // triggering static constructors.
+        var webkitAssembly = Assembly.Load("WebkitGtkSharp");
 
         NativeLibrary.SetDllImportResolver(webkitAssembly, (libraryName, assembly, searchPath) =>
         {

@@ -29,6 +29,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     private HermesWindowOptions _options = null!;
     private bool _isInitialized;
     private bool _isDisposed;
+    private bool _shown;
     private int _uiThreadId;
 
     private CoreWebView2Environment? _webViewEnvironment;
@@ -106,6 +107,11 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     public void Show()
     {
         ThrowIfNotInitialized();
+
+        if (_shown)
+            return;
+
+        _shown = true;
 
         var showCmd = _options.Maximized ? SHOW_WINDOW_CMD.SW_MAXIMIZE
             : _options.Minimized ? SHOW_WINDOW_CMD.SW_MINIMIZE

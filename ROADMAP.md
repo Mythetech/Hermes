@@ -1,0 +1,155 @@
+# Hermes Roadmap
+
+This document tracks planned features and improvements for the Hermes framework.
+
+---
+
+## High Priority
+
+### System Tray / Status Bar Support
+**Status:** Not started
+**Platforms:** All
+
+Native system tray integration for background applications.
+
+| Platform | API |
+|----------|-----|
+| macOS | NSStatusItem / NSStatusBar |
+| Windows | Shell_NotifyIcon (NOTIFYICONDATA) |
+| Linux | libappindicator / GtkStatusIcon (deprecated) |
+
+**Features needed:**
+- [ ] Show/hide tray icon
+- [ ] Set icon image
+- [ ] Set tooltip
+- [ ] Tray icon click handling
+- [ ] Context menu on tray icon
+
+---
+
+### Native Notifications
+**Status:** Not started
+**Platforms:** All
+
+Desktop notifications that integrate with each platform's notification center.
+
+| Platform | API |
+|----------|-----|
+| macOS | NSUserNotificationCenter / UNUserNotificationCenter (macOS 10.14+) |
+| Windows | ToastNotificationManager (Windows 10+) or Shell_NotifyIcon balloons |
+| Linux | libnotify / D-Bus org.freedesktop.Notifications |
+
+**Features needed:**
+- [ ] Show simple notification (title + body)
+- [ ] Notification with icon
+- [ ] Notification click handling
+- [ ] Action buttons
+- [ ] Notification categories/channels
+
+---
+
+### Clipboard API
+**Status:** Not started
+**Platforms:** All
+
+Programmatic clipboard access for copy/paste operations.
+
+| Platform | API |
+|----------|-----|
+| macOS | NSPasteboard |
+| Windows | OpenClipboard / GetClipboardData / SetClipboardData |
+| Linux | GtkClipboard |
+
+**Features needed:**
+- [ ] Get/set text
+- [ ] Get/set HTML
+- [ ] Get/set image
+- [ ] Clipboard change monitoring
+
+---
+
+## Medium Priority
+
+### Global Hotkeys
+**Status:** Not started
+**Platforms:** All
+
+Register keyboard shortcuts that work even when the app is not focused.
+
+| Platform | API |
+|----------|-----|
+| macOS | CGEventTap or Carbon RegisterEventHotKey |
+| Windows | RegisterHotKey |
+| Linux | XGrabKey (X11) |
+
+---
+
+### Drag & Drop
+**Status:** WebView only
+**Platforms:** All
+
+Native drag and drop support for files and data.
+
+**Features needed:**
+- [ ] Drop files onto window
+- [ ] Drag files from window
+- [ ] Custom drag data types
+
+---
+
+### Window Transparency
+**Status:** Not started
+**Platforms:** All
+
+Transparent and translucent window backgrounds for overlay/HUD applications.
+
+---
+
+## Low Priority
+
+### macOS-Specific
+
+- [ ] **Touch Bar support** - For MacBook Pro
+- [ ] **Dock menu customization** - Right-click dock icon menu
+- [ ] **Handoff/Continuity** - Apple ecosystem integration
+- [ ] **Native full screen mode** - macOS full screen with separate space
+
+### Windows-Specific
+
+- [ ] **Jump Lists** - Taskbar right-click recent items
+- [ ] **Taskbar progress** - Progress indicator in taskbar icon
+- [ ] **Window frame customization** - Custom title bar drawing
+
+### Linux-Specific
+
+- [ ] **Wayland support** - Currently X11-focused via GTK
+- [ ] **XDG Desktop Entry** - Proper .desktop file integration
+- [ ] **D-Bus integration** - For system services
+
+---
+
+## Completed
+
+- [x] Window management (all platforms)
+- [x] WebView integration (all platforms)
+- [x] Native menus with accelerators
+- [x] Context menus
+- [x] File/folder dialogs
+- [x] Message dialogs
+- [x] Custom URL schemes
+- [x] JavaScript bridge (window.external)
+- [x] Windows accelerator enforcement
+- [x] Cross-platform error logging
+
+---
+
+## Contributing
+
+When implementing a feature from this roadmap:
+
+1. Create a new interface in `src/Hermes/Abstractions/` (e.g., `ITrayBackend.cs`)
+2. Implement platform backends in `src/Hermes/Platforms/{Windows,Linux,macOS}/`
+3. For macOS, add native code in `src/Hermes.Native.macOS/` if needed
+4. Add tests in `tests/Hermes.Tests/`
+5. Update `PLATFORM-DIFFERENCES.md` with any platform-specific behavior
+6. Move the item to "Completed" in this file
