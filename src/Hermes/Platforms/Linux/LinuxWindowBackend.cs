@@ -169,7 +169,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
         _webView.LoadFailed += (sender, args) =>
         {
-            Console.WriteLine($"[Hermes] WebView LoadFailed: {args.FailingUri} - Error: {args.Error?.Message ?? "unknown"}");
+            Console.WriteLine($"[Hermes] WebView LoadFailed: {args.FailingUri}");
             Console.Out.Flush();
         };
 
