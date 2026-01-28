@@ -32,6 +32,9 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
     private readonly ConcurrentQueue<(System.Action Action, TaskCompletionSource Tcs)> _invokeQueue = new();
     private readonly Dictionary<string, Func<string, Stream?>> _customSchemeHandlers = new();
+    private readonly HashSet<string> _registeredSchemes = new();
+    // Store callbacks to prevent GC - WebKit calls these from native code
+    private readonly List<WebKit.URISchemeRequestCallback> _schemeCallbacks = new();
 
     private LinuxMenuBackend? _menuBackend;
 
@@ -140,17 +143,16 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         _userContentManager.RegisterScriptMessageHandler("hermesHost");
         _userContentManager.ScriptMessageReceived += OnScriptMessageReceived;
 
-        // Get the default WebContext and register schemes BEFORE creating the WebView
-        // This is required for webkit2gtk-4.1 where scheme registration must happen
-        // before any WebView using that context tries to load the scheme
-        var context = WebKit.WebContext.GetDefault();
+        // Create WebView with user content manager
+        _webView = new WebKit.WebView(_userContentManager);
+
+        // Register custom URI schemes with the WebView's context
+        // Must happen after WebView creation but before any navigation
+        var context = _webView.Context;
         foreach (var scheme in _customSchemeHandlers.Keys)
         {
             RegisterSchemeWithContext(context, scheme);
         }
-
-        // Create WebView with user content manager (uses default context)
-        _webView = new WebKit.WebView(_userContentManager);
 
         // Configure settings
         var settings = _webView.Settings;
@@ -331,16 +333,22 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     {
         _customSchemeHandlers[scheme] = handler;
 
-        // If WebView exists, register with the default context immediately
-        // (The WebView uses the default context)
+        // If WebView exists, register with its context immediately
         if (_webView != null)
         {
-            RegisterSchemeWithContext(WebKit.WebContext.GetDefault(), scheme);
+            RegisterSchemeWithContext(_webView.Context, scheme);
         }
     }
 
     private void RegisterSchemeWithContext(WebKit.WebContext context, string scheme)
     {
+        // Avoid registering the same scheme twice - WebKit doesn't allow it
+        if (!_registeredSchemes.Add(scheme))
+        {
+            HermesLogger.Info($"URI scheme '{scheme}' already registered, skipping");
+            return;
+        }
+
         // Register scheme with security manager to allow access to local resources
         // Required for WebKit2GTK >= 2.32 for custom schemes to work properly with Blazor
         var securityManager = context.SecurityManager;
@@ -350,7 +358,9 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
         HermesLogger.Info($"Registering URI scheme '{scheme}' with WebContext");
 
-        context.RegisterUriScheme(scheme, (request) =>
+        // Create and store the callback to prevent garbage collection
+        // WebKit calls this from native code, so the delegate must stay alive
+        WebKit.URISchemeRequestCallback callback = (request) =>
         {
             var uri = request.Uri;
             HermesLogger.Info($"URI scheme handler called for: {uri}");
@@ -395,7 +405,12 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
                 HermesLogger.Warning($"No handler found for scheme '{scheme}'");
                 FinishWithError(request);
             }
-        });
+        };
+
+        // Store the callback to prevent GC
+        _schemeCallbacks.Add(callback);
+
+        context.RegisterUriScheme(scheme, callback);
     }
 
     private static void FinishWithError(WebKit.URISchemeRequest request)
