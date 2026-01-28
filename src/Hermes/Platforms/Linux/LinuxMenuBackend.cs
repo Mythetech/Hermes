@@ -40,7 +40,7 @@ internal sealed class LinuxMenuBackend : IMenuBackend
     {
         EnsureMenuBarAttached();
 
-        var menu = new Menu();
+        var menu = new Gtk.Menu();
         var menuItem = new MenuItem(label);
         menuItem.Submenu = menu;
 
@@ -219,7 +219,7 @@ internal sealed class LinuxMenuBackend : IMenuBackend
         if (parentMenu is null)
             throw new ArgumentException($"Menu '{menuPath}' not found", nameof(menuPath));
 
-        var submenu = new Menu();
+        var submenu = new Gtk.Menu();
         var menuItem = new MenuItem(submenuLabel);
         menuItem.Submenu = submenu;
 
@@ -275,7 +275,7 @@ internal sealed class LinuxMenuBackend : IMenuBackend
 
         EnsureMenuBarAttached();
 
-        _appMenu = new Menu();
+        _appMenu = new Gtk.Menu();
         _appMenuItem = new MenuItem(AppName);
         _appMenuItem.Submenu = _appMenu;
 

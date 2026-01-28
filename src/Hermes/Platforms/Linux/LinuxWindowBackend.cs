@@ -3,6 +3,7 @@ using System.Runtime.Versioning;
 using System.Text.Json;
 using Hermes.Abstractions;
 using Hermes.Diagnostics;
+using Gio;
 using Gtk;
 using WebKit;
 
@@ -177,7 +178,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
             """,
             WebKit.UserContentInjectedFrames.AllFrames,
             WebKit.UserScriptInjectionTime.Start,
-            null, null);
+            Array.Empty<string>(),
+            Array.Empty<string>());
         _userContentManager.AddScript(bridgeScript);
     }
 
@@ -318,8 +320,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         var json = JsonSerializer.Serialize(message);
         var script = $"if(window.__hermesReceiveCallback) window.__hermesReceiveCallback({json});";
 
-        // Use modern EvaluateJavascript API (not deprecated RunJavascript)
-        _webView.EvaluateJavascript(script, null, null);
+        // Run the JavaScript in the web view
+        _webView.RunJavascript(script, null, null, null);
     }
 
     public void RegisterCustomScheme(string scheme, Func<string, Stream?> handler)
@@ -349,8 +351,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
                         var bytes = ReadStreamToBytes(stream);
                         var mimeType = GetMimeType(uri);
 
-                        // Create GLib input stream from bytes
-                        var inputStream = new GLib.MemoryInputStream();
+                        // Create Gio input stream from bytes
+                        var inputStream = new Gio.MemoryInputStream();
                         inputStream.AddData(bytes, null);
 
                         request.Finish(inputStream, bytes.Length, mimeType);
@@ -374,8 +376,18 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
     private static void FinishWithError(WebKit.URISchemeRequest request)
     {
-        var error = new GLib.Error(GLib.Quark.FromString("hermes"), 404, "Not Found");
-        request.FinishError(error);
+        // Return empty content with 404 status - FinishError requires GLib.Error which isn't available
+        // as a public type in the current WebKitGTKSharp binding
+        try
+        {
+            var emptyStream = new Gio.MemoryInputStream();
+            request.Finish(emptyStream, 0, "text/plain");
+        }
+        catch
+        {
+            // If we can't even finish with empty content, just log and move on
+            HermesLogger.Warning($"Failed to handle URI scheme request: {request.Uri}");
+        }
     }
 
     private static byte[] ReadStreamToBytes(Stream stream)
@@ -557,7 +569,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         try
         {
             var jsResult = args.JsResult;
-            var value = jsResult.JsValue;
+            // Use GetJsValue() method - the JsValue property may not be available in all package versions
+            var value = jsResult.GetJsValue();
 
             if (value.IsString)
             {

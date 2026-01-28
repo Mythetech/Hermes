@@ -20,7 +20,7 @@ internal sealed class LinuxContextMenuBackend : IContextMenuBackend
     internal LinuxContextMenuBackend(Gtk.Window window)
     {
         _window = window;
-        _menu = new Menu();
+        _menu = new Gtk.Menu();
     }
 
     public void AddItem(string itemId, string label, string? accelerator = null)
@@ -102,7 +102,7 @@ internal sealed class LinuxContextMenuBackend : IContextMenuBackend
 
         // Popup at the specified location
         // The position func receives the menu's natural size and returns the desired x,y
-        _menu.Popup(null, null, (Menu menu, out int menuX, out int menuY, out bool pushIn) =>
+        _menu.Popup(null, null, (Gtk.Menu menu, out int menuX, out int menuY, out bool pushIn) =>
         {
             menuX = x;
             menuY = y;
