@@ -98,49 +98,25 @@ WM_USER
 WM_GETMINMAXINFO
 WM_DPICHANGED
 
-// Window Styles
-WS_OVERLAPPEDWINDOW
-WS_POPUP
-WS_VISIBLE
-WS_THICKFRAME
-WS_MINIMIZEBOX
-WS_MAXIMIZEBOX
-WS_MINIMIZE
-WS_MAXIMIZE
+// Window Styles (enum)
+WINDOW_STYLE
 
-// Extended Window Styles
-WS_EX_APPWINDOW
-WS_EX_TOPMOST
+// Extended Window Styles (enum)
+WINDOW_EX_STYLE
 
-// Show Window Commands
-SW_SHOW
-SW_HIDE
-SW_SHOWDEFAULT
-SW_MAXIMIZE
-SW_MINIMIZE
-SW_RESTORE
+// Show Window Commands (enum)
+SHOW_WINDOW_CMD
 
-// SetWindowPos Flags
-SWP_NOMOVE
-SWP_NOSIZE
-SWP_NOZORDER
-SWP_NOACTIVATE
+// SetWindowPos Flags (enum)
+SET_WINDOW_POS_FLAGS
 
 // Window Activate States
 WA_INACTIVE
 WA_ACTIVE
 WA_CLICKACTIVE
 
-// Menu Flags
-MF_POPUP
-MF_STRING
-MF_SEPARATOR
-MF_ENABLED
-MF_GRAYED
-MF_CHECKED
-MF_UNCHECKED
-MF_BYCOMMAND
-MF_BYPOSITION
+// Menu Flags (enum)
+MENU_ITEM_FLAGS
 
 // Accelerator APIs
 CreateAcceleratorTableW
@@ -148,64 +124,23 @@ DestroyAcceleratorTable
 TranslateAcceleratorW
 ACCEL
 
-// Accelerator Flags
-FVIRTKEY
-FSHIFT
-FCONTROL
-FALT
-FNOINVERT
+// Accelerator Flags (enum)
+ACCEL_VIRT_FLAGS
 
-// Virtual Key Codes
-VK_F1
-VK_F2
-VK_F3
-VK_F4
-VK_F5
-VK_F6
-VK_F7
-VK_F8
-VK_F9
-VK_F10
-VK_F11
-VK_F12
-VK_RETURN
-VK_ESCAPE
-VK_TAB
-VK_SPACE
-VK_BACK
-VK_DELETE
-VK_INSERT
-VK_HOME
-VK_END
-VK_PRIOR
-VK_NEXT
-VK_UP
-VK_DOWN
-VK_LEFT
-VK_RIGHT
+// Virtual Key Codes (enum)
+VIRTUAL_KEY
 
-// MessageBox Styles
-MB_OK
-MB_OKCANCEL
-MB_YESNO
-MB_YESNOCANCEL
-MB_ICONINFORMATION
-MB_ICONWARNING
-MB_ICONERROR
-MB_ICONQUESTION
+// MessageBox Styles (enum)
+MESSAGEBOX_STYLE
 
-// MessageBox Return Values
-IDOK
-IDCANCEL
-IDYES
-IDNO
+// MessageBox Return Values (enum)
+MESSAGEBOX_RESULT
 
 // Cursors
 IDC_ARROW
 
-// Class Styles
-CS_HREDRAW
-CS_VREDRAW
+// Class Styles (enum)
+WNDCLASS_STYLES
 
-// Color References
-COLOR_WINDOW
+// Color References (enum)
+SYS_COLOR_INDEX

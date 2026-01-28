@@ -82,7 +82,7 @@ internal sealed class WindowsContextMenuBackend : IContextMenuBackend
             return;
 
         var flags = isChecked ? MENU_ITEM_FLAGS.MF_CHECKED : MENU_ITEM_FLAGS.MF_UNCHECKED;
-        PInvoke.CheckMenuItem(_hMenu, id, MENU_ITEM_FLAGS.MF_BYCOMMAND | flags);
+        PInvoke.CheckMenuItem(_hMenu, id, (uint)(MENU_ITEM_FLAGS.MF_BYCOMMAND | flags));
     }
 
     public void SetItemLabel(string itemId, string label)
@@ -101,9 +101,14 @@ internal sealed class WindowsContextMenuBackend : IContextMenuBackend
                   | TRACK_POPUP_MENU_FLAGS.TPM_TOPALIGN
                   | TRACK_POPUP_MENU_FLAGS.TPM_RETURNCMD;
 
-        var selectedId = PInvoke.TrackPopupMenu(_hMenu, flags, x, y, 0, _hwnd);
+        BOOL result;
+        unsafe
+        {
+            result = PInvoke.TrackPopupMenu(_hMenu, flags, x, y, 0, _hwnd, null);
+        }
 
-        if (selectedId != 0 && _commandIdByItemId.TryGetValue((uint)selectedId, out var commandId))
+        var selectedId = (uint)result.Value;
+        if (selectedId != 0 && _commandIdByItemId.TryGetValue(selectedId, out var commandId))
         {
             MenuItemClicked?.Invoke(commandId);
         }

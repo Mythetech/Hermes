@@ -346,7 +346,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
             s_hInstance = PInvoke.GetModuleHandle((PCWSTR)null);
 
-            PInvoke.SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            PInvoke.SetThreadDpiAwarenessContext(PInvoke.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
             unsafe
             {
@@ -359,7 +359,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
                         lpfnWndProc = s_wndProc,
                         hInstance = s_hInstance,
                         hCursor = PInvoke.LoadCursor(HINSTANCE.Null, PInvoke.IDC_ARROW),
-                        hbrBackground = new HBRUSH((nint)(PInvoke.COLOR_WINDOW + 1)),
+                        hbrBackground = new HBRUSH((nint)((int)SYS_COLOR_INDEX.COLOR_WINDOW + 1)),
                         lpszClassName = className
                     };
 
@@ -671,8 +671,8 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
                 if (!hIcon.IsNull)
                 {
-                    PInvoke.SendMessage(_hwnd, PInvoke.WM_SETICON, 1, hIcon.Value);
-                    PInvoke.SendMessage(_hwnd, PInvoke.WM_SETICON, 0, hIcon.Value);
+                    PInvoke.SendMessage(_hwnd, PInvoke.WM_SETICON, 1, new LPARAM((nint)hIcon.Value));
+                    PInvoke.SendMessage(_hwnd, PInvoke.WM_SETICON, 0, new LPARAM((nint)hIcon.Value));
                 }
             }
         }

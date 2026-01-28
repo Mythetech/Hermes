@@ -62,15 +62,18 @@ internal sealed class WindowsMenuBackend : IMenuBackend
 
         _menusByLabel[label] = hPopup;
 
-        if (insertIndex < 0)
+        unsafe
         {
-            PInvoke.AppendMenu(_hMenuBar, MENU_ITEM_FLAGS.MF_POPUP, (nuint)hPopup.Value, label);
-        }
-        else
-        {
-            PInvoke.InsertMenu(_hMenuBar, (uint)insertIndex,
-                MENU_ITEM_FLAGS.MF_BYPOSITION | MENU_ITEM_FLAGS.MF_POPUP,
-                (nuint)hPopup.Value, label);
+            if (insertIndex < 0)
+            {
+                PInvoke.AppendMenu(_hMenuBar, MENU_ITEM_FLAGS.MF_POPUP, (nuint)hPopup.Value, label);
+            }
+            else
+            {
+                PInvoke.InsertMenu(_hMenuBar, (uint)insertIndex,
+                    MENU_ITEM_FLAGS.MF_BYPOSITION | MENU_ITEM_FLAGS.MF_POPUP,
+                    (nuint)hPopup.Value, label);
+            }
         }
 
         PInvoke.DrawMenuBar(_hwnd);
@@ -185,7 +188,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
             return;
 
         var flags = isChecked ? MENU_ITEM_FLAGS.MF_CHECKED : MENU_ITEM_FLAGS.MF_UNCHECKED;
-        PInvoke.CheckMenuItem(hMenu, id, MENU_ITEM_FLAGS.MF_BYCOMMAND | flags);
+        PInvoke.CheckMenuItem(hMenu, id, (uint)(MENU_ITEM_FLAGS.MF_BYCOMMAND | flags));
     }
 
     public void SetItemLabel(string menuLabel, string itemId, string label)
@@ -230,7 +233,10 @@ internal sealed class WindowsMenuBackend : IMenuBackend
         if (hSubmenu.IsNull)
             throw new InvalidOperationException($"Failed to create submenu '{submenuLabel}'");
 
-        PInvoke.AppendMenu(parentMenu.Value, MENU_ITEM_FLAGS.MF_POPUP, (nuint)hSubmenu.Value, submenuLabel);
+        unsafe
+        {
+            PInvoke.AppendMenu(parentMenu.Value, MENU_ITEM_FLAGS.MF_POPUP, (nuint)hSubmenu.Value, submenuLabel);
+        }
 
         var fullPath = $"{menuPath}/{submenuLabel}";
         _submenusByPath[fullPath] = hSubmenu;
@@ -284,9 +290,12 @@ internal sealed class WindowsMenuBackend : IMenuBackend
             throw new InvalidOperationException("Failed to create app menu");
 
         // Insert at position 0 (before File, Edit, etc.)
-        PInvoke.InsertMenu(_hMenuBar, 0,
-            MENU_ITEM_FLAGS.MF_BYPOSITION | MENU_ITEM_FLAGS.MF_POPUP,
-            (nuint)hPopup.Value, AppName);
+        unsafe
+        {
+            PInvoke.InsertMenu(_hMenuBar, 0,
+                MENU_ITEM_FLAGS.MF_BYPOSITION | MENU_ITEM_FLAGS.MF_POPUP,
+                (nuint)hPopup.Value, AppName);
+        }
 
         _appMenu = hPopup;
         PInvoke.DrawMenuBar(_hwnd);

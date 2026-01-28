@@ -6,7 +6,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsAotCompatible>true</IsAotCompatible>
     <!-- Suppress warnings for intentional unsafe COM interop and AOT compatibility in Windows code -->
-    <NoWarn>$(NoWarn);CS8500;IL2026;IL3050</NoWarn>
+    <NoWarn>$(NoWarn);CS8500;IL2026;IL3050;IL2050</NoWarn>
   </PropertyGroup>
 
   <!-- NuGet Package Metadata -->
