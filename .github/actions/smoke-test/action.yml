@@ -35,7 +35,7 @@ runs:
         Write-Output "Starting smoke test: $appPath"
         Write-Output "Timeout: ${timeout}s"
 
-        # Start process and capture output
+        # Start process with redirected streams
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName = $appPath
         $psi.UseShellExecute = $false
@@ -47,10 +47,26 @@ runs:
 
         $process = [System.Diagnostics.Process]::Start($psi)
 
-        $exited = $process.WaitForExit($timeout * 1000)
+        # Read streams asynchronously to avoid blocking
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
 
-        $stdout = $process.StandardOutput.ReadToEnd()
-        $stderr = $process.StandardError.ReadToEnd()
+        # Polling loop with active timeout enforcement
+        $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        $timedOut = $false
+
+        while (-not $process.HasExited) {
+          if ($stopwatch.Elapsed.TotalSeconds -ge $timeout) {
+            $timedOut = $true
+            try { $process.Kill() } catch { }
+            break
+          }
+          Start-Sleep -Milliseconds 500
+        }
+
+        # Now safe to read output (process has exited or was killed)
+        $stdout = $stdoutTask.Result
+        $stderr = $stderrTask.Result
 
         Write-Output ""
         Write-Output "=== Application Output ==="
@@ -62,9 +78,8 @@ runs:
           Write-Output $stderr
         }
 
-        if (-not $exited) {
+        if ($timedOut) {
           Write-Error "TIMEOUT: Process did not exit within ${timeout}s"
-          try { $process.Kill() } catch { }
           exit 1
         }
 
@@ -109,11 +124,27 @@ runs:
 
         echo "Executable: $EXECUTABLE"
 
-        # Run with timeout
-        set +e
-        timeout "${TIMEOUT}s" "$EXECUTABLE" > stdout.txt 2>&1
-        EXIT_CODE=$?
-        set -e
+        # Run with timeout (macOS doesn't have GNU timeout)
+        "$EXECUTABLE" > stdout.txt 2>&1 &
+        PID=$!
+
+        # Wait for process with timeout
+        SECONDS=0
+        EXIT_CODE=""
+        while kill -0 "$PID" 2>/dev/null; do
+          if [[ $SECONDS -ge $TIMEOUT ]]; then
+            kill "$PID" 2>/dev/null || true
+            wait "$PID" 2>/dev/null || true
+            EXIT_CODE=124
+            break
+          fi
+          sleep 1
+        done
+
+        if [[ -z "$EXIT_CODE" ]]; then
+          wait "$PID"
+          EXIT_CODE=$?
+        fi
 
         echo ""
         echo "=== Application Output ==="

@@ -1,0 +1,3 @@
+[submodule "external/GtkSharp"]
+	path = external/GtkSharp
+	url = https://github.com/Mythetech/GtkSharp.git
