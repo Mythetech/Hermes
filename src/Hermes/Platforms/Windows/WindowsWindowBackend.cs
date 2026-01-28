@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text.Json;
@@ -23,6 +22,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     private static HINSTANCE s_hInstance;
     private static bool s_classRegistered;
     private static readonly object s_registrationLock = new();
+    private static readonly WNDPROC s_wndProc = WindowProc;
 
     private HWND _hwnd;
     private HermesWindowOptions _options = null!;
@@ -358,7 +358,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
                     {
                         cbSize = (uint)sizeof(WNDCLASSEXW),
                         style = WNDCLASS_STYLES.CS_HREDRAW | WNDCLASS_STYLES.CS_VREDRAW,
-                        lpfnWndProc = &WindowProc,
+                        lpfnWndProc = s_wndProc,
                         hInstance = s_hInstance,
                         hCursor = PInvoke.LoadCursor(HINSTANCE.Null, PInvoke.IDC_ARROW),
                         hbrBackground = new HBRUSH((nint)(PInvoke.COLOR_WINDOW + 1)),
@@ -375,7 +375,6 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         }
     }
 
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
     private static LRESULT WindowProc(HWND hwnd, uint uMsg, WPARAM wParam, LPARAM lParam)
     {
         if (!s_hwndToInstance.TryGetValue(hwnd, out var instance))

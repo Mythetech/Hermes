@@ -178,8 +178,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
             """,
             WebKit.UserContentInjectedFrames.AllFrames,
             WebKit.UserScriptInjectionTime.Start,
-            Array.Empty<string>(),
-            Array.Empty<string>());
+            null,
+            null);
         _userContentManager.AddScript(bridgeScript);
     }
 
@@ -320,8 +320,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         var json = JsonSerializer.Serialize(message);
         var script = $"if(window.__hermesReceiveCallback) window.__hermesReceiveCallback({json});";
 
-        // Run the JavaScript in the web view
-        _webView.RunJavascript(script, null, null, null);
+        // Run the JavaScript in the web view (fire-and-forget, no callback needed)
+        _webView.RunJavascript(script, null, null);
     }
 
     public void RegisterCustomScheme(string scheme, Func<string, Stream?> handler)
@@ -569,8 +569,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         try
         {
             var jsResult = args.JsResult;
-            // Use GetJsValue() method - the JsValue property may not be available in all package versions
-            var value = jsResult.GetJsValue();
+            // Use JsValue property from the develop package
+            var value = jsResult.JsValue;
 
             if (value.IsString)
             {

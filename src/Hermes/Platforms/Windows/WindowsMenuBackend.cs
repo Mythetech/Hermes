@@ -451,7 +451,13 @@ internal sealed class WindowsMenuBackend : IMenuBackend
 
         // Create new table
         var accelArray = _accelerators.ToArray();
-        _hAccelTable = PInvoke.CreateAcceleratorTable(accelArray, accelArray.Length);
+        unsafe
+        {
+            fixed (ACCEL* pAccel = accelArray)
+            {
+                _hAccelTable = PInvoke.CreateAcceleratorTable(pAccel, accelArray.Length);
+            }
+        }
         _accelTableDirty = false;
     }
 
@@ -465,7 +471,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
             .Replace("Cmd+", "Ctrl+", StringComparison.OrdinalIgnoreCase)
             .Replace("Command+", "Ctrl+", StringComparison.OrdinalIgnoreCase);
 
-        byte modifiers = (byte)ACCEL_VIRT_FLAGS.FVIRTKEY;
+        var modifiers = ACCEL_VIRT_FLAGS.FVIRTKEY;
         ushort key = 0;
 
         var parts = normalized.Split('+', StringSplitOptions.RemoveEmptyEntries);
@@ -478,13 +484,13 @@ internal sealed class WindowsMenuBackend : IMenuBackend
             {
                 case "CTRL":
                 case "CONTROL":
-                    modifiers |= (byte)ACCEL_VIRT_FLAGS.FCONTROL;
+                    modifiers |= ACCEL_VIRT_FLAGS.FCONTROL;
                     break;
                 case "ALT":
-                    modifiers |= (byte)ACCEL_VIRT_FLAGS.FALT;
+                    modifiers |= ACCEL_VIRT_FLAGS.FALT;
                     break;
                 case "SHIFT":
-                    modifiers |= (byte)ACCEL_VIRT_FLAGS.FSHIFT;
+                    modifiers |= ACCEL_VIRT_FLAGS.FSHIFT;
                     break;
                 default:
                     // This should be the key

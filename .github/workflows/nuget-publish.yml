@@ -42,6 +42,9 @@ jobs:
       # All platforms: Build and test
       - name: Restore
         run: dotnet restore
+        env:
+          GITHUB_USERNAME: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build
         run: dotnet build -c Release --no-restore
@@ -85,8 +88,14 @@ jobs:
         run: make universal
         working-directory: src/Hermes.Native.macOS
 
+      - name: Restore
+        run: dotnet restore
+        env:
+          GITHUB_USERNAME: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build Sample App
-        run: dotnet build samples/BlazorHelloWorld -c Release
+        run: dotnet build samples/BlazorHelloWorld -c Release --no-restore
 
       - name: Run Smoke Test
         uses: ./.github/actions/smoke-test
@@ -114,6 +123,12 @@ jobs:
           name: native-osx
           path: artifacts/native
 
+      - name: Restore
+        run: dotnet restore
+        env:
+          GITHUB_USERNAME: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Determine Version
         id: version
         run: |
@@ -127,6 +142,7 @@ jobs:
         run: |
           dotnet pack src/Hermes/Hermes.csproj \
             -c Release \
+            --no-restore \
             -p:Version=${{ steps.version.outputs.VERSION }} \
             -p:IsPackaging=true \
             -p:NativeBinaryPath=${{ github.workspace }}/artifacts/native \
@@ -136,6 +152,7 @@ jobs:
         run: |
           dotnet pack src/Hermes.Blazor/Hermes.Blazor.csproj \
             -c Release \
+            --no-restore \
             -p:Version=${{ steps.version.outputs.VERSION }} \
             -o packages
 

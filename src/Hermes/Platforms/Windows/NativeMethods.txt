@@ -19,6 +19,10 @@ LoadCursorW
 CreateSolidBrush
 DeleteObject
 GetModuleHandleW
+CW_USEDEFAULT
+MINMAXINFO
+WINDOW_LONG_PTR_INDEX
+WM_SETICON
 
 // Message Loop
 GetMessageW
@@ -33,6 +37,7 @@ PeekMessageW
 SetThreadDpiAwarenessContext
 GetDpiForWindow
 GetSystemMetricsForDpi
+DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
 
 // Monitor Info
 GetSystemMetrics
@@ -56,15 +61,24 @@ CheckMenuItem
 ModifyMenuW
 GetMenuItemInfoW
 SetMenuItemInfoW
+TrackPopupMenu
+EndMenu
+TRACK_POPUP_MENU_FLAGS
 
 // Dialogs - COM
 IFileOpenDialog
 IFileSaveDialog
+IFileDialog
 IShellItem
 IShellItemArray
 SHCreateItemFromParsingName
 CoCreateInstance
 CoTaskMemFree
+FileOpenDialog
+FileSaveDialog
+COMDLG_FILTERSPEC
+FILEOPENDIALOGOPTIONS
+SIGDN
 
 // MessageBox
 MessageBoxW
