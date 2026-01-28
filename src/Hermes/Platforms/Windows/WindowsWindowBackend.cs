@@ -502,9 +502,9 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         try
         {
             // Use pre-warmed environment from pool (instant if Prewarm() was called)
+            // Note: No ConfigureAwait(false) - we need continuations on UI thread for WebView2
             _webViewEnvironment = await WebView2EnvironmentPool.Instance
-                .GetOrCreateEnvironmentAsync()
-                .ConfigureAwait(false);
+                .GetOrCreateEnvironmentAsync();
 
             _webViewController = await _webViewEnvironment.CreateCoreWebView2ControllerAsync(_hwnd);
             _webView = _webViewController.CoreWebView2;

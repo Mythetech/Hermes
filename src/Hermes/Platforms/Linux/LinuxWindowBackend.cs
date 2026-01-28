@@ -543,37 +543,75 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         if (s_resolverRegistered) return;
         s_resolverRegistered = true;
 
-        // IMPORTANT: Do NOT use typeof(WebKit.WebView).Assembly here!
-        // That would trigger loading the assembly before we register the resolver.
-        // Instead, load the assembly by name - this gives us a reference without
-        // triggering static constructors.
-        var webkitAssembly = Assembly.Load("WebkitGtkSharp");
-
-        NativeLibrary.SetDllImportResolver(webkitAssembly, (libraryName, assembly, searchPath) =>
+        // GtkSharp uses its own GLibrary.Load mechanism with hardcoded library names.
+        // The standard NativeLibrary.SetDllImportResolver doesn't work because GtkSharp
+        // bypasses P/Invoke. We need to patch GLibrary's _libraryDefinitions dictionary
+        // via reflection to add webkit2gtk-4.1 support for Ubuntu 24.04+.
+        try
         {
-            // If requesting webkit2gtk-4.0, try 4.1 first (for Ubuntu 24.04+)
-            if (libraryName.Contains("webkit2gtk-4.0"))
-            {
-                // Try webkit2gtk-4.1 variants
-                var lib41Names = new[]
-                {
-                    "libwebkit2gtk-4.1.so.0",
-                    "libwebkit2gtk-4.1.so",
-                    "webkit2gtk-4.1"
-                };
+            // Load WebkitGtkSharp assembly without triggering type initialization
+            var webkitAssembly = Assembly.Load("WebkitGtkSharp");
 
-                foreach (var name in lib41Names)
-                {
-                    if (NativeLibrary.TryLoad(name, out var handle))
-                    {
-                        return handle;
-                    }
-                }
+            // Get the internal GLibrary class (compiled into each GtkSharp assembly)
+            var gLibraryType = webkitAssembly.GetType("GLibrary", throwOnError: false);
+            if (gLibraryType == null)
+            {
+                HermesLogger.Warning("Could not find GLibrary type for webkit2gtk-4.1 patching");
+                return;
             }
 
-            // Fall back to default resolution
-            return IntPtr.Zero;
-        });
+            // Get the _libraryDefinitions dictionary field
+            var definitionsField = gLibraryType.GetField("_libraryDefinitions",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            if (definitionsField == null)
+            {
+                HermesLogger.Warning("Could not find _libraryDefinitions field for webkit2gtk-4.1 patching");
+                return;
+            }
+
+            // Get the Library enum type
+            var libraryEnumType = webkitAssembly.GetType("Library", throwOnError: false);
+            if (libraryEnumType == null)
+            {
+                HermesLogger.Warning("Could not find Library enum for webkit2gtk-4.1 patching");
+                return;
+            }
+
+            // Get the Webkit enum value
+            var webkitEnumValue = Enum.Parse(libraryEnumType, "Webkit");
+
+            // Force the static constructor to run by accessing the field
+            // This initializes _libraryDefinitions with the default (4.0) values
+            var definitions = definitionsField.GetValue(null);
+            if (definitions == null)
+            {
+                HermesLogger.Warning("_libraryDefinitions is null");
+                return;
+            }
+
+            // The dictionary is Dictionary<Library, string[]> - use reflection to update it
+            var dictionaryType = definitions.GetType();
+            var indexer = dictionaryType.GetProperty("Item");
+
+            // Set new library names that include webkit2gtk-4.1 variants first
+            // On Ubuntu 24.04+, only 4.1 is available, so we try those first
+            var newLibraryNames = new[]
+            {
+                "libwebkit2gtk-4.1.so.0",  // Ubuntu 24.04+ (try first)
+                "libwebkit2gtk-4.1.so",
+                "libwebkit2gtk-4.0.so.37", // Ubuntu 22.04 and older
+                "libwebkit2gtk-4.0.dll",
+                "libwebkit2gtk-4.0.dylib",
+                "libwebkit2gtk-4.0.0.dll"
+            };
+
+            indexer?.SetValue(definitions, newLibraryNames, new[] { webkitEnumValue });
+            HermesLogger.Info("Patched GLibrary to support webkit2gtk-4.1");
+        }
+        catch (Exception ex)
+        {
+            HermesLogger.Warning($"Failed to patch webkit2gtk library definitions: {ex.Message}");
+        }
     }
 
     private void OnWindowDeleteEvent(object? sender, DeleteEventArgs args)

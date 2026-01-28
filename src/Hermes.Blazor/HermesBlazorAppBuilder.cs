@@ -173,6 +173,10 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             jsComponents,
             _hostPage);
 
+        // Set sync context before Show() so WebView2 initialization continuations
+        // are marshaled back to the UI thread via the message loop
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+
         window.Show();
 
         var app = new HermesBlazorApp(serviceProvider, _hostBuilder.Configuration, window, webViewManager, syncContext);
