@@ -10,6 +10,71 @@ using WebKit;
 
 namespace Hermes.Platforms.Linux;
 
+/// <summary>
+/// P/Invoke declarations for webkit2gtk-4.1 CORS header support.
+/// The GtkSharp binding doesn't expose URISchemeResponse, so we use native calls.
+/// </summary>
+internal static class WebKitNative
+{
+    // WebKit2GTK 4.1 uses libsoup3
+    private const string LibWebKit = "libwebkit2gtk-4.1.so.0";
+    private const string LibSoup = "libsoup-3.0.so.0";
+
+    // SoupMessageHeadersType enum
+    private const int SOUP_MESSAGE_HEADERS_RESPONSE = 1;
+
+    [DllImport(LibSoup)]
+    public static extern IntPtr soup_message_headers_new(int type);
+
+    [DllImport(LibSoup)]
+    public static extern void soup_message_headers_append(IntPtr headers, string name, string value);
+
+    [DllImport(LibSoup)]
+    public static extern void soup_message_headers_free(IntPtr headers);
+
+    [DllImport(LibWebKit)]
+    public static extern IntPtr webkit_uri_scheme_response_new(IntPtr input_stream, long stream_length);
+
+    [DllImport(LibWebKit)]
+    public static extern void webkit_uri_scheme_response_set_content_type(IntPtr response, string content_type);
+
+    [DllImport(LibWebKit)]
+    public static extern void webkit_uri_scheme_response_set_http_headers(IntPtr response, IntPtr headers);
+
+    [DllImport(LibWebKit)]
+    public static extern void webkit_uri_scheme_request_finish_with_response(IntPtr request, IntPtr response);
+
+    /// <summary>
+    /// Finish a URI scheme request with CORS headers to allow fetch() API access.
+    /// </summary>
+    public static void FinishWithCorsHeaders(URISchemeRequest request, GLib.InputStream inputStream, long contentLength, string contentType)
+    {
+        // Create SoupMessageHeaders for the response
+        var headers = soup_message_headers_new(SOUP_MESSAGE_HEADERS_RESPONSE);
+        try
+        {
+            // Add CORS headers to allow fetch() from the app origin
+            soup_message_headers_append(headers, "Access-Control-Allow-Origin", "*");
+            soup_message_headers_append(headers, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+            soup_message_headers_append(headers, "Access-Control-Allow-Headers", "*");
+
+            // Create URI scheme response
+            var response = webkit_uri_scheme_response_new(inputStream.Handle, contentLength);
+            webkit_uri_scheme_response_set_content_type(response, contentType);
+            webkit_uri_scheme_response_set_http_headers(response, headers);
+
+            // Finish with the response (this transfers ownership of headers to the response)
+            webkit_uri_scheme_request_finish_with_response(request.Handle, response);
+        }
+        catch
+        {
+            // If P/Invoke fails, clean up headers
+            soup_message_headers_free(headers);
+            throw;
+        }
+    }
+}
+
 [SupportedOSPlatform("linux")]
 internal sealed class LinuxWindowBackend : IHermesWindowBackend
 {
@@ -414,7 +479,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
                         var inputStream = new GLib.MemoryInputStream();
                         inputStream.AddData(ptr, bytes.Length, null);
 
-                        request.Finish(inputStream, bytes.Length, mimeType);
+                        // Use P/Invoke to finish with CORS headers for fetch() API support
+                        WebKitNative.FinishWithCorsHeaders(request, inputStream, bytes.Length, mimeType);
                     }
                     catch (Exception ex)
                     {

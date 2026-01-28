@@ -613,31 +613,49 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         var isSmokeTest = Environment.GetEnvironmentVariable("HERMES_SMOKE_TEST") == "1";
         if (isSmokeTest) Console.WriteLine($"RESOURCE_REQUEST:{e.Request.Uri}");
 
-        var uri = new Uri(e.Request.Uri);
-        var scheme = uri.Scheme;
-
-        if (_customSchemeHandlers.TryGetValue(scheme, out var handler))
+        try
         {
-            var stream = handler(e.Request.Uri);
-            if (stream is not null)
+            var uri = new Uri(e.Request.Uri);
+            var scheme = uri.Scheme;
+
+            if (_customSchemeHandlers.TryGetValue(scheme, out var handler))
             {
-                var contentType = GetContentType(uri.AbsolutePath);
-                var response = _webViewEnvironment!.CreateWebResourceResponse(
-                    stream,
-                    200,
-                    "OK",
-                    $"Content-Type: {contentType}");
-                e.Response = response;
+                var stream = handler(e.Request.Uri);
+                if (stream is not null)
+                {
+                    var contentType = GetContentType(uri.AbsolutePath);
+                    if (isSmokeTest) Console.WriteLine($"RESOURCE_RESPONSE:200,{contentType},{stream.Length}bytes");
+                    var headers = $"Content-Type: {contentType}\r\n" +
+                                  "Access-Control-Allow-Origin: *\r\n" +
+                                  "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n" +
+                                  "Access-Control-Allow-Headers: *";
+                    var response = _webViewEnvironment!.CreateWebResourceResponse(
+                        stream,
+                        200,
+                        "OK",
+                        headers);
+                    e.Response = response;
+                }
+                else
+                {
+                    if (isSmokeTest) Console.WriteLine($"RESOURCE_RESPONSE:404,handler_returned_null");
+                    var headers = "Access-Control-Allow-Origin: *";
+                    var response = _webViewEnvironment!.CreateWebResourceResponse(
+                        null,
+                        404,
+                        "Not Found",
+                        headers);
+                    e.Response = response;
+                }
             }
             else
             {
-                var response = _webViewEnvironment!.CreateWebResourceResponse(
-                    null,
-                    404,
-                    "Not Found",
-                    string.Empty);
-                e.Response = response;
+                if (isSmokeTest) Console.WriteLine($"RESOURCE_RESPONSE:no_handler_for_scheme:{scheme}");
             }
+        }
+        catch (Exception ex)
+        {
+            if (isSmokeTest) Console.WriteLine($"RESOURCE_ERROR:{ex.GetType().Name}:{ex.Message}");
         }
     }
 
