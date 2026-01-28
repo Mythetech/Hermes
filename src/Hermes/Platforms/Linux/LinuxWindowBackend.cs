@@ -167,11 +167,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
             Console.Out.Flush();
         };
 
-        _webView.LoadFailed += (sender, args) =>
-        {
-            Console.WriteLine($"[Hermes] WebView LoadFailed: {args.FailingUri}");
-            Console.Out.Flush();
-        };
+        // Note: LoadFailed event handler removed - GtkSharp can't marshal GError type
+        // and causes "Unknown type GError" exception that crashes the app
 
         // Disable context menu if requested
         if (!_options.ContextMenuEnabled)
@@ -460,6 +457,10 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         var queryIndex = uri.IndexOf('?');
         if (queryIndex >= 0)
             path = uri[..queryIndex];
+
+        // Handle root path or paths ending with / - these serve index.html
+        if (path.EndsWith('/') || path == "app://localhost" || path == "http://localhost")
+            return "text/html";
 
         var ext = Path.GetExtension(path).ToLowerInvariant();
         return ext switch

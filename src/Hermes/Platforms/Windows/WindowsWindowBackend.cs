@@ -54,6 +54,14 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         if (_isInitialized)
             throw new InvalidOperationException("Window already initialized");
 
+        // WebView2 requires an STA thread. Without [STAThread] on Main(), COM operations will fail.
+        if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
+        {
+            throw new InvalidOperationException(
+                "Hermes requires the main thread to be an STA thread. " +
+                "Add [STAThread] attribute to your Main method or use 'async Task Main(string[] args)' with [STAThread].");
+        }
+
         _options = options;
         _uiThreadId = Environment.CurrentManagedThreadId;
 

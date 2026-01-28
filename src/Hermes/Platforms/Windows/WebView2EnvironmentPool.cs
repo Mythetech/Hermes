@@ -23,8 +23,8 @@ internal sealed class WebView2EnvironmentPool
     private WebView2EnvironmentPool() { }
 
     /// <summary>
-    /// Begin pre-warming on a background thread. Call early in app startup.
-    /// Fire-and-forget - exceptions are logged but not thrown.
+    /// Begin pre-warming the WebView2 environment. Call early in app startup.
+    /// Fire-and-forget - must be called from an STA thread.
     /// </summary>
     public void BeginPrewarm(string? userDataFolder = null)
     {
@@ -46,9 +46,9 @@ internal sealed class WebView2EnvironmentPool
         // Check if initialization is in progress
         var existingTask = _initTask;
         if (existingTask is not null)
-            return await existingTask.ConfigureAwait(false);
+            return await existingTask;
 
-        await _initLock.WaitAsync().ConfigureAwait(false);
+        await _initLock.WaitAsync();
         try
         {
             // Double-check after acquiring lock
@@ -59,12 +59,12 @@ internal sealed class WebView2EnvironmentPool
             if (_initTask is not null)
             {
                 _initLock.Release();
-                return await _initTask.ConfigureAwait(false);
+                return await _initTask;
             }
 
             // Start initialization
             _initTask = CreateEnvironmentAsync(userDataFolder ?? _userDataFolder);
-            _sharedEnvironment = await _initTask.ConfigureAwait(false);
+            _sharedEnvironment = await _initTask;
             return _sharedEnvironment;
         }
         finally
@@ -86,7 +86,7 @@ internal sealed class WebView2EnvironmentPool
         return await CoreWebView2Environment.CreateAsync(
             browserExecutableFolder: null,
             userDataFolder: userDataFolder,
-            options: null).ConfigureAwait(false);
+            options: null);
     }
 
     /// <summary>
