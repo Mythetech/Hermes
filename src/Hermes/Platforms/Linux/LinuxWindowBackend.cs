@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text.Json;
 using Hermes.Abstractions;
@@ -351,8 +352,12 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
                         var mimeType = GetMimeType(uri);
 
                         // Create GLib input stream from bytes
+                        // Allocate unmanaged memory and copy bytes (GLib takes ownership)
+                        var ptr = Marshal.AllocHGlobal(bytes.Length);
+                        Marshal.Copy(bytes, 0, ptr, bytes.Length);
+
                         var inputStream = new GLib.MemoryInputStream();
-                        inputStream.AddData(bytes, null);
+                        inputStream.AddData(ptr, bytes.Length, null);
 
                         request.Finish(inputStream, bytes.Length, mimeType);
                     }

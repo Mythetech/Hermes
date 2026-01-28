@@ -52,7 +52,7 @@
   <!-- Windows dependencies and source files -->
   <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3240.44" />
-    <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.183" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.*" PrivateAssets="all" />
     <!-- Include NativeMethods.txt from Platforms/Windows subfolder for CsWin32 -->
     <AdditionalFiles Include="Platforms/Windows/NativeMethods.txt" />
     <AdditionalFiles Include="Platforms/Windows/NativeMethods.json" />

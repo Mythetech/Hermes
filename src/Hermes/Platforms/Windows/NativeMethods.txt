@@ -98,25 +98,49 @@ WM_USER
 WM_GETMINMAXINFO
 WM_DPICHANGED
 
-// Window Styles (enum instead of individual constants)
-WINDOW_STYLE
+// Window Styles
+WS_OVERLAPPEDWINDOW
+WS_POPUP
+WS_VISIBLE
+WS_THICKFRAME
+WS_MINIMIZEBOX
+WS_MAXIMIZEBOX
+WS_MINIMIZE
+WS_MAXIMIZE
 
-// Extended Window Styles (enum instead of individual constants)
-WINDOW_EX_STYLE
+// Extended Window Styles
+WS_EX_APPWINDOW
+WS_EX_TOPMOST
 
-// Show Window Commands (enum instead of individual constants)
-SHOW_WINDOW_CMD
+// Show Window Commands
+SW_SHOW
+SW_HIDE
+SW_SHOWDEFAULT
+SW_MAXIMIZE
+SW_MINIMIZE
+SW_RESTORE
 
-// SetWindowPos Flags (enum instead of individual constants)
-SET_WINDOW_POS_FLAGS
+// SetWindowPos Flags
+SWP_NOMOVE
+SWP_NOSIZE
+SWP_NOZORDER
+SWP_NOACTIVATE
 
 // Window Activate States
 WA_INACTIVE
 WA_ACTIVE
 WA_CLICKACTIVE
 
-// Menu Flags (enum instead of individual constants)
-MENU_ITEM_FLAGS
+// Menu Flags
+MF_POPUP
+MF_STRING
+MF_SEPARATOR
+MF_ENABLED
+MF_GRAYED
+MF_CHECKED
+MF_UNCHECKED
+MF_BYCOMMAND
+MF_BYPOSITION
 
 // Accelerator APIs
 CreateAcceleratorTableW
@@ -124,23 +148,64 @@ DestroyAcceleratorTable
 TranslateAcceleratorW
 ACCEL
 
-// Accelerator Flags (enum instead of individual constants)
-ACCEL_VIRT_FLAGS
+// Accelerator Flags
+FVIRTKEY
+FSHIFT
+FCONTROL
+FALT
+FNOINVERT
 
-// Virtual Key Codes (enum instead of individual constants)
-VIRTUAL_KEY
+// Virtual Key Codes
+VK_F1
+VK_F2
+VK_F3
+VK_F4
+VK_F5
+VK_F6
+VK_F7
+VK_F8
+VK_F9
+VK_F10
+VK_F11
+VK_F12
+VK_RETURN
+VK_ESCAPE
+VK_TAB
+VK_SPACE
+VK_BACK
+VK_DELETE
+VK_INSERT
+VK_HOME
+VK_END
+VK_PRIOR
+VK_NEXT
+VK_UP
+VK_DOWN
+VK_LEFT
+VK_RIGHT
 
-// MessageBox Styles (enum instead of individual constants)
-MESSAGEBOX_STYLE
+// MessageBox Styles
+MB_OK
+MB_OKCANCEL
+MB_YESNO
+MB_YESNOCANCEL
+MB_ICONINFORMATION
+MB_ICONWARNING
+MB_ICONERROR
+MB_ICONQUESTION
 
-// MessageBox Return Values (enum instead of individual constants)
-MESSAGEBOX_RESULT
+// MessageBox Return Values
+IDOK
+IDCANCEL
+IDYES
+IDNO
 
 // Cursors
 IDC_ARROW
 
-// Class Styles (enum instead of individual constants)
-WNDCLASS_STYLES
+// Class Styles
+CS_HREDRAW
+CS_VREDRAW
 
-// Color References (enum instead of individual constants)
-SYS_COLOR_INDEX
+// Color References
+COLOR_WINDOW
