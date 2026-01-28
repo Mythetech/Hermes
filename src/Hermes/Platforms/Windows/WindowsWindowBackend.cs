@@ -347,7 +347,8 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
             s_hInstance = PInvoke.GetModuleHandle((PCWSTR)null);
 
-            PInvoke.SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 is defined as ((DPI_AWARENESS_CONTEXT)-4)
+            PInvoke.SetThreadDpiAwarenessContext(new DPI_AWARENESS_CONTEXT((nint)(-4)));
 
             unsafe
             {
