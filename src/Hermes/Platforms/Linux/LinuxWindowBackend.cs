@@ -160,6 +160,19 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         settings.JavascriptCanAccessClipboard = true;
         settings.EnableJavascript = true;
 
+        // Add load state tracking for diagnostics
+        _webView.LoadChanged += (sender, args) =>
+        {
+            Console.WriteLine($"[Hermes] WebView LoadChanged: {args.LoadEvent} - URI: {_webView.Uri}");
+            Console.Out.Flush();
+        };
+
+        _webView.LoadFailed += (sender, args) =>
+        {
+            Console.WriteLine($"[Hermes] WebView LoadFailed: {args.FailingUri} - Error: {args.Error?.Message ?? "unknown"}");
+            Console.Out.Flush();
+        };
+
         // Disable context menu if requested
         if (!_options.ContextMenuEnabled)
         {
@@ -308,6 +321,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     public void NavigateToUrl(string url)
     {
         ThrowIfNotInitialized();
+        Console.WriteLine($"[Hermes] NavigateToUrl: {url}");
+        Console.Out.Flush();
         _webView.LoadUri(url);
     }
 
@@ -345,7 +360,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         // Avoid registering the same scheme twice - WebKit doesn't allow it
         if (!_registeredSchemes.Add(scheme))
         {
-            HermesLogger.Info($"URI scheme '{scheme}' already registered, skipping");
+            Console.WriteLine($"[Hermes] URI scheme '{scheme}' already registered, skipping");
             return;
         }
 
@@ -356,14 +371,15 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         securityManager.RegisterUriSchemeAsSecure(scheme);
         securityManager.RegisterUriSchemeAsCorsEnabled(scheme);
 
-        HermesLogger.Info($"Registering URI scheme '{scheme}' with WebContext");
+        Console.WriteLine($"[Hermes] Registering URI scheme '{scheme}' with WebContext (SecurityManager configured)");
 
         // Create and store the callback to prevent garbage collection
         // WebKit calls this from native code, so the delegate must stay alive
         WebKit.URISchemeRequestCallback callback = (request) =>
         {
             var uri = request.Uri;
-            HermesLogger.Info($"URI scheme handler called for: {uri}");
+            Console.WriteLine($"[Hermes] URI scheme handler called for: {uri}");
+            Console.Out.Flush();
 
             if (_customSchemeHandlers.TryGetValue(scheme, out var handler))
             {
@@ -376,7 +392,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
                         var bytes = ReadStreamToBytes(stream);
                         var mimeType = GetMimeType(uri);
 
-                        HermesLogger.Info($"Serving {uri} ({bytes.Length} bytes, {mimeType})");
+                        Console.WriteLine($"[Hermes] Serving {uri} ({bytes.Length} bytes, {mimeType})");
 
                         // Create GLib input stream from bytes
                         // Allocate unmanaged memory and copy bytes (GLib takes ownership)
@@ -390,19 +406,19 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
                     }
                     catch (Exception ex)
                     {
-                        HermesLogger.Warning($"Error serving {uri}: {ex.Message}");
+                        Console.WriteLine($"[Hermes] Error serving {uri}: {ex.Message}");
                         FinishWithError(request);
                     }
                 }
                 else
                 {
-                    HermesLogger.Warning($"Handler returned null for {uri}");
+                    Console.WriteLine($"[Hermes] Handler returned null for {uri}");
                     FinishWithError(request);
                 }
             }
             else
             {
-                HermesLogger.Warning($"No handler found for scheme '{scheme}'");
+                Console.WriteLine($"[Hermes] No handler found for scheme '{scheme}'");
                 FinishWithError(request);
             }
         };
@@ -411,6 +427,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         _schemeCallbacks.Add(callback);
 
         context.RegisterUriScheme(scheme, callback);
+        Console.WriteLine($"[Hermes] URI scheme '{scheme}' registered successfully");
+        Console.Out.Flush();
     }
 
     private static void FinishWithError(WebKit.URISchemeRequest request)

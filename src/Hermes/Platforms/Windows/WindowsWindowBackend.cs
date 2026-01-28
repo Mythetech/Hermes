@@ -125,12 +125,17 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
     public void WaitForClose()
     {
+        var isSmokeTest = Environment.GetEnvironmentVariable("HERMES_SMOKE_TEST") == "1";
+
         Show();
+
+        if (isSmokeTest) Console.WriteLine($"WAITFORCLOSE:entered,webViewReady={_webViewReady is not null}");
 
         // Pump messages until WebView is initialized
         // This allows async continuations from InitializeWebViewAsync to run
         if (_webViewReady is not null)
         {
+            if (isSmokeTest) Console.WriteLine("WAITFORCLOSE:pumping_messages");
             while (!_webViewReady.Task.IsCompleted)
             {
                 if (PInvoke.PeekMessage(out var msg, HWND.Null, 0, 0, PEEK_MESSAGE_REMOVE_TYPE.PM_REMOVE))
@@ -143,8 +148,10 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
                     Thread.Sleep(1); // Avoid busy-waiting
                 }
             }
+            if (isSmokeTest) Console.WriteLine("WAITFORCLOSE:webview_ready");
         }
 
+        if (isSmokeTest) Console.WriteLine("WAITFORCLOSE:entering_main_loop");
         RunMessageLoop();
     }
 
@@ -517,16 +524,23 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     private async Task InitializeWebViewAsync()
     {
         _webViewReady = new TaskCompletionSource();
+        var isSmokeTest = Environment.GetEnvironmentVariable("HERMES_SMOKE_TEST") == "1";
 
         try
         {
+            if (isSmokeTest) Console.WriteLine("WEBVIEW_INIT:starting");
+
             // Use pre-warmed environment from pool (instant if Prewarm() was called)
             // Note: No ConfigureAwait(false) - we need continuations on UI thread for WebView2
             _webViewEnvironment = await WebView2EnvironmentPool.Instance
                 .GetOrCreateEnvironmentAsync();
 
+            if (isSmokeTest) Console.WriteLine("WEBVIEW_INIT:environment_ready");
+
             _webViewController = await _webViewEnvironment.CreateCoreWebView2ControllerAsync(_hwnd);
             _webView = _webViewController.CoreWebView2;
+
+            if (isSmokeTest) Console.WriteLine("WEBVIEW_INIT:controller_ready");
 
             var settings = _webView.Settings;
             settings.AreDefaultContextMenusEnabled = _options.ContextMenuEnabled;
@@ -544,6 +558,8 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
                 };
                 """);
 
+            if (isSmokeTest) Console.WriteLine("WEBVIEW_INIT:script_injected");
+
             _webView.WebMessageReceived += (sender, args) =>
             {
                 WebMessageReceived?.Invoke(args.TryGetWebMessageAsString());
@@ -558,14 +574,26 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
             RefitContent();
 
             if (!string.IsNullOrEmpty(_options.StartUrl))
+            {
+                if (isSmokeTest) Console.WriteLine($"WEBVIEW_INIT:navigating_to:{_options.StartUrl}");
                 _webView.Navigate(_options.StartUrl);
+            }
             else if (!string.IsNullOrEmpty(_options.StartHtml))
+            {
+                if (isSmokeTest) Console.WriteLine("WEBVIEW_INIT:navigating_to_html");
                 _webView.NavigateToString(_options.StartHtml);
+            }
+            else
+            {
+                if (isSmokeTest) Console.WriteLine("WEBVIEW_INIT:no_navigation_url");
+            }
 
+            if (isSmokeTest) Console.WriteLine("WEBVIEW_INIT:complete");
             _webViewReady.SetResult();
         }
         catch (Exception ex)
         {
+            if (isSmokeTest) Console.WriteLine($"WEBVIEW_INIT:error:{ex.Message}");
             _webViewReady.SetException(ex);
         }
     }
