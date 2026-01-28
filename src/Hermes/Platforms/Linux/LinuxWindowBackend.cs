@@ -337,6 +337,13 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
     private void RegisterSchemeWithContext(WebKit.WebContext context, string scheme)
     {
+        // Register scheme with security manager to allow access to local resources
+        // Required for WebKit2GTK >= 2.32 for custom schemes to work properly with Blazor
+        var securityManager = context.SecurityManager;
+        securityManager.RegisterUriSchemeAsLocal(scheme);
+        securityManager.RegisterUriSchemeAsSecure(scheme);
+        securityManager.RegisterUriSchemeAsCorsEnabled(scheme);
+
         context.RegisterUriScheme(scheme, (request) =>
         {
             var uri = request.Uri;

@@ -126,6 +126,25 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     public void WaitForClose()
     {
         Show();
+
+        // Pump messages until WebView is initialized
+        // This allows async continuations from InitializeWebViewAsync to run
+        if (_webViewReady is not null)
+        {
+            while (!_webViewReady.Task.IsCompleted)
+            {
+                if (PInvoke.PeekMessage(out var msg, HWND.Null, 0, 0, PEEK_MESSAGE_REMOVE_TYPE.PM_REMOVE))
+                {
+                    PInvoke.TranslateMessage(in msg);
+                    PInvoke.DispatchMessage(in msg);
+                }
+                else
+                {
+                    Thread.Sleep(1); // Avoid busy-waiting
+                }
+            }
+        }
+
         RunMessageLoop();
     }
 
