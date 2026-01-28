@@ -22,26 +22,20 @@ internal sealed class WindowsDialogBackend : IDialogBackend
 
     public unsafe string[]? ShowOpenFile(string title, string? defaultPath, bool multiSelect, DialogFilter[]? filters)
     {
-        IFileOpenDialog* pfd = null;
+        var clsid = typeof(FileOpenDialog).GUID;
+        var iid = typeof(IFileOpenDialog).GUID;
+
+        int hr = PInvoke.CoCreateInstance(in clsid, null, CLSCTX.CLSCTX_INPROC_SERVER, in iid, out var ppv);
+        if (hr < 0)
+            Marshal.ThrowExceptionForHR(hr);
+
+        var pfd = (IFileOpenDialog)ppv;
 
         try
         {
-            var clsid = typeof(FileOpenDialog).GUID;
-            var iid = typeof(IFileOpenDialog).GUID;
-
-            int hr = PInvoke.CoCreateInstance(
-                in clsid,
-                null,
-                CLSCTX.CLSCTX_INPROC_SERVER,
-                in iid,
-                (void**)&pfd);
-
-            if (hr < 0)
-                Marshal.ThrowExceptionForHR(hr);
-
             fixed (char* titlePtr = title)
             {
-                pfd->SetTitle(titlePtr);
+                pfd.SetTitle(titlePtr);
             }
 
             if (!string.IsNullOrEmpty(defaultPath))
@@ -54,71 +48,64 @@ internal sealed class WindowsDialogBackend : IDialogBackend
                 SetFileFilters(pfd, filters);
             }
 
-            FILEOPENDIALOGOPTIONS options;
-            pfd->GetOptions(&options);
+            pfd.GetOptions(out var options);
             options |= FILEOPENDIALOGOPTIONS.FOS_FILEMUSTEXIST | FILEOPENDIALOGOPTIONS.FOS_NOCHANGEDIR;
 
             if (multiSelect)
                 options |= FILEOPENDIALOGOPTIONS.FOS_ALLOWMULTISELECT;
 
-            pfd->SetOptions(options);
+            pfd.SetOptions(options);
 
-            hr = pfd->Show(_hwnd);
-            if (hr < 0)
-                return null;
+            try
+            {
+                pfd.Show(_hwnd);
+            }
+            catch (COMException)
+            {
+                return null; // User cancelled
+            }
 
-            IShellItemArray* pResults = null;
-            pfd->GetResults(&pResults);
+            pfd.GetResults(out var pResults);
 
-            uint count;
-            pResults->GetCount(&count);
+            pResults.GetCount(out var count);
 
             var results = new string[count];
             for (uint i = 0; i < count; i++)
             {
-                IShellItem* pItem = null;
-                pResults->GetItemAt(i, &pItem);
+                pResults.GetItemAt(i, out var pItem);
 
-                PWSTR pszPath = default;
-                pItem->GetDisplayName(SIGDN.SIGDN_FILESYSPATH, &pszPath);
-                results[i] = new string(pszPath);
+                pItem.GetDisplayName(SIGDN.SIGDN_FILESYSPATH, out var pszPath);
+                results[i] = pszPath.ToString();
 
                 PInvoke.CoTaskMemFree(pszPath);
-                pItem->Release();
+                Marshal.ReleaseComObject(pItem);
             }
 
-            pResults->Release();
+            Marshal.ReleaseComObject(pResults);
             return results;
         }
         finally
         {
-            if (pfd != null)
-                pfd->Release();
+            Marshal.ReleaseComObject(pfd);
         }
     }
 
     public unsafe string[]? ShowOpenFolder(string title, string? defaultPath, bool multiSelect)
     {
-        IFileOpenDialog* pfd = null;
+        var clsid = typeof(FileOpenDialog).GUID;
+        var iid = typeof(IFileOpenDialog).GUID;
+
+        int hr = PInvoke.CoCreateInstance(in clsid, null, CLSCTX.CLSCTX_INPROC_SERVER, in iid, out var ppv);
+        if (hr < 0)
+            Marshal.ThrowExceptionForHR(hr);
+
+        var pfd = (IFileOpenDialog)ppv;
 
         try
         {
-            var clsid = typeof(FileOpenDialog).GUID;
-            var iid = typeof(IFileOpenDialog).GUID;
-
-            int hr = PInvoke.CoCreateInstance(
-                in clsid,
-                null,
-                CLSCTX.CLSCTX_INPROC_SERVER,
-                in iid,
-                (void**)&pfd);
-
-            if (hr < 0)
-                Marshal.ThrowExceptionForHR(hr);
-
             fixed (char* titlePtr = title)
             {
-                pfd->SetTitle(titlePtr);
+                pfd.SetTitle(titlePtr);
             }
 
             if (!string.IsNullOrEmpty(defaultPath))
@@ -126,116 +113,110 @@ internal sealed class WindowsDialogBackend : IDialogBackend
                 SetDefaultFolder(pfd, defaultPath);
             }
 
-            FILEOPENDIALOGOPTIONS options;
-            pfd->GetOptions(&options);
+            pfd.GetOptions(out var options);
             options |= FILEOPENDIALOGOPTIONS.FOS_PICKFOLDERS | FILEOPENDIALOGOPTIONS.FOS_NOCHANGEDIR;
 
             if (multiSelect)
                 options |= FILEOPENDIALOGOPTIONS.FOS_ALLOWMULTISELECT;
 
-            pfd->SetOptions(options);
+            pfd.SetOptions(options);
 
-            hr = pfd->Show(_hwnd);
-            if (hr < 0)
-                return null;
+            try
+            {
+                pfd.Show(_hwnd);
+            }
+            catch (COMException)
+            {
+                return null; // User cancelled
+            }
 
-            IShellItemArray* pResults = null;
-            pfd->GetResults(&pResults);
+            pfd.GetResults(out var pResults);
 
-            uint count;
-            pResults->GetCount(&count);
+            pResults.GetCount(out var count);
 
             var results = new string[count];
             for (uint i = 0; i < count; i++)
             {
-                IShellItem* pItem = null;
-                pResults->GetItemAt(i, &pItem);
+                pResults.GetItemAt(i, out var pItem);
 
-                PWSTR pszPath = default;
-                pItem->GetDisplayName(SIGDN.SIGDN_FILESYSPATH, &pszPath);
-                results[i] = new string(pszPath);
+                pItem.GetDisplayName(SIGDN.SIGDN_FILESYSPATH, out var pszPath);
+                results[i] = pszPath.ToString();
 
                 PInvoke.CoTaskMemFree(pszPath);
-                pItem->Release();
+                Marshal.ReleaseComObject(pItem);
             }
 
-            pResults->Release();
+            Marshal.ReleaseComObject(pResults);
             return results;
         }
         finally
         {
-            if (pfd != null)
-                pfd->Release();
+            Marshal.ReleaseComObject(pfd);
         }
     }
 
     public unsafe string? ShowSaveFile(string title, string? defaultPath, DialogFilter[]? filters, string? defaultFileName)
     {
-        IFileSaveDialog* pfd = null;
+        var clsid = typeof(FileSaveDialog).GUID;
+        var iid = typeof(IFileSaveDialog).GUID;
+
+        int hr = PInvoke.CoCreateInstance(in clsid, null, CLSCTX.CLSCTX_INPROC_SERVER, in iid, out var ppv);
+        if (hr < 0)
+            Marshal.ThrowExceptionForHR(hr);
+
+        var pfd = (IFileSaveDialog)ppv;
 
         try
         {
-            var clsid = typeof(FileSaveDialog).GUID;
-            var iid = typeof(IFileSaveDialog).GUID;
-
-            int hr = PInvoke.CoCreateInstance(
-                in clsid,
-                null,
-                CLSCTX.CLSCTX_INPROC_SERVER,
-                in iid,
-                (void**)&pfd);
-
-            if (hr < 0)
-                Marshal.ThrowExceptionForHR(hr);
-
             fixed (char* titlePtr = title)
             {
-                pfd->SetTitle(titlePtr);
+                pfd.SetTitle(titlePtr);
             }
 
             if (!string.IsNullOrEmpty(defaultFileName))
             {
                 fixed (char* fileNamePtr = defaultFileName)
                 {
-                    pfd->SetFileName(fileNamePtr);
+                    pfd.SetFileName(fileNamePtr);
                 }
             }
 
             if (!string.IsNullOrEmpty(defaultPath))
             {
-                SetDefaultFolder((IFileDialog*)pfd, defaultPath);
+                SetDefaultFolder(pfd, defaultPath);
             }
 
             if (filters is { Length: > 0 })
             {
-                SetFileFilters((IFileDialog*)pfd, filters);
+                SetFileFilters(pfd, filters);
             }
 
-            FILEOPENDIALOGOPTIONS options;
-            ((IFileDialog*)pfd)->GetOptions(&options);
+            pfd.GetOptions(out var options);
             options |= FILEOPENDIALOGOPTIONS.FOS_NOCHANGEDIR | FILEOPENDIALOGOPTIONS.FOS_OVERWRITEPROMPT;
-            ((IFileDialog*)pfd)->SetOptions(options);
+            pfd.SetOptions(options);
 
-            hr = pfd->Show(_hwnd);
-            if (hr < 0)
-                return null;
+            try
+            {
+                pfd.Show(_hwnd);
+            }
+            catch (COMException)
+            {
+                return null; // User cancelled
+            }
 
-            IShellItem* pItem = null;
-            pfd->GetResult(&pItem);
+            pfd.GetResult(out var pItem);
 
-            PWSTR pszPath = default;
-            pItem->GetDisplayName(SIGDN.SIGDN_FILESYSPATH, &pszPath);
-            var result = new string(pszPath);
+            pItem.GetDisplayName(SIGDN.SIGDN_FILESYSPATH, out var pszPath);
+            var result = pszPath.ToString();
 
             PInvoke.CoTaskMemFree(pszPath);
-            pItem->Release();
+            Marshal.ReleaseComObject(pItem);
 
             return result;
         }
         finally
         {
-            if (pfd != null)
-                pfd->Release();
+            Marshal.ReleaseComObject(pfd);
         }
     }
 
@@ -271,24 +252,20 @@ internal sealed class WindowsDialogBackend : IDialogBackend
         };
     }
 
-    private static unsafe void SetDefaultFolder(IFileDialog* pfd, string path)
+    private static unsafe void SetDefaultFolder(IFileDialog pfd, string path)
     {
-        IShellItem* psiFolder = null;
+        var iid = typeof(IShellItem).GUID;
+        int hr = PInvoke.SHCreateItemFromParsingName(path, null, in iid, out var ppv);
 
-        fixed (char* pathPtr = path)
+        if (hr >= 0 && ppv != null)
         {
-            var iid = typeof(IShellItem).GUID;
-            int hr = PInvoke.SHCreateItemFromParsingName(pathPtr, null, in iid, (void**)&psiFolder);
-
-            if (hr >= 0 && psiFolder != null)
-            {
-                pfd->SetFolder(psiFolder);
-                psiFolder->Release();
-            }
+            var psiFolder = (IShellItem)ppv;
+            pfd.SetFolder(psiFolder);
+            Marshal.ReleaseComObject(psiFolder);
         }
     }
 
-    private static unsafe void SetFileFilters(IFileDialog* pfd, DialogFilter[] filters)
+    private static unsafe void SetFileFilters(IFileDialog pfd, DialogFilter[] filters)
     {
         var specs = new COMDLG_FILTERSPEC[filters.Length];
         var nameHandles = new GCHandle[filters.Length];
@@ -309,14 +286,14 @@ internal sealed class WindowsDialogBackend : IDialogBackend
 
                 specs[i] = new COMDLG_FILTERSPEC
                 {
-                    pszName = (PCWSTR)nameHandles[i].AddrOfPinnedObject(),
-                    pszSpec = (PCWSTR)specHandles[i].AddrOfPinnedObject()
+                    pszName = new PCWSTR((char*)nameHandles[i].AddrOfPinnedObject()),
+                    pszSpec = new PCWSTR((char*)specHandles[i].AddrOfPinnedObject())
                 };
             }
 
             fixed (COMDLG_FILTERSPEC* specsPtr = specs)
             {
-                pfd->SetFileTypes((uint)specs.Length, specsPtr);
+                pfd.SetFileTypes((uint)specs.Length, specsPtr);
             }
         }
         finally

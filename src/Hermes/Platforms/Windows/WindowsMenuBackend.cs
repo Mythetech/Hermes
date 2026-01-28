@@ -162,7 +162,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
         if (!_menusByLabel.TryGetValue(menuLabel, out var hMenu))
             throw new ArgumentException($"Menu '{menuLabel}' not found", nameof(menuLabel));
 
-        PInvoke.AppendMenu(hMenu, MENU_ITEM_FLAGS.MF_SEPARATOR, 0, null);
+        PInvoke.AppendMenu(hMenu, MENU_ITEM_FLAGS.MF_SEPARATOR, 0, (string?)null);
         PInvoke.DrawMenuBar(_hwnd);
     }
 
@@ -264,7 +264,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
         if (menu is null)
             throw new ArgumentException($"Menu '{menuPath}' not found", nameof(menuPath));
 
-        PInvoke.AppendMenu(menu.Value, MENU_ITEM_FLAGS.MF_SEPARATOR, 0, null);
+        PInvoke.AppendMenu(menu.Value, MENU_ITEM_FLAGS.MF_SEPARATOR, 0, (string?)null);
         PInvoke.DrawMenuBar(_hwnd);
     }
 
@@ -317,7 +317,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
     public void AddAppMenuSeparator(string? position = null)
     {
         var appMenu = EnsureAppMenu();
-        PInvoke.AppendMenu(appMenu, MENU_ITEM_FLAGS.MF_SEPARATOR, 0, null);
+        PInvoke.AppendMenu(appMenu, MENU_ITEM_FLAGS.MF_SEPARATOR, 0, (string?)null);
         PInvoke.DrawMenuBar(_hwnd);
     }
 

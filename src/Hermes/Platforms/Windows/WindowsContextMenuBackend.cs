@@ -42,7 +42,7 @@ internal sealed class WindowsContextMenuBackend : IContextMenuBackend
 
     public void AddSeparator()
     {
-        PInvoke.AppendMenu(_hMenu, MENU_ITEM_FLAGS.MF_SEPARATOR, 0, null);
+        PInvoke.AppendMenu(_hMenu, MENU_ITEM_FLAGS.MF_SEPARATOR, 0, (string?)null);
     }
 
     public void RemoveItem(string itemId)
