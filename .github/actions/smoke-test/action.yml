@@ -1,0 +1,196 @@
+name: 'Hermes Smoke Test'
+description: 'Verifies that a Hermes Blazor application boots and reaches first render'
+
+inputs:
+  app_path:
+    description: 'Path to the application executable or .app bundle'
+    required: true
+  timeout:
+    description: 'Timeout in seconds'
+    required: false
+    default: '60'
+
+runs:
+  using: 'composite'
+  steps:
+    # Linux: Setup virtual display and dependencies
+    - name: Setup Display (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb libgtk-3-0 libwebkit2gtk-4.1-0
+
+    # Windows smoke test
+    - name: Run Smoke Test (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $env:HERMES_SMOKE_TEST = "1"
+        $env:HERMES_SMOKE_TEST_EXIT = "1"
+
+        $appPath = "${{ inputs.app_path }}"
+        $timeout = [int]"${{ inputs.timeout }}"
+
+        Write-Output "Starting smoke test: $appPath"
+        Write-Output "Timeout: ${timeout}s"
+
+        # Start process and capture output
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $appPath
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $false
+        $psi.Environment["HERMES_SMOKE_TEST"] = "1"
+        $psi.Environment["HERMES_SMOKE_TEST_EXIT"] = "1"
+
+        $process = [System.Diagnostics.Process]::Start($psi)
+
+        $exited = $process.WaitForExit($timeout * 1000)
+
+        $stdout = $process.StandardOutput.ReadToEnd()
+        $stderr = $process.StandardError.ReadToEnd()
+
+        Write-Output ""
+        Write-Output "=== Application Output ==="
+        Write-Output $stdout
+
+        if ($stderr) {
+          Write-Output ""
+          Write-Output "=== Errors ==="
+          Write-Output $stderr
+        }
+
+        if (-not $exited) {
+          Write-Error "TIMEOUT: Process did not exit within ${timeout}s"
+          try { $process.Kill() } catch { }
+          exit 1
+        }
+
+        if ($stdout -notmatch "HERMES_READY:") {
+          Write-Error "FAIL: Never received HERMES_READY marker"
+          exit 1
+        }
+
+        if ($process.ExitCode -ne 0) {
+          Write-Error "FAIL: Process exited with code $($process.ExitCode)"
+          exit 1
+        }
+
+        Write-Output ""
+        Write-Output "PASS: Smoke test completed successfully"
+
+    # macOS smoke test
+    - name: Run Smoke Test (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        export HERMES_SMOKE_TEST=1
+        export HERMES_SMOKE_TEST_EXIT=1
+
+        APP_PATH="${{ inputs.app_path }}"
+        TIMEOUT="${{ inputs.timeout }}"
+
+        echo "Starting smoke test: $APP_PATH"
+        echo "Timeout: ${TIMEOUT}s"
+
+        # Handle .app bundles
+        if [[ "$APP_PATH" == *.app ]]; then
+          xattr -cr "$APP_PATH" 2>/dev/null || true
+          EXECUTABLE=$(find "$APP_PATH/Contents/MacOS" -type f -perm +111 | head -1)
+          if [[ -z "$EXECUTABLE" ]]; then
+            echo "FAIL: Could not find executable in $APP_PATH"
+            exit 1
+          fi
+        else
+          EXECUTABLE="$APP_PATH"
+        fi
+
+        echo "Executable: $EXECUTABLE"
+
+        # Run with timeout
+        set +e
+        timeout "${TIMEOUT}s" "$EXECUTABLE" > stdout.txt 2>&1
+        EXIT_CODE=$?
+        set -e
+
+        echo ""
+        echo "=== Application Output ==="
+        cat stdout.txt
+
+        # Check for timeout (exit code 124)
+        if [[ $EXIT_CODE -eq 124 ]]; then
+          echo "TIMEOUT: Process did not exit within ${TIMEOUT}s"
+          exit 1
+        fi
+
+        # Check for ready marker
+        if ! grep -q "HERMES_READY:" stdout.txt; then
+          echo "FAIL: Never received HERMES_READY marker"
+          exit 1
+        fi
+
+        # Exit code 0 is expected when HERMES_SMOKE_TEST_EXIT=1
+        if [[ $EXIT_CODE -ne 0 ]]; then
+          echo "FAIL: Process exited with code $EXIT_CODE"
+          exit 1
+        fi
+
+        echo ""
+        echo "PASS: Smoke test completed successfully"
+
+    # Linux smoke test
+    - name: Run Smoke Test (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        export HERMES_SMOKE_TEST=1
+        export HERMES_SMOKE_TEST_EXIT=1
+        export DISPLAY=:99
+
+        APP_PATH="${{ inputs.app_path }}"
+        TIMEOUT="${{ inputs.timeout }}"
+
+        echo "Starting smoke test: $APP_PATH"
+        echo "Timeout: ${TIMEOUT}s"
+
+        # Start virtual display
+        Xvfb :99 -screen 0 1920x1080x24 &
+        XVFB_PID=$!
+        sleep 2
+
+        chmod +x "$APP_PATH"
+
+        # Run with timeout
+        set +e
+        timeout "${TIMEOUT}s" "$APP_PATH" > stdout.txt 2>&1
+        EXIT_CODE=$?
+        set -e
+
+        # Cleanup Xvfb
+        kill $XVFB_PID 2>/dev/null || true
+
+        echo ""
+        echo "=== Application Output ==="
+        cat stdout.txt
+
+        # Check for timeout
+        if [[ $EXIT_CODE -eq 124 ]]; then
+          echo "TIMEOUT: Process did not exit within ${TIMEOUT}s"
+          exit 1
+        fi
+
+        # Check for ready marker
+        if ! grep -q "HERMES_READY:" stdout.txt; then
+          echo "FAIL: Never received HERMES_READY marker"
+          exit 1
+        fi
+
+        if [[ $EXIT_CODE -ne 0 ]]; then
+          echo "FAIL: Process exited with code $EXIT_CODE"
+          exit 1
+        fi
+
+        echo ""
+        echo "PASS: Smoke test completed successfully"

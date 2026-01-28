@@ -9,10 +9,7 @@
 - (instancetype)initWithParams:(const HermesWindowParams*)params {
     self = [super init];
     if (self) {
-        // Store UI thread ID
         _uiThreadId = (int64_t)pthread_mach_thread_np(pthread_self());
-
-        // Store callbacks
         _onClosing = params->OnClosing;
         _onResized = params->OnResized;
         _onMoved = params->OnMoved;
@@ -20,12 +17,9 @@
         _onFocusOut = params->OnFocusOut;
         _onWebMessage = params->OnWebMessage;
         _onCustomScheme = params->OnCustomScheme;
-
-        // Initialize collections
         _schemeHandlers = [NSMutableArray new];
         _pendingSchemes = [NSMutableArray new];
 
-        // Determine window style
         NSWindowStyleMask styleMask;
         if (params->Chromeless) {
             styleMask = NSWindowStyleMaskBorderless;
@@ -36,21 +30,16 @@
             }
         }
 
-        // Calculate frame
         NSRect frame = NSMakeRect(0, 0, params->Width, params->Height);
-
-        // Create window
         _window = [[NSWindow alloc] initWithContentRect:frame
                                               styleMask:styleMask
                                                 backing:NSBackingStoreBuffered
                                                   defer:YES];
 
-        // Set window properties
         if (params->Title) {
             [_window setTitle:[NSString stringWithUTF8String:params->Title]];
         }
 
-        // Position window
         if (params->UsePosition) {
             CGFloat y = [self convertYFromTopLeft:params->Y height:params->Height];
             [_window setFrameOrigin:NSMakePoint(params->X, y)];
@@ -58,7 +47,6 @@
             [_window center];
         }
 
-        // Size constraints
         if (params->MinWidth > 0 && params->MinHeight > 0) {
             [_window setMinSize:NSMakeSize(params->MinWidth, params->MinHeight)];
         }
@@ -66,28 +54,36 @@
             [_window setMaxSize:NSMakeSize(params->MaxWidth, params->MaxHeight)];
         }
 
-        // TopMost
         if (params->TopMost) {
             [_window setLevel:NSFloatingWindowLevel];
         }
 
-        // Set up window delegate
         _windowDelegate = [[HermesWindowDelegate alloc] init];
         _windowDelegate.hermesWindow = self;
         [_window setDelegate:_windowDelegate];
 
-        // Create WebView configuration
         _webViewConfiguration = [[WKWebViewConfiguration alloc] init];
+        _devToolsEnabled = params->DevToolsEnabled;
 
-        // Set WebView preferences
         WKPreferences* prefs = _webViewConfiguration.preferences;
         if (params->DevToolsEnabled) {
-            // Enable developer extras
-            [prefs setValue:@YES forKey:@"developerExtrasEnabled"];
+            @try {
+                [prefs setValue:@YES forKey:@"developerExtrasEnabled"];
+            } @catch (NSException *e) {
+                NSLog(@"[Hermes] Failed to enable developerExtrasEnabled: %@", [e reason]);
+            }
+            @try {
+                [prefs setValue:@YES forKey:@"javaScriptCanAccessClipboard"];
+            } @catch (NSException *e) {
+                NSLog(@"[Hermes] Failed to enable javaScriptCanAccessClipboard: %@", [e reason]);
+            }
+            @try {
+                [prefs setValue:@YES forKey:@"domPasteAllowed"];
+            } @catch (NSException *e) {
+                NSLog(@"[Hermes] Failed to enable domPasteAllowed: %@", [e reason]);
+            }
         }
 
-        // Register custom schemes BEFORE creating WebView
-        // macOS WebKit requires schemes to be registered at configuration time
         for (int i = 0; i < 16; i++) {
             if (params->CustomSchemeNames[i] != NULL) {
                 NSString* scheme = [NSString stringWithUTF8String:params->CustomSchemeNames[i]];
@@ -95,21 +91,17 @@
             }
         }
 
-        // Store initial content for later
         NSString* startUrl = params->StartUrl ? [NSString stringWithUTF8String:params->StartUrl] : nil;
         NSString* startHtml = params->StartHtml ? [NSString stringWithUTF8String:params->StartHtml] : nil;
 
-        // Attach WebView
         [self attachWebView];
 
-        // Load initial content
         if (startUrl) {
             [self navigateToUrl:startUrl];
         } else if (startHtml) {
             [self navigateToString:startHtml];
         }
 
-        // Handle initial state
         _premaximizedFrame = frame;
         if (params->Maximized) {
             [_window zoom:nil];
@@ -122,7 +114,6 @@
 }
 
 - (void)attachWebView {
-    // Inject JavaScript bridge
     NSString* initScript = @"window.__receiveMessageCallbacks = [];"
         "window.__dispatchMessageCallback = function(message) {"
         "    window.__receiveMessageCallbacks.forEach(function(callback) { callback(message); });"
@@ -143,14 +134,12 @@
     WKUserContentController* contentController = [[WKUserContentController alloc] init];
     [contentController addUserScript:userScript];
 
-    // Set up UI delegate for message handling
     _uiDelegate = [[HermesUiDelegate alloc] init];
     _uiDelegate.hermesWindow = self;
     [contentController addScriptMessageHandler:_uiDelegate name:@"hermesinterop"];
 
     _webViewConfiguration.userContentController = contentController;
 
-    // Register any pending custom schemes
     for (NSString* scheme in _pendingSchemes) {
         HermesUrlSchemeHandler* handler = [[HermesUrlSchemeHandler alloc] init];
         handler.callback = _onCustomScheme;
@@ -159,14 +148,17 @@
     }
     [_pendingSchemes removeAllObjects];
 
-    // Create WebView
     _webView = [[WKWebView alloc] initWithFrame:_window.contentView.bounds
                                   configuration:_webViewConfiguration];
 
+    if (_devToolsEnabled) {
+        if (@available(macOS 13.3, *)) {
+            _webView.inspectable = YES;
+        }
+    }
+
     [_webView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     _webView.UIDelegate = _uiDelegate;
-
-    // Add to window
     [_window.contentView addSubview:_webView];
 }
 
@@ -184,19 +176,7 @@
 - (void)waitForClose {
     _isRunning = YES;
     [self show];
-
-    // Run the main event loop
-    while (_isRunning && [_window isVisible]) {
-        @autoreleasepool {
-            NSEvent* event = [NSApp nextEventMatchingMask:NSEventMaskAny
-                                                untilDate:[NSDate distantFuture]
-                                                   inMode:NSDefaultRunLoopMode
-                                                  dequeue:YES];
-            if (event) {
-                [NSApp sendEvent:event];
-            }
-        }
-    }
+    [NSApp run];
 }
 
 #pragma mark - Properties
@@ -274,13 +254,10 @@
 }
 
 - (void)sendWebMessage:(NSString*)message {
-    // JSON-encode the message in an array to safely escape special characters
     NSData* data = [NSJSONSerialization dataWithJSONObject:@[message]
                                                    options:0
                                                      error:nil];
     NSString* jsonMessage = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-
-    // Remove the array brackets to get just the escaped string
     jsonMessage = [[jsonMessage substringToIndex:([jsonMessage length] - 1)] substringFromIndex:1];
 
     NSString* script = [NSString stringWithFormat:@"__dispatchMessageCallback(%@)", jsonMessage];
@@ -288,11 +265,8 @@
 }
 
 - (void)registerCustomScheme:(NSString*)scheme {
-    // If WebView is already created, we can't add more schemes
-    if (_webView) {
-        NSLog(@"Hermes: Cannot register custom scheme '%@' after WebView is created", scheme);
+    if (_webView)
         return;
-    }
     [_pendingSchemes addObject:scheme];
 }
 
@@ -316,7 +290,6 @@
 
 #pragma mark - Coordinate Conversion
 
-// macOS uses bottom-left origin, but our API uses top-left
 - (CGFloat)convertYFromTopLeft:(CGFloat)y height:(CGFloat)height {
     NSScreen* screen = [NSScreen mainScreen];
     CGFloat screenHeight = screen.frame.size.height;
@@ -332,9 +305,7 @@
 #pragma mark - Cleanup
 
 - (void)dealloc {
-    // Remove script message handler to break retain cycle
     [_webViewConfiguration.userContentController removeScriptMessageHandlerForName:@"hermesinterop"];
-
     [_webView removeFromSuperview];
 }
 

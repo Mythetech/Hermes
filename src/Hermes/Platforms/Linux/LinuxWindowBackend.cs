@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Runtime.Versioning;
+using System.Text.Json;
 using Hermes.Abstractions;
+using Hermes.Diagnostics;
 using Gtk;
 using WebKit;
 
@@ -101,9 +103,9 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
             {
                 _window.SetIconFromFile(options.IconPath);
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore icon load failures
+                HermesLogger.Warning($"Failed to load window icon from '{options.IconPath}': {ex.Message}");
             }
         }
 
@@ -312,14 +314,9 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     {
         ThrowIfNotInitialized();
 
-        // Escape the message for JavaScript
-        var escaped = message
-            .Replace("\\", "\\\\")
-            .Replace("'", "\\'")
-            .Replace("\n", "\\n")
-            .Replace("\r", "\\r");
-
-        var script = $"if(window.__hermesReceiveCallback) window.__hermesReceiveCallback('{escaped}');";
+        // Use JSON serialization for consistent escaping across platforms
+        var json = JsonSerializer.Serialize(message);
+        var script = $"if(window.__hermesReceiveCallback) window.__hermesReceiveCallback({json});";
 
         // Use modern EvaluateJavascript API (not deprecated RunJavascript)
         _webView.EvaluateJavascript(script, null, null);
@@ -465,9 +462,9 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
             {
                 action();
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore exceptions in fire-and-forget
+                HermesLogger.Error("Exception in BeginInvoke callback", ex);
             }
             return false;
         });
@@ -568,9 +565,9 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
                 WebMessageReceived?.Invoke(message);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore JavaScript result parsing errors
+            HermesLogger.Warning($"Failed to parse JavaScript message result: {ex.Message}");
         }
     }
 

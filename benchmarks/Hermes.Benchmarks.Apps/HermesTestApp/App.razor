@@ -1,0 +1,26 @@
+@inject Stopwatch Stopwatch
+
+<div class="ready">
+    <h1>READY</h1>
+    <p>First render: @_renderTime ms</p>
+</div>
+
+@code {
+    private double _renderTime;
+    private bool _rendered;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender && !_rendered)
+        {
+            _rendered = true;
+            _renderTime = Stopwatch.Elapsed.TotalMilliseconds;
+            Stopwatch.Stop();
+
+            // Output the magic string that the harness looks for
+            Console.WriteLine($"BENCHMARK_READY:{_renderTime:F2}");
+
+            StateHasChanged();
+        }
+    }
+}

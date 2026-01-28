@@ -110,6 +110,66 @@ internal sealed class MacMenuBackend : IMenuBackend
 
     #endregion
 
+    #region Submenu Operations
+
+    public void AddSubmenu(string menuPath, string submenuLabel)
+    {
+        EnsureNotDisposed();
+        MacNative.MenuAddSubmenu(_menuHandle, menuPath, submenuLabel);
+    }
+
+    public void AddSubmenuItem(string menuPath, string itemId, string itemLabel, string? accelerator = null)
+    {
+        EnsureNotDisposed();
+        MacNative.MenuAddSubmenuItem(_menuHandle, menuPath, itemId, itemLabel, accelerator);
+    }
+
+    public void AddSubmenuSeparator(string menuPath)
+    {
+        EnsureNotDisposed();
+        MacNative.MenuAddSubmenuSeparator(_menuHandle, menuPath);
+    }
+
+    #endregion
+
+    #region App Menu Operations
+
+    private string? _appName;
+
+    public string AppName
+    {
+        get
+        {
+            if (_appName is null)
+            {
+                var ptr = MacNative.MenuGetAppName();
+                _appName = Marshal.PtrToStringUTF8(ptr) ?? "App";
+                MacNative.Free(ptr);
+            }
+            return _appName;
+        }
+    }
+
+    public void AddAppMenuItem(string itemId, string itemLabel, string? accelerator = null, string? position = null)
+    {
+        EnsureNotDisposed();
+        MacNative.MenuAddAppMenuItem(_menuHandle, itemId, itemLabel, accelerator, position);
+    }
+
+    public void AddAppMenuSeparator(string? position = null)
+    {
+        EnsureNotDisposed();
+        MacNative.MenuAddAppMenuSeparator(_menuHandle, position);
+    }
+
+    public void RemoveAppMenuItem(string itemId)
+    {
+        EnsureNotDisposed();
+        MacNative.MenuRemoveAppMenuItem(_menuHandle, itemId);
+    }
+
+    #endregion
+
     #region Private Helpers
 
     private void EnsureNotDisposed()

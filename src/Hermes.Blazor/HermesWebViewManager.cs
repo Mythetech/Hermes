@@ -3,6 +3,7 @@ using System.Threading.Channels;
 using Hermes.Abstractions;
 using Hermes.Blazor.Diagnostics;
 using Hermes.Blazor.Threading;
+using Hermes.Diagnostics;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebView;
@@ -27,6 +28,7 @@ internal sealed class HermesWebViewManager : WebViewManager
     private readonly Channel<string> _messageChannel;
     private readonly Task _messagePumpTask;
     private readonly CancellationTokenSource _cts = new();
+    private volatile bool _disposed;
 
     public HermesWebViewManager(
         IHermesWindowBackend backend,
@@ -39,22 +41,17 @@ internal sealed class HermesWebViewManager : WebViewManager
     {
         _backend = backend;
 
-        // Bounded channel with async wait instead of Thread.Sleep
         _messageChannel = Channel.CreateBounded<string>(new BoundedChannelOptions(1024)
         {
             SingleReader = true,
-            SingleWriter = false,
+            SingleWriter = true,
             FullMode = BoundedChannelFullMode.Wait,
             AllowSynchronousContinuations = false
         });
 
-        // Start message pump
         _messagePumpTask = RunMessagePumpAsync(_cts.Token);
-
-        // Register for web messages from JS
         _backend.WebMessageReceived += OnWebMessageReceived;
 
-        // Register custom scheme for Blazor resources
         var scheme = new Uri(AppBaseUri).Scheme;
         _backend.RegisterCustomScheme(scheme, HandleWebRequest);
     }
@@ -67,12 +64,21 @@ internal sealed class HermesWebViewManager : WebViewManager
 
     protected override void SendMessage(string message)
     {
-        // Non-blocking write - if channel is full, wait asynchronously
+        if (_disposed)
+            return;
+
         if (!_messageChannel.Writer.TryWrite(message))
+            _ = WriteMessageAsync(message);
+    }
+
+    private async Task WriteMessageAsync(string message)
+    {
+        try
         {
-            // Slow path: queue the write
-            _ = _messageChannel.Writer.WriteAsync(message, _cts.Token);
+            await _messageChannel.Writer.WriteAsync(message, _cts.Token);
         }
+        catch (ObjectDisposedException) { }
+        catch (OperationCanceledException) { }
     }
 
     private async Task RunMessagePumpAsync(CancellationToken cancellationToken)
@@ -86,7 +92,6 @@ internal sealed class HermesWebViewManager : WebViewManager
 
             while (await reader.WaitToReadAsync(cancellationToken))
             {
-                // Batch read for efficiency
                 var count = 0;
                 while (count < BatchSize && reader.TryRead(out var message))
                 {
@@ -95,7 +100,6 @@ internal sealed class HermesWebViewManager : WebViewManager
 
                 if (count > 0)
                 {
-                    // Send batch on UI thread
                     var messages = batch.AsSpan(0, count).ToArray();
                     _backend.BeginInvoke(() =>
                     {
@@ -104,49 +108,37 @@ internal sealed class HermesWebViewManager : WebViewManager
                             _backend.SendWebMessage(msg);
                         }
                     });
-
-                    // Clear references
                     Array.Clear(batch, 0, count);
                 }
             }
         }
-        catch (OperationCanceledException)
-        {
-            // Expected on shutdown
-        }
+        catch (OperationCanceledException) { }
     }
 
     private void OnWebMessageReceived(string message)
     {
-        // Log first message - indicates Blazor JS has loaded and is communicating
         StartupLog.LogFirstMessage();
-
-        // Route message to Blazor
         MessageReceived(new Uri(AppBaseUri), message);
     }
 
     private Stream? HandleWebRequest(string url)
     {
-        // TryGetResponseContent expects the full URL, not just the path
-        // allowFallbackOnHostPage=true allows "/" to map to the host page (index.html)
-        if (TryGetResponseContent(url, true, out var statusCode, out var statusMessage,
+        var uri = new Uri(url);
+        var path = uri.AbsolutePath;
+
+        if (path.Contains("blazor.web.js") || path.Contains("aspnetcore-browser-refresh.js"))
+            return null;
+
+        var hasFileExtension = path.LastIndexOf('.') > path.LastIndexOf('/');
+        var allowFallbackOnHostPage = !hasFileExtension;
+
+        if (TryGetResponseContent(url, allowFallbackOnHostPage, out var statusCode, out var statusMessage,
             out var content, out var headers))
         {
-            // Log resource requests for debugging startup timing
-            var uri = new Uri(url);
-            var path = uri.AbsolutePath;
             if (path == "/" || path.EndsWith("index.html", StringComparison.OrdinalIgnoreCase))
-            {
                 StartupLog.Log("WebView", "Serving index.html (host page)");
-            }
             else if (path.Contains("blazor.webview.js"))
-            {
                 StartupLog.Log("WebView", "Serving blazor.webview.js");
-            }
-            else if (path.Contains("_framework"))
-            {
-                StartupLog.Log("WebView", $"Serving framework resource: {path}");
-            }
 
             return content;
         }
@@ -156,6 +148,7 @@ internal sealed class HermesWebViewManager : WebViewManager
 
     protected override ValueTask DisposeAsyncCore()
     {
+        _disposed = true;
         _cts.Cancel();
         _messageChannel.Writer.TryComplete();
 
@@ -163,7 +156,10 @@ internal sealed class HermesWebViewManager : WebViewManager
         {
             _messagePumpTask.Wait(TimeSpan.FromSeconds(1));
         }
-        catch { }
+        catch (Exception ex)
+        {
+            HermesLogger.Warning($"Message pump task did not complete gracefully during dispose: {ex.Message}");
+        }
 
         _backend.WebMessageReceived -= OnWebMessageReceived;
         _cts.Dispose();

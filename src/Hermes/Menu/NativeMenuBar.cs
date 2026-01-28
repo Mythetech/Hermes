@@ -8,15 +8,27 @@ namespace Hermes.Menu;
 /// </summary>
 public sealed class NativeMenuBar
 {
+    /// <summary>
+    /// Reserved internal label for the app menu. Uses a null-prefix to prevent collision with user menus.
+    /// </summary>
+    internal const string AppMenuLabel = "\0AppMenu";
+
     private readonly IMenuBackend _backend;
     private readonly Dictionary<string, NativeMenu> _menus = new();
     private readonly Dictionary<string, NativeMenuItem> _itemsById = new();
+    private NativeAppMenu? _appMenu;
 
     internal NativeMenuBar(IMenuBackend backend)
     {
         _backend = backend;
         _backend.MenuItemClicked += OnMenuItemClicked;
     }
+
+    /// <summary>
+    /// The application menu. On macOS, this is the system app menu (left of File).
+    /// On Windows/Linux, this creates a top-level menu with the application name.
+    /// </summary>
+    public NativeAppMenu AppMenu => _appMenu ??= new NativeAppMenu(_backend, this);
 
     /// <summary>
     /// Event raised when any menu item is clicked.

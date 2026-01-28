@@ -10,8 +10,28 @@
     <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
   </PropertyGroup>
 
+  <!-- NuGet Package Metadata -->
+  <PropertyGroup>
+    <PackageId>Mythetech.Hermes.Blazor</PackageId>
+    <Authors>Mythetech</Authors>
+    <Description>Blazor integration for Hermes desktop framework</Description>
+    <PackageTags>blazor;desktop;hermes;webview</PackageTags>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <!-- SourceLink for debugging -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.*" PrivateAssets="All" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Hermes\Hermes.csproj" />
+  </ItemGroup>
+
+  <!-- Allow benchmarks to access internal members -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Hermes.Benchmarks" />
   </ItemGroup>
 
   <ItemGroup>

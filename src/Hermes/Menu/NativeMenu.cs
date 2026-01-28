@@ -11,18 +11,44 @@ public sealed class NativeMenu
     private readonly IMenuBackend _backend;
     private readonly NativeMenuBar _menuBar;
     private readonly List<NativeMenuItem> _items = new();
+    private readonly List<NativeMenu> _submenus = new();
+    private readonly string? _parentPath;
 
     internal NativeMenu(IMenuBackend backend, NativeMenuBar menuBar, string label)
     {
         _backend = backend;
         _menuBar = menuBar;
         Label = label;
+        _parentPath = null;
+    }
+
+    internal NativeMenu(IMenuBackend backend, NativeMenuBar menuBar, string label, string parentPath)
+    {
+        _backend = backend;
+        _menuBar = menuBar;
+        Label = label;
+        _parentPath = parentPath;
     }
 
     /// <summary>
     /// The display label for this menu.
     /// </summary>
     public string Label { get; }
+
+    /// <summary>
+    /// The full path to this menu (e.g., "File" or "File/New").
+    /// </summary>
+    public string Path => _parentPath is null ? Label : $"{_parentPath}/{Label}";
+
+    /// <summary>
+    /// Whether this is a submenu (has a parent).
+    /// </summary>
+    public bool IsSubmenu => _parentPath is not null;
+
+    /// <summary>
+    /// All submenus in this menu.
+    /// </summary>
+    public IReadOnlyList<NativeMenu> Submenus => _submenus;
 
     /// <summary>
     /// All items in this menu.
@@ -38,6 +64,24 @@ public sealed class NativeMenu
         _items.Find(i => i.Id == itemId);
 
     /// <summary>
+    /// Add a submenu to this menu.
+    /// </summary>
+    /// <param name="label">Display label for the submenu.</param>
+    /// <param name="configure">Configuration callback to add items to the submenu.</param>
+    /// <returns>This menu for method chaining.</returns>
+    public NativeMenu AddSubmenu(string label, Action<NativeMenu> configure)
+    {
+        _backend.AddSubmenu(Path, label);
+
+        var submenu = new NativeMenu(_backend, _menuBar, label, Path);
+        _submenus.Add(submenu);
+
+        configure(submenu);
+
+        return this;
+    }
+
+    /// <summary>
     /// Add a menu item to the end of this menu.
     /// </summary>
     /// <param name="label">Display label for the item.</param>
@@ -46,19 +90,18 @@ public sealed class NativeMenu
     /// <returns>This menu for method chaining.</returns>
     public NativeMenu AddItem(string label, string itemId, Action<NativeMenuItem>? configure = null)
     {
-        var item = new NativeMenuItem(_backend, Label, itemId, label);
-
-        // Allow configuration before registering with backend
+        var item = new NativeMenuItem(_backend, Path, itemId, label);
         configure?.Invoke(item);
 
-        // Register with backend
-        _backend.AddItem(Label, itemId, label, item.Accelerator?.ToPlatformString());
+        if (IsSubmenu)
+            _backend.AddSubmenuItem(Path, itemId, label, item.Accelerator?.ToPlatformString());
+        else
+            _backend.AddItem(Path, itemId, label, item.Accelerator?.ToPlatformString());
 
-        // Apply initial state if different from defaults
         if (!item.IsEnabled)
-            _backend.SetItemEnabled(Label, itemId, false);
+            _backend.SetItemEnabled(Path, itemId, false);
         if (item.IsChecked)
-            _backend.SetItemChecked(Label, itemId, true);
+            _backend.SetItemChecked(Path, itemId, true);
 
         _items.Add(item);
         _menuBar.RegisterItem(item);
@@ -72,7 +115,10 @@ public sealed class NativeMenu
     /// <returns>This menu for method chaining.</returns>
     public NativeMenu AddSeparator()
     {
-        _backend.AddSeparator(Label);
+        if (IsSubmenu)
+            _backend.AddSubmenuSeparator(Path);
+        else
+            _backend.AddSeparator(Path);
         return this;
     }
 
@@ -86,21 +132,16 @@ public sealed class NativeMenu
     /// <returns>This menu for method chaining.</returns>
     public NativeMenu InsertItem(string afterId, string label, string itemId, Action<NativeMenuItem>? configure = null)
     {
-        var item = new NativeMenuItem(_backend, Label, itemId, label);
-
-        // Allow configuration before registering with backend
+        var item = new NativeMenuItem(_backend, Path, itemId, label);
         configure?.Invoke(item);
 
-        // Register with backend
-        _backend.InsertItem(Label, afterId, itemId, label, item.Accelerator?.ToPlatformString());
+        _backend.InsertItem(Path, afterId, itemId, label, item.Accelerator?.ToPlatformString());
 
-        // Apply initial state if different from defaults
         if (!item.IsEnabled)
-            _backend.SetItemEnabled(Label, itemId, false);
+            _backend.SetItemEnabled(Path, itemId, false);
         if (item.IsChecked)
-            _backend.SetItemChecked(Label, itemId, true);
+            _backend.SetItemChecked(Path, itemId, true);
 
-        // Insert in local list after the target item
         var afterIndex = _items.FindIndex(i => i.Id == afterId);
         if (afterIndex >= 0)
             _items.Insert(afterIndex + 1, item);
@@ -123,7 +164,7 @@ public sealed class NativeMenu
         if (item is null)
             return this;
 
-        _backend.RemoveItem(Label, itemId);
+        _backend.RemoveItem(Path, itemId);
         _items.Remove(item);
         _menuBar.UnregisterItem(itemId);
 

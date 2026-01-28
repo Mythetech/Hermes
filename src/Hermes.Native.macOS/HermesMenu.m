@@ -22,6 +22,7 @@
         _actionHandlers = [NSMutableArray new];
         _itemsById = [NSMutableDictionary new];
         _menusByLabel = [NSMutableDictionary new];
+        _submenusByPath = [NSMutableDictionary new];
 
         // Ensure we have a menu bar
         if (![NSApp mainMenu]) {
@@ -194,6 +195,170 @@
     }
 }
 
+#pragma mark - Submenu Operations
+
+- (void)addSubmenu:(NSString*)menuPath submenuLabel:(NSString*)submenuLabel {
+    NSMenu* parentMenu = [self findMenuByPath:menuPath];
+    if (!parentMenu) return;
+
+    // Create menu item for the submenu
+    NSMenuItem* submenuItem = [[NSMenuItem alloc] init];
+    [submenuItem setTitle:submenuLabel];
+
+    // Create the submenu
+    NSMenu* submenu = [[NSMenu alloc] initWithTitle:submenuLabel];
+    [submenuItem setSubmenu:submenu];
+
+    // Add to parent
+    [parentMenu addItem:submenuItem];
+
+    // Track by full path
+    NSString* fullPath = [NSString stringWithFormat:@"%@/%@", menuPath, submenuLabel];
+    _submenusByPath[fullPath] = submenu;
+}
+
+- (void)addItemToSubmenu:(NSString*)menuPath
+                  itemId:(NSString*)itemId
+               itemLabel:(NSString*)itemLabel
+             accelerator:(NSString*)accelerator {
+
+    NSMenu* menu = [self findMenuByPath:menuPath];
+    if (!menu) return;
+
+    // Parse accelerator
+    NSString* keyEquivalent = @"";
+    NSEventModifierFlags modifierMask = 0;
+    [HermesMenu parseAccelerator:accelerator keyEquivalent:&keyEquivalent modifierMask:&modifierMask];
+
+    // Create action handler
+    HermesMenuActionHandler* handler = [[HermesMenuActionHandler alloc] init];
+    handler.menu = self;
+    handler.itemId = itemId;
+    [_actionHandlers addObject:handler];
+
+    // Create menu item
+    NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:itemLabel
+                                                  action:@selector(menuItemClicked:)
+                                           keyEquivalent:keyEquivalent];
+    [item setTarget:handler];
+    [item setKeyEquivalentModifierMask:modifierMask];
+
+    [menu addItem:item];
+    _itemsById[itemId] = item;
+}
+
+- (void)addSeparatorToSubmenu:(NSString*)menuPath {
+    NSMenu* menu = [self findMenuByPath:menuPath];
+    if (!menu) return;
+
+    [menu addItem:[NSMenuItem separatorItem]];
+}
+
+#pragma mark - App Menu Operations
+
+- (NSMenu*)getAppMenu {
+    NSMenu* mainMenu = [NSApp mainMenu];
+    if ([mainMenu numberOfItems] > 0) {
+        NSMenuItem* appMenuItem = [mainMenu itemAtIndex:0];
+        return [appMenuItem submenu];
+    }
+    return nil;
+}
+
+- (NSInteger)findQuitItemIndex:(NSMenu*)appMenu {
+    for (NSInteger i = 0; i < [appMenu numberOfItems]; i++) {
+        NSMenuItem* item = [appMenu itemAtIndex:i];
+        if ([item action] == @selector(terminate:)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+- (void)addAppMenuItem:(NSString*)itemId
+             itemLabel:(NSString*)itemLabel
+           accelerator:(NSString*)accelerator
+              position:(NSString*)position {
+
+    NSMenu* appMenu = [self getAppMenu];
+    if (!appMenu) return;
+
+    // Parse accelerator
+    NSString* keyEquivalent = @"";
+    NSEventModifierFlags modifierMask = 0;
+    [HermesMenu parseAccelerator:accelerator keyEquivalent:&keyEquivalent modifierMask:&modifierMask];
+
+    // Create action handler
+    HermesMenuActionHandler* handler = [[HermesMenuActionHandler alloc] init];
+    handler.menu = self;
+    handler.itemId = itemId;
+    [_actionHandlers addObject:handler];
+
+    // Create menu item
+    NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:itemLabel
+                                                  action:@selector(menuItemClicked:)
+                                           keyEquivalent:keyEquivalent];
+    [item setTarget:handler];
+    [item setKeyEquivalentModifierMask:modifierMask];
+
+    // Determine insert position
+    NSInteger insertIndex = [appMenu numberOfItems]; // Default to end
+
+    if ([position isEqualToString:@"before-quit"]) {
+        NSInteger quitIndex = [self findQuitItemIndex:appMenu];
+        if (quitIndex >= 0) insertIndex = quitIndex;
+    } else if ([position isEqualToString:@"top"]) {
+        insertIndex = 0;
+    } else if ([position isEqualToString:@"after-about"]) {
+        // About is typically at index 0, so insert at 1
+        insertIndex = MIN(1, [appMenu numberOfItems]);
+    }
+
+    // Ensure we don't insert after Quit (keep Quit last)
+    NSInteger quitIndex = [self findQuitItemIndex:appMenu];
+    if (quitIndex >= 0 && insertIndex > quitIndex) {
+        insertIndex = quitIndex;
+    }
+
+    [appMenu insertItem:item atIndex:insertIndex];
+    _itemsById[itemId] = item;
+}
+
+- (void)addAppMenuSeparator:(NSString*)position {
+    NSMenu* appMenu = [self getAppMenu];
+    if (!appMenu) return;
+
+    NSInteger insertIndex = [appMenu numberOfItems];
+
+    if ([position isEqualToString:@"before-quit"]) {
+        NSInteger quitIndex = [self findQuitItemIndex:appMenu];
+        if (quitIndex >= 0) insertIndex = quitIndex;
+    } else if ([position isEqualToString:@"top"]) {
+        insertIndex = 0;
+    } else if ([position isEqualToString:@"after-about"]) {
+        insertIndex = MIN(1, [appMenu numberOfItems]);
+    }
+
+    // Ensure we don't insert after Quit
+    NSInteger quitIndex = [self findQuitItemIndex:appMenu];
+    if (quitIndex >= 0 && insertIndex > quitIndex) {
+        insertIndex = quitIndex;
+    }
+
+    [appMenu insertItem:[NSMenuItem separatorItem] atIndex:insertIndex];
+}
+
+- (void)removeAppMenuItem:(NSString*)itemId {
+    NSMenu* appMenu = [self getAppMenu];
+    if (!appMenu) return;
+
+    NSMenuItem* item = _itemsById[itemId];
+    if (item) {
+        [appMenu removeItem:item];
+        [_itemsById removeObjectForKey:itemId];
+    }
+}
+
 #pragma mark - Internal
 
 - (NSMenu*)findMenuByLabel:(NSString*)label {
@@ -213,6 +378,45 @@
         }
     }
     return nil;
+}
+
+- (NSMenu*)findMenuByPath:(NSString*)path {
+    // Check if it's a submenu path (contains /)
+    if ([path containsString:@"/"]) {
+        // First check submenu cache
+        NSMenu* cachedSubmenu = _submenusByPath[path];
+        if (cachedSubmenu) return cachedSubmenu;
+    }
+
+    // For single-component paths, it's a top-level menu
+    if (![path containsString:@"/"]) {
+        return [self findMenuByLabel:path];
+    }
+
+    // Parse the path and traverse
+    NSArray* components = [path componentsSeparatedByString:@"/"];
+    NSMenu* currentMenu = [self findMenuByLabel:components[0]];
+
+    for (NSUInteger i = 1; i < [components count] && currentMenu; i++) {
+        NSString* component = components[i];
+        NSMenu* nextMenu = nil;
+
+        for (NSMenuItem* item in [currentMenu itemArray]) {
+            if ([[item title] isEqualToString:component] && [item submenu]) {
+                nextMenu = [item submenu];
+                break;
+            }
+        }
+
+        currentMenu = nextMenu;
+    }
+
+    // Cache if found
+    if (currentMenu) {
+        _submenusByPath[path] = currentMenu;
+    }
+
+    return currentMenu;
 }
 
 - (NSMenuItem*)findItemById:(NSString*)itemId inMenu:(NSMenu*)menu {

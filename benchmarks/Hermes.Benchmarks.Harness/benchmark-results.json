@@ -1,0 +1,51 @@
+{
+  "Timestamp": "2026-01-27T21:11:10.933879Z",
+  "Environment": {
+    "OS": "Unix 15.7.4",
+    "Runtime": ".NET 10.0.1",
+    "ProcessorCount": 10,
+    "MachineName": "Toms-MacBook-Pro"
+  },
+  "Hermes": {
+    "Name": "Hermes",
+    "StartupTimeMs": {
+      "Mean": 536.7276666666667,
+      "Median": 514.29,
+      "Min": 477.39,
+      "Max": 756.4,
+      "StdDev": 62.54058448848171,
+      "P95": 695.75,
+      "SampleCount": 30
+    },
+    "PeakMemoryMB": {
+      "Mean": 0,
+      "Median": 0,
+      "Min": 0,
+      "Max": 0,
+      "StdDev": 0,
+      "P95": 0,
+      "SampleCount": 30
+    }
+  },
+  "Photino": {
+    "Name": "Photino",
+    "StartupTimeMs": {
+      "Mean": 581.857,
+      "Median": 577.11,
+      "Min": 470.95,
+      "Max": 790.18,
+      "StdDev": 71.05923372501427,
+      "P95": 738.7,
+      "SampleCount": 30
+    },
+    "PeakMemoryMB": {
+      "Mean": 0,
+      "Median": 0,
+      "Min": 0,
+      "Max": 0,
+      "StdDev": 0,
+      "P95": 0,
+      "SampleCount": 30
+    }
+  }
+}

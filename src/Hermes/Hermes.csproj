@@ -7,6 +7,28 @@
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
+  <!-- NuGet Package Metadata -->
+  <PropertyGroup>
+    <PackageId>Mythetech.Hermes</PackageId>
+    <Authors>Mythetech</Authors>
+    <Description>Cross-platform native desktop framework for .NET</Description>
+    <PackageTags>desktop;native;webview;blazor;cross-platform</PackageTags>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <!-- Native binary for CI packaging (passed via -p:NativeBinaryPath=...) -->
+  <ItemGroup Condition="'$(IsPackaging)' == 'true' AND '$(NativeBinaryPath)' != ''">
+    <None Include="$(NativeBinaryPath)/libHermes.Native.macOS.dylib"
+          Pack="true"
+          PackagePath="runtimes/osx/native/" />
+  </ItemGroup>
+
+  <!-- SourceLink for debugging -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.*" PrivateAssets="All" />
+  </ItemGroup>
+
   <!-- Allow Hermes.Blazor to access internal members -->
   <ItemGroup>
     <InternalsVisibleTo Include="Hermes.Blazor" />

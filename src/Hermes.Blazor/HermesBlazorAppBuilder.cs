@@ -34,7 +34,6 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
 
         if (addDefaultConfiguration)
         {
-            // Add default configuration sources
             _hostBuilder.Configuration
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                 .AddJsonFile($"appsettings.{_hostBuilder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
@@ -135,14 +134,16 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
     [RequiresUnreferencedCode("Blazor WebView uses reflection for component instantiation")]
     public HermesBlazorApp Build()
     {
-        // Create file provider if not set
-        var fileProvider = _fileProvider ?? new PhysicalFileProvider(
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot"));
+        var wwwrootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
+        var fallbackProvider = Directory.Exists(wwwrootPath)
+            ? new PhysicalFileProvider(wwwrootPath)
+            : (IFileProvider)new NullFileProvider();
 
-        // Create the window (backend is created but not initialized yet)
+        var appName = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name ?? "App";
+        var fileProvider = _fileProvider ?? StaticWebAssetsFileProvider.Create(appName, fallbackProvider);
+
         var window = new HermesWindow();
 
-        // Apply window configuration
         if (_windowConfiguration is not null)
         {
             var options = new HermesWindowOptions();
@@ -150,14 +151,10 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             ApplyOptions(window, options);
         }
 
-        // Get the backend BEFORE Show() - it exists but is not initialized
         var backend = GetBackend(window);
-
-        // Create threading infrastructure
         var syncContext = new HermesSynchronizationContext(backend);
         var dispatcher = new HermesDispatcher(syncContext);
 
-        // Add Blazor services (includes NavigationManager, etc.)
         _hostBuilder.Services.AddBlazorWebView();
         _hostBuilder.Services.AddSingleton(window);
         _hostBuilder.Services.AddSingleton(backend);
@@ -165,14 +162,9 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         _hostBuilder.Services.AddSingleton(dispatcher);
         _hostBuilder.Services.AddSingleton<IConfiguration>(_hostBuilder.Configuration);
 
-        // Build service provider
         var serviceProvider = _hostBuilder.Services.BuildServiceProvider();
-
-        // Create JS component store
         var jsComponents = new JSComponentConfigurationStore();
 
-        // Create WebView manager BEFORE Show() - this registers the custom scheme
-        // which on macOS must happen before Initialize() is called
         var webViewManager = new HermesWebViewManager(
             backend,
             serviceProvider,
@@ -181,13 +173,10 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             jsComponents,
             _hostPage);
 
-        // NOW show the window (triggers Initialize which processes registered schemes)
         window.Show();
 
-        // Create app
         var app = new HermesBlazorApp(serviceProvider, _hostBuilder.Configuration, window, webViewManager, syncContext);
 
-        // Add root components
         foreach (var component in RootComponents.GetComponents())
         {
             app.RootComponents.Add(component.Type, component.Selector, component.Parameters);
@@ -228,11 +217,8 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             window.SetMaxSize(options.MaxWidth ?? int.MaxValue, options.MaxHeight ?? int.MaxValue);
     }
 
-    private static IHermesWindowBackend GetBackend(HermesWindow window)
-    {
-        // Direct access via internal property - no reflection needed
-        return window.Backend;
-    }
+    private static IHermesWindowBackend GetBackend(HermesWindow window) =>
+        window.Backend;
 
     private readonly record struct RootComponentRegistration(
         [DynamicallyAccessedMembers(

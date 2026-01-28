@@ -14,11 +14,15 @@ internal sealed class LinuxMenuBackend : IMenuBackend
     private readonly AccelGroup _accelGroup;
 
     private readonly Dictionary<string, Menu> _menusByLabel = new();
+    private readonly Dictionary<string, Menu> _submenusByPath = new();
     private readonly Dictionary<string, MenuItem> _menuItemsByLabel = new();
     private readonly Dictionary<string, MenuItem> _itemsByCommandId = new();
     private readonly Dictionary<MenuItem, string> _commandIdByItem = new();
 
     private bool _menuBarAttached;
+    private Menu? _appMenu;
+    private MenuItem? _appMenuItem;
+    private string? _appName;
 
     public event Action<string>? MenuItemClicked;
 
@@ -205,6 +209,137 @@ internal sealed class LinuxMenuBackend : IMenuBackend
         {
             ApplyAccelerator(menuItem, accelerator);
         }
+    }
+
+    #region Submenu Operations
+
+    public void AddSubmenu(string menuPath, string submenuLabel)
+    {
+        var parentMenu = FindMenuByPath(menuPath);
+        if (parentMenu is null)
+            throw new ArgumentException($"Menu '{menuPath}' not found", nameof(menuPath));
+
+        var submenu = new Menu();
+        var menuItem = new MenuItem(submenuLabel);
+        menuItem.Submenu = submenu;
+
+        parentMenu.Append(menuItem);
+        menuItem.ShowAll();
+
+        var fullPath = $"{menuPath}/{submenuLabel}";
+        _submenusByPath[fullPath] = submenu;
+    }
+
+    public void AddSubmenuItem(string menuPath, string itemId, string itemLabel, string? accelerator = null)
+    {
+        var menu = FindMenuByPath(menuPath);
+        if (menu is null)
+            throw new ArgumentException($"Menu '{menuPath}' not found", nameof(menuPath));
+
+        var menuItem = new MenuItem(itemLabel);
+        _itemsByCommandId[itemId] = menuItem;
+        _commandIdByItem[menuItem] = itemId;
+
+        menuItem.Activated += OnMenuItemActivated;
+
+        if (!string.IsNullOrEmpty(accelerator))
+        {
+            ApplyAccelerator(menuItem, accelerator);
+        }
+
+        menu.Append(menuItem);
+        menuItem.ShowAll();
+    }
+
+    public void AddSubmenuSeparator(string menuPath)
+    {
+        var menu = FindMenuByPath(menuPath);
+        if (menu is null)
+            throw new ArgumentException($"Menu '{menuPath}' not found", nameof(menuPath));
+
+        var separator = new SeparatorMenuItem();
+        menu.Append(separator);
+        separator.ShowAll();
+    }
+
+    #endregion
+
+    #region App Menu Operations
+
+    public string AppName => _appName ??= System.Diagnostics.Process.GetCurrentProcess().ProcessName;
+
+    private Menu EnsureAppMenu()
+    {
+        if (_appMenu is not null)
+            return _appMenu;
+
+        EnsureMenuBarAttached();
+
+        _appMenu = new Menu();
+        _appMenuItem = new MenuItem(AppName);
+        _appMenuItem.Submenu = _appMenu;
+
+        // Insert at the beginning (position 0)
+        _menuBar.Insert(_appMenuItem, 0);
+        _appMenuItem.ShowAll();
+
+        return _appMenu;
+    }
+
+    public void AddAppMenuItem(string itemId, string itemLabel, string? accelerator = null, string? position = null)
+    {
+        var appMenu = EnsureAppMenu();
+
+        var menuItem = new MenuItem(itemLabel);
+        _itemsByCommandId[itemId] = menuItem;
+        _commandIdByItem[menuItem] = itemId;
+
+        menuItem.Activated += OnMenuItemActivated;
+
+        if (!string.IsNullOrEmpty(accelerator))
+        {
+            ApplyAccelerator(menuItem, accelerator);
+        }
+
+        appMenu.Append(menuItem);
+        menuItem.ShowAll();
+    }
+
+    public void AddAppMenuSeparator(string? position = null)
+    {
+        var appMenu = EnsureAppMenu();
+        var separator = new SeparatorMenuItem();
+        appMenu.Append(separator);
+        separator.ShowAll();
+    }
+
+    public void RemoveAppMenuItem(string itemId)
+    {
+        if (_appMenu is null) return;
+        if (!_itemsByCommandId.TryGetValue(itemId, out var menuItem)) return;
+
+        _appMenu.Remove(menuItem);
+        menuItem.Destroy();
+
+        _itemsByCommandId.Remove(itemId);
+        _commandIdByItem.Remove(menuItem);
+    }
+
+    #endregion
+
+    private Menu? FindMenuByPath(string path)
+    {
+        // Check submenu cache first
+        if (_submenusByPath.TryGetValue(path, out var submenu))
+            return submenu;
+
+        // For single-component paths, it's a top-level menu
+        if (!path.Contains('/'))
+        {
+            return _menusByLabel.TryGetValue(path, out var menu) ? menu : null;
+        }
+
+        return null;
     }
 
     private void EnsureMenuBarAttached()

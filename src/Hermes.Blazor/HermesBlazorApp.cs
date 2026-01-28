@@ -1,12 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
-using Hermes.Abstractions;
-using Hermes.Blazor.Diagnostics;
 using Hermes.Blazor.Threading;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
 
 namespace Hermes.Blazor;
 
@@ -63,21 +59,9 @@ public sealed class HermesBlazorApp : IAsyncDisposable
     /// </summary>
     public void Run()
     {
-        StartupLog.Log("Blazor", "Installing SynchronizationContext");
-        // Install synchronization context
         SynchronizationContext.SetSynchronizationContext(_syncContext);
-
-        StartupLog.Log("Blazor", "Initializing root components...");
-        // Initialize pending root components (adds them to WebViewManager)
         RootComponents.InitializeAsync().GetAwaiter().GetResult();
-        StartupLog.Log("Blazor", "Root components initialized");
-
-        // Navigate to the root URL
-        StartupLog.Log("Blazor", "Navigating to /");
         _webViewManager.Navigate("/");
-
-        StartupLog.Log("Blazor", "Entering message loop (waiting for close)");
-        // Run the window message loop (blocking)
         _window.WaitForClose();
     }
 
@@ -134,7 +118,6 @@ public sealed class HermesRootComponents
     {
         if (_initialized)
         {
-            // Add immediately if already initialized
             _ = _webViewManager.AddRootComponentAsync(
                 componentType,
                 selector,
@@ -142,7 +125,6 @@ public sealed class HermesRootComponents
         }
         else
         {
-            // Queue for later
             _pendingComponents.Add(new RootComponentRegistration(componentType, selector, parameters));
         }
     }
@@ -152,10 +134,8 @@ public sealed class HermesRootComponents
         if (_initialized) return;
         _initialized = true;
 
-        StartupLog.Log("Blazor", $"Adding {_pendingComponents.Count} root component(s) to WebViewManager");
         foreach (var registration in _pendingComponents)
         {
-            StartupLog.Log("Blazor", $"  - {registration.ComponentType.Name} -> {registration.Selector}");
             await _webViewManager.AddRootComponentAsync(
                 registration.ComponentType,
                 registration.Selector,

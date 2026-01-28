@@ -14,6 +14,7 @@
 @property (nonatomic, strong) NSMutableArray<HermesMenuActionHandler*>* actionHandlers;
 @property (nonatomic, strong) NSMutableDictionary<NSString*, NSMenuItem*>* itemsById;
 @property (nonatomic, strong) NSMutableDictionary<NSString*, NSMenu*>* menusByLabel;
+@property (nonatomic, strong) NSMutableDictionary<NSString*, NSMenu*>* submenusByPath;
 
 - (instancetype)initWithWindow:(HermesWindow*)window callback:(MenuItemCallback)callback;
 
@@ -42,9 +43,28 @@
 - (void)setItemLabel:(NSString*)menuLabel itemId:(NSString*)itemId label:(NSString*)label;
 - (void)setItemAccelerator:(NSString*)menuLabel itemId:(NSString*)itemId accelerator:(NSString*)accelerator;
 
+// Submenu operations
+- (void)addSubmenu:(NSString*)menuPath submenuLabel:(NSString*)submenuLabel;
+- (void)addItemToSubmenu:(NSString*)menuPath
+                  itemId:(NSString*)itemId
+               itemLabel:(NSString*)itemLabel
+             accelerator:(NSString*)accelerator;
+- (void)addSeparatorToSubmenu:(NSString*)menuPath;
+
+// App menu operations
+- (NSMenu*)getAppMenu;
+- (void)addAppMenuItem:(NSString*)itemId
+             itemLabel:(NSString*)itemLabel
+           accelerator:(NSString*)accelerator
+              position:(NSString*)position;
+- (void)addAppMenuSeparator:(NSString*)position;
+- (void)removeAppMenuItem:(NSString*)itemId;
+
 // Internal
 - (NSMenu*)findMenuByLabel:(NSString*)label;
+- (NSMenu*)findMenuByPath:(NSString*)path;
 - (NSMenuItem*)findItemById:(NSString*)itemId inMenu:(NSMenu*)menu;
+- (NSInteger)findQuitItemIndex:(NSMenu*)appMenu;
 + (void)parseAccelerator:(NSString*)accelerator
            keyEquivalent:(NSString**)keyEquivalent
             modifierMask:(NSEventModifierFlags*)modifierMask;

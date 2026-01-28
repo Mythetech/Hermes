@@ -32,6 +32,7 @@
 @property (nonatomic, assign) int64_t uiThreadId;
 @property (nonatomic, assign) BOOL isRunning;
 @property (nonatomic, assign) NSRect premaximizedFrame;
+@property (nonatomic, assign) BOOL devToolsEnabled;
 
 // Initialization
 - (instancetype)initWithParams:(const HermesWindowParams*)params;

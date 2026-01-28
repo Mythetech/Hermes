@@ -3,10 +3,11 @@
 #import "HermesMenu.h"
 #import "HermesContextMenu.h"
 #import "HermesDialogs.h"
+#import "HermesAppDelegate.h"
 #import <Cocoa/Cocoa.h>
 
-// Global flag for app registration
 static BOOL g_appRegistered = NO;
+static HermesAppDelegate* g_appDelegate = nil;
 
 #pragma mark - Application Lifecycle
 
@@ -16,18 +17,16 @@ void Hermes_App_Register(void) {
 
     @autoreleasepool {
         [NSApplication sharedApplication];
+
+        g_appDelegate = [[HermesAppDelegate alloc] init];
+        [NSApp setDelegate:g_appDelegate];
         [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 
-        // Create a basic app menu (required for keyboard shortcuts to work)
         NSMenu* mainMenu = [[NSMenu alloc] init];
-
-        // App menu
         NSMenuItem* appMenuItem = [[NSMenuItem alloc] init];
         NSMenu* appMenu = [[NSMenu alloc] init];
 
         NSString* appName = [[NSProcessInfo processInfo] processName];
-
-        // Quit item
         NSMenuItem* quitItem = [[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"Quit %@", appName]
                                                           action:@selector(terminate:)
                                                    keyEquivalent:@"q"];
@@ -312,6 +311,70 @@ void Hermes_Menu_SetItemAccelerator(void* menu, const char* menuLabel, const cha
         [hermesMenu setItemAccelerator:[NSString stringWithUTF8String:menuLabel]
                                 itemId:[NSString stringWithUTF8String:itemId]
                            accelerator:[NSString stringWithUTF8String:accelerator]];
+    }
+}
+
+#pragma mark - Submenu Operations
+
+void Hermes_Menu_AddSubmenu(void* menu, const char* menuPath, const char* submenuLabel) {
+    @autoreleasepool {
+        HermesMenu* hermesMenu = (__bridge HermesMenu*)menu;
+        [hermesMenu addSubmenu:[NSString stringWithUTF8String:menuPath]
+                  submenuLabel:[NSString stringWithUTF8String:submenuLabel]];
+    }
+}
+
+void Hermes_Menu_AddSubmenuItem(void* menu, const char* menuPath, const char* itemId,
+                                 const char* itemLabel, const char* accelerator) {
+    @autoreleasepool {
+        HermesMenu* hermesMenu = (__bridge HermesMenu*)menu;
+        [hermesMenu addItemToSubmenu:[NSString stringWithUTF8String:menuPath]
+                              itemId:[NSString stringWithUTF8String:itemId]
+                           itemLabel:[NSString stringWithUTF8String:itemLabel]
+                         accelerator:accelerator ? [NSString stringWithUTF8String:accelerator] : nil];
+    }
+}
+
+void Hermes_Menu_AddSubmenuSeparator(void* menu, const char* menuPath) {
+    @autoreleasepool {
+        HermesMenu* hermesMenu = (__bridge HermesMenu*)menu;
+        [hermesMenu addSeparatorToSubmenu:[NSString stringWithUTF8String:menuPath]];
+    }
+}
+
+#pragma mark - App Menu Operations
+
+char* Hermes_Menu_GetAppName(void) {
+    @autoreleasepool {
+        NSString* appName = [[NSProcessInfo processInfo] processName];
+        const char* utf8 = [appName UTF8String];
+        char* result = strdup(utf8);
+        return result;
+    }
+}
+
+void Hermes_Menu_AddAppMenuItem(void* menu, const char* itemId, const char* itemLabel,
+                                 const char* accelerator, const char* position) {
+    @autoreleasepool {
+        HermesMenu* hermesMenu = (__bridge HermesMenu*)menu;
+        [hermesMenu addAppMenuItem:[NSString stringWithUTF8String:itemId]
+                         itemLabel:[NSString stringWithUTF8String:itemLabel]
+                       accelerator:accelerator ? [NSString stringWithUTF8String:accelerator] : nil
+                          position:position ? [NSString stringWithUTF8String:position] : nil];
+    }
+}
+
+void Hermes_Menu_AddAppMenuSeparator(void* menu, const char* position) {
+    @autoreleasepool {
+        HermesMenu* hermesMenu = (__bridge HermesMenu*)menu;
+        [hermesMenu addAppMenuSeparator:position ? [NSString stringWithUTF8String:position] : nil];
+    }
+}
+
+void Hermes_Menu_RemoveAppMenuItem(void* menu, const char* itemId) {
+    @autoreleasepool {
+        HermesMenu* hermesMenu = (__bridge HermesMenu*)menu;
+        [hermesMenu removeAppMenuItem:[NSString stringWithUTF8String:itemId]];
     }
 }
 

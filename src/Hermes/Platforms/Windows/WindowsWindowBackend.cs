@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Text.Json;
 using Hermes.Abstractions;
 using Microsoft.Web.WebView2.Core;
 using Windows.Win32;
@@ -247,7 +248,9 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     public void SendWebMessage(string message)
     {
         ThrowIfNotInitialized();
-        _webView?.PostWebMessageAsString(message);
+        // Use JSON serialization for consistent escaping across platforms
+        var json = JsonSerializer.Serialize(message);
+        _webView?.PostWebMessageAsJson(json);
     }
 
     public void RegisterCustomScheme(string scheme, Func<string, Stream?> handler)
@@ -614,6 +617,14 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         MSG msg;
         while (PInvoke.GetMessage(out msg, HWND.Null, 0, 0))
         {
+            // Check for keyboard accelerators (menu shortcuts)
+            if (_menuBackend is not null)
+            {
+                var hAccel = _menuBackend.AccelTable;
+                if (!hAccel.IsNull && PInvoke.TranslateAccelerator(_hwnd, hAccel, in msg) != 0)
+                    continue; // Accelerator was handled, skip normal processing
+            }
+
             PInvoke.TranslateMessage(in msg);
             PInvoke.DispatchMessage(in msg);
         }

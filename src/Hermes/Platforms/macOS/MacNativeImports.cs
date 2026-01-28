@@ -150,6 +150,31 @@ internal static partial class MacNative
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Menu_SetItemAccelerator", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void MenuSetItemAccelerator(IntPtr menu, string menuLabel, string itemId, string accelerator);
 
+    // Submenu Operations
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Menu_AddSubmenu", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void MenuAddSubmenu(IntPtr menu, string menuPath, string submenuLabel);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Menu_AddSubmenuItem", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void MenuAddSubmenuItem(IntPtr menu, string menuPath, string itemId,
+                                                    string itemLabel, string? accelerator);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Menu_AddSubmenuSeparator", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void MenuAddSubmenuSeparator(IntPtr menu, string menuPath);
+
+    // App Menu Operations
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Menu_GetAppName", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial IntPtr MenuGetAppName();
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Menu_AddAppMenuItem", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void MenuAddAppMenuItem(IntPtr menu, string itemId, string itemLabel,
+                                                    string? accelerator, string? position);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Menu_AddAppMenuSeparator", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void MenuAddAppMenuSeparator(IntPtr menu, string? position);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Menu_RemoveAppMenuItem", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void MenuRemoveAppMenuItem(IntPtr menu, string itemId);
+
     #endregion
 
     #region Context Menu Operations
