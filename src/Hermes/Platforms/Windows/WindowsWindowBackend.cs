@@ -662,6 +662,11 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     private static string GetContentType(string path)
     {
         var extension = Path.GetExtension(path).ToLowerInvariant();
+
+        // Paths without extensions (like "/" or "/page") are HTML pages (Blazor routing)
+        if (string.IsNullOrEmpty(extension))
+            return "text/html";
+
         return extension switch
         {
             ".html" or ".htm" => "text/html",

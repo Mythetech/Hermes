@@ -54,9 +54,11 @@ internal static class WebKitNative
         try
         {
             // Add CORS headers to allow fetch() from the app origin
-            soup_message_headers_append(headers, "Access-Control-Allow-Origin", "*");
+            // Cannot use wildcard "*" when credentials mode is used - must specify actual origin
+            soup_message_headers_append(headers, "Access-Control-Allow-Origin", "app://localhost");
             soup_message_headers_append(headers, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-            soup_message_headers_append(headers, "Access-Control-Allow-Headers", "*");
+            soup_message_headers_append(headers, "Access-Control-Allow-Headers", "Content-Type, Authorization");
+            soup_message_headers_append(headers, "Access-Control-Allow-Credentials", "true");
 
             // Create URI scheme response
             var response = webkit_uri_scheme_response_new(inputStream.Handle, contentLength);
