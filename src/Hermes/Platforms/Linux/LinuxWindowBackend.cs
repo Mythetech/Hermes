@@ -3,7 +3,6 @@ using System.Runtime.Versioning;
 using System.Text.Json;
 using Hermes.Abstractions;
 using Hermes.Diagnostics;
-using Gio;
 using Gtk;
 using WebKit;
 
@@ -351,8 +350,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
                         var bytes = ReadStreamToBytes(stream);
                         var mimeType = GetMimeType(uri);
 
-                        // Create Gio input stream from bytes
-                        var inputStream = new Gio.MemoryInputStream();
+                        // Create GLib input stream from bytes
+                        var inputStream = new GLib.MemoryInputStream();
                         inputStream.AddData(bytes, null);
 
                         request.Finish(inputStream, bytes.Length, mimeType);
@@ -380,7 +379,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         // as a public type in the current WebKitGTKSharp binding
         try
         {
-            var emptyStream = new Gio.MemoryInputStream();
+            var emptyStream = new GLib.MemoryInputStream();
             request.Finish(emptyStream, 0, "text/plain");
         }
         catch

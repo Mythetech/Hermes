@@ -5,6 +5,8 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsAotCompatible>true</IsAotCompatible>
+    <!-- Suppress warnings for intentional unsafe COM interop and AOT compatibility in Windows code -->
+    <NoWarn>$(NoWarn);CS8500;IL2026;IL3050</NoWarn>
   </PropertyGroup>
 
   <!-- NuGet Package Metadata -->
@@ -37,6 +39,8 @@
   <!-- Platform-specific compilation symbols -->
   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
     <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+    <!-- Suppress CA1416: CsWin32 generates version-specific attributes but code is already properly gated -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
     <DefineConstants>$(DefineConstants);LINUX</DefineConstants>
@@ -47,8 +51,8 @@
 
   <!-- Windows dependencies and source files -->
   <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.*" />
-    <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.*" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3240.44" />
+    <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.183" PrivateAssets="all" />
     <!-- Include NativeMethods.txt from Platforms/Windows subfolder for CsWin32 -->
     <AdditionalFiles Include="Platforms/Windows/NativeMethods.txt" />
     <AdditionalFiles Include="Platforms/Windows/NativeMethods.json" />

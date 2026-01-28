@@ -192,8 +192,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         get
         {
             ThrowIfNotInitialized();
-            var style = PInvoke.GetWindowLongPtr(_hwnd, WINDOW_LONG_PTR_INDEX.GWL_STYLE);
-            return ((WINDOW_STYLE)style & WINDOW_STYLE.WS_MAXIMIZE) != 0;
+            return PInvoke.IsZoomed(_hwnd);
         }
         set
         {
@@ -207,8 +206,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         get
         {
             ThrowIfNotInitialized();
-            var style = PInvoke.GetWindowLongPtr(_hwnd, WINDOW_LONG_PTR_INDEX.GWL_STYLE);
-            return ((WINDOW_STYLE)style & WINDOW_STYLE.WS_MINIMIZE) != 0;
+            return PInvoke.IsIconic(_hwnd);
         }
         set
         {
