@@ -63,8 +63,8 @@
 
   <!-- Linux dependencies and source files -->
   <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
-    <ProjectReference Include="..\..\external\GtkSharp\Source\Libs\GtkSharp\GtkSharp.csproj" />
-    <ProjectReference Include="..\..\external\GtkSharp\Source\Libs\WebkitGtkSharp\WebkitGtkSharp.csproj" />
+    <PackageReference Include="GtkSharp" Version="3.24.24.128-develop" />
+    <PackageReference Include="WebkitGtkSharp" Version="3.24.24.128-develop" />
   </ItemGroup>
   <ItemGroup Condition="!$([MSBuild]::IsOSPlatform('Linux'))">
     <Compile Remove="Platforms/Linux/**/*.cs" />

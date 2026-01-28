@@ -526,9 +526,50 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         {
             if (s_gtkInitialized) return;
 
+            // Register native library resolver to handle webkit2gtk-4.0 -> 4.1 mapping
+            // Ubuntu 24.04+ only ships webkit2gtk-4.1, but GtkSharp bindings expect 4.0
+            RegisterWebKitLibraryResolver();
+
             Gtk.Application.Init();
             s_gtkInitialized = true;
         }
+    }
+
+    private static bool s_resolverRegistered;
+
+    private static void RegisterWebKitLibraryResolver()
+    {
+        if (s_resolverRegistered) return;
+        s_resolverRegistered = true;
+
+        // Get the WebKitGtkSharp assembly to register the resolver for
+        var webkitAssembly = typeof(WebKit.WebView).Assembly;
+
+        NativeLibrary.SetDllImportResolver(webkitAssembly, (libraryName, assembly, searchPath) =>
+        {
+            // If requesting webkit2gtk-4.0, try 4.1 first (for Ubuntu 24.04+)
+            if (libraryName.Contains("webkit2gtk-4.0"))
+            {
+                // Try webkit2gtk-4.1 variants
+                var lib41Names = new[]
+                {
+                    "libwebkit2gtk-4.1.so.0",
+                    "libwebkit2gtk-4.1.so",
+                    "webkit2gtk-4.1"
+                };
+
+                foreach (var name in lib41Names)
+                {
+                    if (NativeLibrary.TryLoad(name, out var handle))
+                    {
+                        return handle;
+                    }
+                }
+            }
+
+            // Fall back to default resolution
+            return IntPtr.Zero;
+        });
     }
 
     private void OnWindowDeleteEvent(object? sender, DeleteEventArgs args)
