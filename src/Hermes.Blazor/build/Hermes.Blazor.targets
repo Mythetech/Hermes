@@ -1,15 +1,34 @@
 <Project>
-  <!-- Copy static web assets from NuGet packages to output wwwroot for desktop Blazor apps -->
-  <!-- This is needed because the StaticWebAssetsFileProvider uses absolute paths that don't exist in published builds -->
-  <Target Name="HermesCopyStaticWebAssetsToOutput" AfterTargets="GenerateStaticWebAssetsManifest">
+  <!--
+    This targets file is included in the Mythetech.Hermes.Blazor NuGet package.
+    It copies static web assets from NuGet packages to the output wwwroot folder
+    for desktop Blazor apps where the development-time paths don't exist.
+  -->
+
+  <!-- For build scenario -->
+  <Target Name="HermesCopyStaticWebAssetsToOutput"
+          AfterTargets="GenerateStaticWebAssetsManifest"
+          Condition="'$(PublishDir)' == ''">
     <ItemGroup>
-      <!-- Get all static web assets from packages (BasePath starts with _content) -->
       <_HermesContentAssetsToCopy Include="@(StaticWebAsset)"
                                    Condition="$([System.String]::Copy('%(BasePath)').StartsWith('_content'))" />
     </ItemGroup>
-
     <Copy SourceFiles="@(_HermesContentAssetsToCopy->'%(Identity)')"
-          DestinationFiles="@(_HermesContentAssetsToCopy->'$(OutputPath)wwwroot\%(BasePath)\%(RelativePath)')"
+          DestinationFiles="@(_HermesContentAssetsToCopy->'$(OutputPath)wwwroot/%(BasePath)/%(RelativePath)')"
+          SkipUnchangedFiles="true"
+          Condition="'@(_HermesContentAssetsToCopy)' != ''" />
+  </Target>
+
+  <!-- For publish scenario -->
+  <Target Name="HermesCopyStaticWebAssetsToPublish"
+          AfterTargets="GenerateStaticWebAssetsManifest"
+          Condition="'$(PublishDir)' != ''">
+    <ItemGroup>
+      <_HermesContentAssetsToCopy Include="@(StaticWebAsset)"
+                                   Condition="$([System.String]::Copy('%(BasePath)').StartsWith('_content'))" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_HermesContentAssetsToCopy->'%(Identity)')"
+          DestinationFiles="@(_HermesContentAssetsToCopy->'$(PublishDir)wwwroot/%(BasePath)/%(RelativePath)')"
           SkipUnchangedFiles="true"
           Condition="'@(_HermesContentAssetsToCopy)' != ''" />
   </Target>
