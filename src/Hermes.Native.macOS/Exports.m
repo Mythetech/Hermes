@@ -26,6 +26,41 @@ void Hermes_App_Register(void) {
         NSMenuItem* appMenuItem = [[NSMenuItem alloc] init];
         NSMenu* appMenu = [[NSMenu alloc] init];
 
+        // Standard Edit items - target nil for responder chain
+        NSMenuItem* undoItem = [[NSMenuItem alloc] initWithTitle:@"Undo"
+                                                          action:@selector(undo:)
+                                                   keyEquivalent:@"z"];
+        [appMenu addItem:undoItem];
+
+        NSMenuItem* redoItem = [[NSMenuItem alloc] initWithTitle:@"Redo"
+                                                          action:@selector(redo:)
+                                                   keyEquivalent:@"Z"];
+        [appMenu addItem:redoItem];
+
+        [appMenu addItem:[NSMenuItem separatorItem]];
+
+        NSMenuItem* cutItem = [[NSMenuItem alloc] initWithTitle:@"Cut"
+                                                         action:@selector(cut:)
+                                                  keyEquivalent:@"x"];
+        [appMenu addItem:cutItem];
+
+        NSMenuItem* copyItem = [[NSMenuItem alloc] initWithTitle:@"Copy"
+                                                          action:@selector(copy:)
+                                                   keyEquivalent:@"c"];
+        [appMenu addItem:copyItem];
+
+        NSMenuItem* pasteItem = [[NSMenuItem alloc] initWithTitle:@"Paste"
+                                                           action:@selector(paste:)
+                                                    keyEquivalent:@"v"];
+        [appMenu addItem:pasteItem];
+
+        NSMenuItem* selectAllItem = [[NSMenuItem alloc] initWithTitle:@"Select All"
+                                                               action:@selector(selectAll:)
+                                                        keyEquivalent:@"a"];
+        [appMenu addItem:selectAllItem];
+
+        [appMenu addItem:[NSMenuItem separatorItem]];
+
         NSString* appName = [[NSProcessInfo processInfo] processName];
         NSMenuItem* quitItem = [[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"Quit %@", appName]
                                                           action:@selector(terminate:)

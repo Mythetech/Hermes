@@ -3,21 +3,34 @@
     This targets file is included in the Mythetech.Hermes.Blazor NuGet package.
     It copies static web assets from NuGet packages to the output wwwroot folder
     for desktop Blazor apps where the development-time paths don't exist.
-
-    Note: We use %(SubPath) instead of %(RelativePath) because RelativePath may contain
-    fingerprint placeholders (e.g., app#[.fingerprint]?.js) which are invalid on Windows.
   -->
 
   <!-- For build scenario -->
   <Target Name="HermesCopyStaticWebAssetsToOutput"
           AfterTargets="GenerateStaticWebAssetsManifest"
           Condition="'$(PublishDir)' == ''">
+
+    <PropertyGroup>
+      <_HermesWwwrootPath>$([MSBuild]::NormalizePath($(OutputPath), 'wwwroot'))</_HermesWwwrootPath>
+    </PropertyGroup>
+
     <ItemGroup>
       <_HermesContentAssetsToCopy Include="@(StaticWebAsset)"
                                    Condition="$([System.String]::Copy('%(BasePath)').StartsWith('_content'))" />
     </ItemGroup>
-    <Copy SourceFiles="@(_HermesContentAssetsToCopy->'%(Identity)')"
-          DestinationFiles="@(_HermesContentAssetsToCopy->'$(OutputPath)/wwwroot/%(BasePath)/%(SubPath)')"
+
+    <ItemGroup>
+      <_HermesContentAssetsToCopy>
+        <DestinationPath>$([MSBuild]::NormalizePath($(_HermesWwwrootPath), %(BasePath), %(RelativePath)))</DestinationPath>
+      </_HermesContentAssetsToCopy>
+
+      <_HermesContentAssetsToCopy Condition="'%(RelativePath)' == ''">
+        <DestinationPath>$([MSBuild]::NormalizePath($(_HermesWwwrootPath), %(BasePath), %(Filename)%(Extension)))</DestinationPath>
+      </_HermesContentAssetsToCopy>
+    </ItemGroup>
+
+    <Copy SourceFiles="@(_HermesContentAssetsToCopy)"
+          DestinationFiles="@(_HermesContentAssetsToCopy->'%(DestinationPath)')"
           SkipUnchangedFiles="true"
           Condition="'@(_HermesContentAssetsToCopy)' != ''" />
   </Target>
@@ -26,12 +39,28 @@
   <Target Name="HermesCopyStaticWebAssetsToPublish"
           AfterTargets="GenerateStaticWebAssetsManifest"
           Condition="'$(PublishDir)' != ''">
+
+    <PropertyGroup>
+      <_HermesWwwrootPath>$([MSBuild]::NormalizePath($(PublishDir), 'wwwroot'))</_HermesWwwrootPath>
+    </PropertyGroup>
+
     <ItemGroup>
       <_HermesContentAssetsToCopy Include="@(StaticWebAsset)"
                                    Condition="$([System.String]::Copy('%(BasePath)').StartsWith('_content'))" />
     </ItemGroup>
-    <Copy SourceFiles="@(_HermesContentAssetsToCopy->'%(Identity)')"
-          DestinationFiles="@(_HermesContentAssetsToCopy->'$(PublishDir)/wwwroot/%(BasePath)/%(SubPath)')"
+
+    <ItemGroup>
+      <_HermesContentAssetsToCopy>
+        <DestinationPath>$([MSBuild]::NormalizePath($(_HermesWwwrootPath), %(BasePath), %(RelativePath)))</DestinationPath>
+      </_HermesContentAssetsToCopy>
+
+      <_HermesContentAssetsToCopy Condition="'%(RelativePath)' == ''">
+        <DestinationPath>$([MSBuild]::NormalizePath($(_HermesWwwrootPath), %(BasePath), %(Filename)%(Extension)))</DestinationPath>
+      </_HermesContentAssetsToCopy>
+    </ItemGroup>
+
+    <Copy SourceFiles="@(_HermesContentAssetsToCopy)"
+          DestinationFiles="@(_HermesContentAssetsToCopy->'%(DestinationPath)')"
           SkipUnchangedFiles="true"
           Condition="'@(_HermesContentAssetsToCopy)' != ''" />
   </Target>

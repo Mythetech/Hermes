@@ -89,21 +89,25 @@
         _customTitleBar = params->CustomTitleBar;
 
         WKPreferences* prefs = _webViewConfiguration.preferences;
+
+        // Enable clipboard access unconditionally for Cmd+V paste support
+        @try {
+            [prefs setValue:@YES forKey:@"javaScriptCanAccessClipboard"];
+        } @catch (NSException *e) {
+            NSLog(@"[Hermes] Failed to enable javaScriptCanAccessClipboard: %@", [e reason]);
+        }
+        @try {
+            [prefs setValue:@YES forKey:@"domPasteAllowed"];
+        } @catch (NSException *e) {
+            NSLog(@"[Hermes] Failed to enable domPasteAllowed: %@", [e reason]);
+        }
+
+        // DevTools extras only when enabled
         if (params->DevToolsEnabled) {
             @try {
                 [prefs setValue:@YES forKey:@"developerExtrasEnabled"];
             } @catch (NSException *e) {
                 NSLog(@"[Hermes] Failed to enable developerExtrasEnabled: %@", [e reason]);
-            }
-            @try {
-                [prefs setValue:@YES forKey:@"javaScriptCanAccessClipboard"];
-            } @catch (NSException *e) {
-                NSLog(@"[Hermes] Failed to enable javaScriptCanAccessClipboard: %@", [e reason]);
-            }
-            @try {
-                [prefs setValue:@YES forKey:@"domPasteAllowed"];
-            } @catch (NSException *e) {
-                NSLog(@"[Hermes] Failed to enable domPasteAllowed: %@", [e reason]);
             }
         }
 
