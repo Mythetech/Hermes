@@ -176,7 +176,7 @@ jobs:
             --no-build \
             -p:Version=${{ steps.version.outputs.VERSION }} \
             -p:IsPackaging=true \
-            -p:ArtifactsPath=${{ github.workspace }}/artifacts \
+            -p:CIArtifactsPath=${{ github.workspace }}/artifacts \
             -o packages
 
       - name: Build Hermes.Blazor
