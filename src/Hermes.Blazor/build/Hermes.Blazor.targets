@@ -3,6 +3,9 @@
     This targets file is included in the Mythetech.Hermes.Blazor NuGet package.
     It copies static web assets from NuGet packages to the output wwwroot folder
     for desktop Blazor apps where the development-time paths don't exist.
+
+    Note: We use %(SubPath) instead of %(RelativePath) because RelativePath may contain
+    fingerprint placeholders (e.g., app#[.fingerprint]?.js) which are invalid on Windows.
   -->
 
   <!-- For build scenario -->
@@ -14,7 +17,7 @@
                                    Condition="$([System.String]::Copy('%(BasePath)').StartsWith('_content'))" />
     </ItemGroup>
     <Copy SourceFiles="@(_HermesContentAssetsToCopy->'%(Identity)')"
-          DestinationFiles="@(_HermesContentAssetsToCopy->'$(OutputPath)wwwroot/%(BasePath)/%(RelativePath)')"
+          DestinationFiles="@(_HermesContentAssetsToCopy->'$(OutputPath)/wwwroot/%(BasePath)/%(SubPath)')"
           SkipUnchangedFiles="true"
           Condition="'@(_HermesContentAssetsToCopy)' != ''" />
   </Target>
@@ -28,7 +31,7 @@
                                    Condition="$([System.String]::Copy('%(BasePath)').StartsWith('_content'))" />
     </ItemGroup>
     <Copy SourceFiles="@(_HermesContentAssetsToCopy->'%(Identity)')"
-          DestinationFiles="@(_HermesContentAssetsToCopy->'$(PublishDir)wwwroot/%(BasePath)/%(RelativePath)')"
+          DestinationFiles="@(_HermesContentAssetsToCopy->'$(PublishDir)/wwwroot/%(BasePath)/%(SubPath)')"
           SkipUnchangedFiles="true"
           Condition="'@(_HermesContentAssetsToCopy)' != ''" />
   </Target>
