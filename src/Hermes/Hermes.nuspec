@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Mythetech.Hermes</id>
+    <version>$version$</version>
+    <authors>Mythetech</authors>
+    <description>Cross-platform native desktop framework for .NET</description>
+    <tags>desktop native webview blazor cross-platform</tags>
+    <license type="expression">MIT</license>
+    <projectUrl>https://github.com/mythetech/Hermes</projectUrl>
+    <repository type="git" url="https://github.com/mythetech/Hermes.git" />
+    <readme>README.md</readme>
+    <dependencies>
+      <!-- No runtime dependencies - platform-specific deps (WebView2, GtkSharp) are implementation details -->
+      <group targetFramework="net10.0" />
+    </dependencies>
+  </metadata>
+  <files>
+    <!-- README for NuGet gallery -->
+    <file src="../../README.md" target="" />
+
+    <!-- MSBuild targets for conditional dependencies (auto-imported by consuming projects) -->
+    <file src="Hermes.targets" target="buildTransitive/net10.0/Mythetech.Hermes.targets" />
+    <file src="Hermes.targets" target="build/net10.0/Mythetech.Hermes.targets" />
+
+    <!-- Reference assembly (Linux build - has all public types for compile-time) -->
+    <file src="../../artifacts/dll-linux-x64/Hermes.dll" target="lib/net10.0/" />
+    <file src="../../artifacts/dll-linux-x64/Hermes.pdb" target="lib/net10.0/" />
+
+    <!-- Runtime-specific assemblies -->
+    <file src="../../artifacts/dll-win-x64/Hermes.dll" target="runtimes/win-x64/lib/net10.0/" />
+    <file src="../../artifacts/dll-win-x64/Hermes.pdb" target="runtimes/win-x64/lib/net10.0/" />
+    <file src="../../artifacts/dll-linux-x64/Hermes.dll" target="runtimes/linux-x64/lib/net10.0/" />
+    <file src="../../artifacts/dll-linux-x64/Hermes.pdb" target="runtimes/linux-x64/lib/net10.0/" />
+    <file src="../../artifacts/dll-osx/Hermes.dll" target="runtimes/osx/lib/net10.0/" />
+    <file src="../../artifacts/dll-osx/Hermes.pdb" target="runtimes/osx/lib/net10.0/" />
+
+    <!-- macOS native library -->
+    <file src="../../artifacts/native/libHermes.Native.macOS.dylib" target="runtimes/osx/native/" />
+  </files>
+</package>

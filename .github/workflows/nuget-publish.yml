@@ -52,6 +52,15 @@ jobs:
       - name: Test
         run: dotnet test -c Release --no-build --verbosity normal
 
+      # All platforms: Upload compiled DLL and PDB for multi-RID packaging
+      - name: Upload Platform Binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: dll-${{ matrix.rid }}
+          path: |
+            src/Hermes/bin/Release/net10.0/Hermes.dll
+            src/Hermes/bin/Release/net10.0/Hermes.pdb
+
       # macOS only: Upload native binary
       - name: Upload Native Binary
         if: matrix.os == 'macos-latest'
@@ -117,6 +126,28 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Install NuGet CLI
+        uses: nuget/setup-nuget@v2
+
+      # Download platform-specific DLLs
+      - name: Download Windows DLL
+        uses: actions/download-artifact@v4
+        with:
+          name: dll-win-x64
+          path: artifacts/dll-win-x64
+
+      - name: Download Linux DLL
+        uses: actions/download-artifact@v4
+        with:
+          name: dll-linux-x64
+          path: artifacts/dll-linux-x64
+
+      - name: Download macOS DLL
+        uses: actions/download-artifact@v4
+        with:
+          name: dll-osx
+          path: artifacts/dll-osx
+
       - name: Download Native Binary
         uses: actions/download-artifact@v4
         with:
@@ -140,19 +171,18 @@ jobs:
 
       - name: Pack Hermes
         run: |
-          dotnet pack src/Hermes/Hermes.csproj \
-            -c Release \
-            --no-restore \
-            -p:Version=${{ steps.version.outputs.VERSION }} \
-            -p:IsPackaging=true \
-            -p:NativeBinaryPath=${{ github.workspace }}/artifacts/native \
-            -o packages
+          nuget pack src/Hermes/Hermes.nuspec \
+            -Version ${{ steps.version.outputs.VERSION }} \
+            -OutputDirectory packages
+
+      - name: Build Hermes.Blazor
+        run: dotnet build src/Hermes.Blazor/Hermes.Blazor.csproj -c Release --no-restore
 
       - name: Pack Hermes.Blazor
         run: |
           dotnet pack src/Hermes.Blazor/Hermes.Blazor.csproj \
             -c Release \
-            --no-restore \
+            --no-build \
             -p:Version=${{ steps.version.outputs.VERSION }} \
             -o packages
 

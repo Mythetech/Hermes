@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--
+    This targets file is included in the Mythetech.Hermes NuGet package.
+    It conditionally adds platform-specific dependencies based on the target runtime.
+  -->
+
+  <!-- Windows: Requires WebView2 -->
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win')) OR ($([MSBuild]::IsOSPlatform('Windows')) AND '$(RuntimeIdentifier)' == '')">
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3240.44" />
+  </ItemGroup>
+
+  <!-- Linux: Requires GtkSharp and WebkitGtkSharp -->
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('linux')) OR ($([MSBuild]::IsOSPlatform('Linux')) AND '$(RuntimeIdentifier)' == '')">
+    <PackageReference Include="GtkSharp" Version="3.24.24.128-develop" />
+    <PackageReference Include="WebkitGtkSharp" Version="3.24.24.128-develop" />
+  </ItemGroup>
+
+  <!-- macOS: No additional NuGet dependencies (uses native dylib via P/Invoke) -->
+
+</Project>
