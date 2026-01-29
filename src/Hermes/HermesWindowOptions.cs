@@ -106,4 +106,12 @@ public sealed class HermesWindowOptions
     /// Maximum window height in pixels.
     /// </summary>
     public int? MaxHeight { get; set; }
+
+    /// <summary>
+    /// Enable custom title bar mode.
+    /// On macOS: Uses transparent title bar with native traffic light buttons, allowing
+    /// WebView content to extend under the title bar area.
+    /// On Windows/Linux: Enables chromeless mode for fully custom window chrome.
+    /// </summary>
+    public bool CustomTitleBar { get; set; }
 }

@@ -48,6 +48,8 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     public event Action? FocusIn;
     public event Action? FocusOut;
     public event Action<string>? WebMessageReceived;
+    public event Action? Maximized;
+    public event Action? Restored;
 
     public void Initialize(HermesWindowOptions options)
     {
@@ -65,10 +67,16 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         _options = options;
         _uiThreadId = Environment.CurrentManagedThreadId;
 
+        // CustomTitleBar on Windows enables chromeless mode for custom window chrome
+        if (_options.CustomTitleBar)
+        {
+            _options.Chromeless = true;
+        }
+
         EnsureWindowClassRegistered();
 
-        var style = CalculateWindowStyle(options);
-        var exStyle = CalculateExtendedStyle(options);
+        var style = CalculateWindowStyle(_options);
+        var exStyle = CalculateExtendedStyle(_options);
 
         int x = options.X ?? PInvoke.CW_USEDEFAULT;
         int y = options.Y ?? PInvoke.CW_USEDEFAULT;
@@ -238,7 +246,14 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         set
         {
             ThrowIfNotInitialized();
+            var wasMaximized = PInvoke.IsZoomed(_hwnd);
             PInvoke.ShowWindow(_hwnd, value ? SHOW_WINDOW_CMD.SW_MAXIMIZE : SHOW_WINDOW_CMD.SW_RESTORE);
+
+            // Fire events if state changed
+            if (value && !wasMaximized)
+                Maximized?.Invoke();
+            else if (!value && wasMaximized)
+                Restored?.Invoke();
         }
     }
 
@@ -255,6 +270,8 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
             PInvoke.ShowWindow(_hwnd, value ? SHOW_WINDOW_CMD.SW_MINIMIZE : SHOW_WINDOW_CMD.SW_RESTORE);
         }
     }
+
+    public HermesPlatform Platform => HermesPlatform.Windows;
 
     public void NavigateToUrl(string url)
     {

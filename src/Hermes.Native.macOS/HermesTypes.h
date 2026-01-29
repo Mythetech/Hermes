@@ -42,6 +42,7 @@ typedef struct {
     bool Minimized;
     bool DevToolsEnabled;
     bool ContextMenuEnabled;
+    bool CustomTitleBar;
 
     // Event callbacks
     ClosingCallback OnClosing;

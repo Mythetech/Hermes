@@ -23,15 +23,18 @@
             box-sizing: border-box;
         }
 
-        body {
+        html, body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
             background: var(--bg);
             color: var(--text);
-            min-height: 100vh;
+            height: 100%;
+            overflow: hidden;
         }
 
         #app {
-            min-height: 100vh;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
         }
 
         .loading {
@@ -43,10 +46,82 @@
             min-height: 100vh;
         }
 
+        /* Title Bar */
+        .title-bar {
+            -webkit-app-region: drag;
+            height: 38px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--surface-hover);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+        }
+
+        /* macOS: space for traffic lights */
+        .title-bar.macos {
+            padding-left: 78px;
+        }
+
+        .title-bar-content {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding-left: 1rem;
+        }
+
+        .title-bar-brand {
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary) 0%, #a855f7 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .title-bar-title {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        /* Window controls (Windows/Linux only) */
+        .window-controls {
+            display: flex;
+            -webkit-app-region: no-drag;
+        }
+
+        .window-btn {
+            width: 46px;
+            height: 38px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .window-btn:hover {
+            background: var(--surface-hover);
+            color: var(--text);
+        }
+
+        .window-btn-close:hover {
+            background: #e81123;
+            color: white;
+        }
+
         /* Layout */
         .layout {
             display: flex;
-            min-height: 100vh;
+            flex: 1;
+            margin-top: 38px;
+            height: calc(100% - 38px);
+            overflow: hidden;
         }
 
         .sidebar {
@@ -54,6 +129,7 @@
             background: var(--surface);
             border-right: 1px solid var(--surface-hover);
             flex-shrink: 0;
+            overflow-y: auto;
         }
 
         .content {

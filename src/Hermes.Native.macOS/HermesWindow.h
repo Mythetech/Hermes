@@ -33,6 +33,8 @@
 @property (nonatomic, assign) BOOL isRunning;
 @property (nonatomic, assign) NSRect premaximizedFrame;
 @property (nonatomic, assign) BOOL devToolsEnabled;
+@property (nonatomic, assign) BOOL customTitleBar;
+@property (nonatomic, strong) id dragEventMonitor;
 
 // Initialization
 - (instancetype)initWithParams:(const HermesWindowParams*)params;

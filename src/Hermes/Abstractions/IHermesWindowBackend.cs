@@ -1,6 +1,16 @@
 namespace Hermes.Abstractions;
 
 /// <summary>
+/// Identifies the current operating system platform.
+/// </summary>
+public enum HermesPlatform
+{
+    Windows,
+    macOS,
+    Linux
+}
+
+/// <summary>
 /// Platform-specific backend for window lifecycle and WebView management.
 /// Implementations exist for Windows, Linux, and macOS.
 /// </summary>
@@ -58,6 +68,11 @@ public interface IHermesWindowBackend : IDisposable
     /// Get or set whether the window is minimized.
     /// </summary>
     bool IsMinimized { get; set; }
+
+    /// <summary>
+    /// Gets the current platform.
+    /// </summary>
+    HermesPlatform Platform { get; }
 
     #endregion
 
@@ -144,6 +159,16 @@ public interface IHermesWindowBackend : IDisposable
     /// Raised when JavaScript sends a message via window.external.sendMessage().
     /// </summary>
     event Action<string>? WebMessageReceived;
+
+    /// <summary>
+    /// Raised when the window is maximized.
+    /// </summary>
+    event Action? Maximized;
+
+    /// <summary>
+    /// Raised when the window is restored from maximized state.
+    /// </summary>
+    event Action? Restored;
 
     #endregion
 }

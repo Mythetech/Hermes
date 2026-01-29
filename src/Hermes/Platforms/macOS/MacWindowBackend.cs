@@ -56,7 +56,8 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
             Maximized = options.Maximized,
             Minimized = options.Minimized,
             DevToolsEnabled = options.DevToolsEnabled,
-            ContextMenuEnabled = options.ContextMenuEnabled
+            ContextMenuEnabled = options.ContextMenuEnabled,
+            CustomTitleBar = options.CustomTitleBar
         };
 
         // Marshal strings
@@ -199,7 +200,14 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
         set
         {
             EnsureInitialized();
+            var wasMaximized = MacNative.WindowGetIsMaximized(_windowHandle);
             MacNative.WindowSetIsMaximized(_windowHandle, value);
+
+            // Fire events if state changed
+            if (value && !wasMaximized)
+                Maximized?.Invoke();
+            else if (!value && wasMaximized)
+                Restored?.Invoke();
         }
     }
 
@@ -216,6 +224,8 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
             MacNative.WindowSetIsMinimized(_windowHandle, value);
         }
     }
+
+    public HermesPlatform Platform => HermesPlatform.macOS;
 
     #endregion
 
@@ -344,6 +354,8 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
     public event Action? FocusIn;
     public event Action? FocusOut;
     public event Action<string>? WebMessageReceived;
+    public event Action? Maximized;
+    public event Action? Restored;
 
     #endregion
 

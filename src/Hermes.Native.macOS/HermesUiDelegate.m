@@ -15,6 +15,12 @@
                 _hermesWindow.onWebMessage(messageUtf8);
             }
         }
+    } else if ([message.name isEqualToString:@"hermesWindowDrag"]) {
+        // Start window drag using the current event
+        NSEvent* currentEvent = [NSApp currentEvent];
+        if (currentEvent && _hermesWindow) {
+            [_hermesWindow.window performWindowDragWithEvent:currentEvent];
+        }
     }
 }
 

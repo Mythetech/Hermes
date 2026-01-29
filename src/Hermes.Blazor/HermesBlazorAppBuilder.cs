@@ -205,6 +205,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         window.SetTopMost(options.TopMost);
         window.SetDevToolsEnabled(options.DevToolsEnabled);
         window.SetContextMenuEnabled(options.ContextMenuEnabled);
+        window.SetCustomTitleBar(options.CustomTitleBar);
 
         if (options.Maximized)
             window.Maximize();

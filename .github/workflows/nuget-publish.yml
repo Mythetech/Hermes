@@ -42,9 +42,6 @@ jobs:
       # All platforms: Build and test
       - name: Restore
         run: dotnet restore
-        env:
-          GITHUB_USERNAME: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build
         run: dotnet build -c Release --no-restore
@@ -99,9 +96,6 @@ jobs:
 
       - name: Restore
         run: dotnet restore
-        env:
-          GITHUB_USERNAME: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Sample App
         run: dotnet build samples/BlazorHelloWorld -c Release --no-restore
@@ -153,9 +147,6 @@ jobs:
 
       - name: Restore
         run: dotnet restore
-        env:
-          GITHUB_USERNAME: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Determine Version
         id: version

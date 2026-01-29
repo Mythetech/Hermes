@@ -189,6 +189,18 @@ public sealed class HermesWindow : IDisposable
         return this;
     }
 
+    /// <summary>
+    /// Enable custom title bar mode.
+    /// On macOS: Uses transparent title bar with native traffic light buttons.
+    /// On Windows/Linux: Enables chromeless mode for fully custom window chrome.
+    /// </summary>
+    public HermesWindow SetCustomTitleBar(bool enabled)
+    {
+        ThrowIfInitialized();
+        _options.CustomTitleBar = enabled;
+        return this;
+    }
+
     #endregion
 
     #region Content
@@ -291,6 +303,24 @@ public sealed class HermesWindow : IDisposable
     public HermesWindow OnWebMessage(Action<string> handler)
     {
         _backend.WebMessageReceived += handler;
+        return this;
+    }
+
+    /// <summary>
+    /// Register a handler for when the window is maximized.
+    /// </summary>
+    public HermesWindow OnMaximized(Action handler)
+    {
+        _backend.Maximized += handler;
+        return this;
+    }
+
+    /// <summary>
+    /// Register a handler for when the window is restored from maximized state.
+    /// </summary>
+    public HermesWindow OnRestored(Action handler)
+    {
+        _backend.Restored += handler;
         return this;
     }
 
@@ -444,6 +474,52 @@ public sealed class HermesWindow : IDisposable
             _backend.Invoke(action);
         else
             action();
+    }
+
+    /// <summary>
+    /// Gets whether the window is currently maximized.
+    /// </summary>
+    public bool IsMaximized => _initialized && _backend.IsMaximized;
+
+    /// <summary>
+    /// Gets the current platform.
+    /// </summary>
+    public HermesPlatform Platform => _backend.Platform;
+
+    /// <summary>
+    /// Minimize the window at runtime.
+    /// </summary>
+    public void MinimizeWindow()
+    {
+        EnsureInitialized();
+        _backend.IsMinimized = true;
+    }
+
+    /// <summary>
+    /// Restore the window from minimized state.
+    /// </summary>
+    public void RestoreWindow()
+    {
+        EnsureInitialized();
+        _backend.IsMinimized = false;
+    }
+
+    /// <summary>
+    /// Maximize the window at runtime.
+    /// </summary>
+    public void MaximizeWindow()
+    {
+        EnsureInitialized();
+        _backend.IsMaximized = true;
+    }
+
+    /// <summary>
+    /// Toggle between maximized and normal window state.
+    /// </summary>
+    public void ToggleMaximize()
+    {
+        EnsureInitialized();
+        _backend.IsMaximized = !_backend.IsMaximized;
     }
 
     #endregion

@@ -70,6 +70,7 @@ public static class Program
             options.Height = 768;
             options.CenterOnScreen = true;
             options.DevToolsEnabled = true;
+            options.CustomTitleBar = true;  // Enable custom title bar
         });
 
         // Register the metrics service so components can report render time

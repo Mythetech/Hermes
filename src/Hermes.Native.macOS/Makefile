@@ -5,7 +5,7 @@
 CC = xcrun clang
 
 # Frameworks
-FRAMEWORKS = -framework Cocoa -framework WebKit -framework UniformTypeIdentifiers
+FRAMEWORKS = -framework Cocoa -framework WebKit -framework UniformTypeIdentifiers -framework QuartzCore
 
 # Compiler flags
 # Note: Some SDK versions have format_arg issues in headers, suppress these warnings

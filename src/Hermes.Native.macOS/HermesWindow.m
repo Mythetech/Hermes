@@ -3,6 +3,7 @@
 #import "HermesUiDelegate.h"
 #import "HermesUrlSchemeHandler.h"
 #import <pthread.h>
+#import <QuartzCore/QuartzCore.h>
 
 @implementation HermesWindow
 
@@ -28,6 +29,10 @@
             if (params->Resizable) {
                 styleMask |= NSWindowStyleMaskResizable;
             }
+            // CustomTitleBar: extend content under title bar while keeping traffic lights
+            if (params->CustomTitleBar) {
+                styleMask |= NSWindowStyleMaskFullSizeContentView;
+            }
         }
 
         NSRect frame = NSMakeRect(0, 0, params->Width, params->Height);
@@ -38,6 +43,23 @@
 
         if (params->Title) {
             [_window setTitle:[NSString stringWithUTF8String:params->Title]];
+        }
+
+        // CustomTitleBar: make title bar transparent and hide title text
+        if (params->CustomTitleBar && !params->Chromeless) {
+            [_window setTitlebarAppearsTransparent:YES];
+            [_window setTitleVisibility:NSWindowTitleHidden];
+            // Remove the title bar separator line
+            if (@available(macOS 11.0, *)) {
+                [_window setTitlebarSeparatorStyle:NSTitlebarSeparatorStyleNone];
+            }
+
+            // Position traffic light buttons for custom title bar
+            // Delay to allow macOS to finish setting up the title bar
+            __weak typeof(self) weakSelf = self;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [weakSelf repositionTrafficLightButtons];
+            });
         }
 
         if (params->UsePosition) {
@@ -64,6 +86,7 @@
 
         _webViewConfiguration = [[WKWebViewConfiguration alloc] init];
         _devToolsEnabled = params->DevToolsEnabled;
+        _customTitleBar = params->CustomTitleBar;
 
         WKPreferences* prefs = _webViewConfiguration.preferences;
         if (params->DevToolsEnabled) {
@@ -96,6 +119,44 @@
 
         [self attachWebView];
 
+        // Set up event monitor for custom title bar dragging and double-click to zoom
+        if (_customTitleBar && !params->Chromeless) {
+            __weak typeof(self) weakSelf = self;
+            _dragEventMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown
+                                                                      handler:^NSEvent*(NSEvent* event) {
+                __strong typeof(weakSelf) strongSelf = weakSelf;
+                if (!strongSelf || event.window != strongSelf.window) {
+                    return event;
+                }
+
+                // Get click location in window coordinates
+                NSPoint locationInWindow = event.locationInWindow;
+                NSRect contentRect = strongSelf.window.contentView.frame;
+
+                // Title bar is at the top 38 pixels (matching CSS)
+                CGFloat titleBarHeight = 38.0;
+                CGFloat titleBarTop = contentRect.size.height;
+                CGFloat titleBarBottom = titleBarTop - titleBarHeight;
+
+                // Check if click is in title bar region
+                if (locationInWindow.y >= titleBarBottom && locationInWindow.y <= titleBarTop) {
+                    // Skip traffic light area (first 78 pixels)
+                    if (locationInWindow.x >= 78) {
+                        if (event.clickCount == 2) {
+                            // Double-click: toggle zoom (maximize/restore)
+                            [strongSelf.window zoom:nil];
+                        } else {
+                            // Single click: start window drag
+                            [strongSelf.window performWindowDragWithEvent:event];
+                        }
+                        return nil;  // Consume the event
+                    }
+                }
+
+                return event;  // Pass through
+            }];
+        }
+
         if (startUrl) {
             [self navigateToUrl:startUrl];
         } else if (startHtml) {
@@ -125,7 +186,21 @@
         "    receiveMessage: function(callback) {"
         "        window.__receiveMessageCallbacks.push(callback);"
         "    }"
-        "};";
+        "};"
+        // Window drag support for -webkit-app-region: drag
+        "document.addEventListener('mousedown', function(e) {"
+        "    var el = e.target;"
+        "    while (el) {"
+        "        var style = window.getComputedStyle(el);"
+        "        var region = style.getPropertyValue('-webkit-app-region') || style.getPropertyValue('app-region');"
+        "        if (region === 'no-drag') return;"
+        "        if (region === 'drag') {"
+        "            window.webkit.messageHandlers.hermesWindowDrag.postMessage('drag');"
+        "            return;"
+        "        }"
+        "        el = el.parentElement;"
+        "    }"
+        "});";
 
     WKUserScript* userScript = [[WKUserScript alloc] initWithSource:initScript
                                                       injectionTime:WKUserScriptInjectionTimeAtDocumentStart
@@ -137,6 +212,7 @@
     _uiDelegate = [[HermesUiDelegate alloc] init];
     _uiDelegate.hermesWindow = self;
     [contentController addScriptMessageHandler:_uiDelegate name:@"hermesinterop"];
+    [contentController addScriptMessageHandler:_uiDelegate name:@"hermesWindowDrag"];
 
     _webViewConfiguration.userContentController = contentController;
 
@@ -302,10 +378,96 @@
     return screenHeight - y - height;
 }
 
+#pragma mark - Traffic Light Buttons
+
+- (void)repositionTrafficLightButtons {
+    if (!_customTitleBar) return;
+
+    NSButton* closeButton = [_window standardWindowButton:NSWindowCloseButton];
+    if (!closeButton) return;
+
+    // Get the buttons' container view
+    NSView* containerView = closeButton.superview;
+    if (!containerView) return;
+
+    NSView* titleBarView = containerView.superview;
+    if (!titleBarView) return;
+
+    CGFloat leftInset = 7.0;   // Extra left margin
+    CGFloat topInset = 3.0;    // Move down to center in 38px title bar
+
+    // Remove ALL existing constraints on the container
+    [containerView removeConstraints:containerView.constraints];
+
+    // Remove constraints from parent that reference the container
+    NSMutableArray* constraintsToRemove = [NSMutableArray array];
+    for (NSLayoutConstraint* constraint in titleBarView.constraints) {
+        if (constraint.firstItem == containerView || constraint.secondItem == containerView) {
+            [constraintsToRemove addObject:constraint];
+        }
+    }
+    [titleBarView removeConstraints:constraintsToRemove];
+
+    // Store current size before changing to Auto Layout
+    CGSize containerSize = containerView.frame.size;
+
+    // Use Auto Layout with our own constraints
+    containerView.translatesAutoresizingMaskIntoConstraints = NO;
+
+    // Pin to left edge with offset
+    NSLayoutConstraint* leftConstraint = [NSLayoutConstraint constraintWithItem:containerView
+                                                                      attribute:NSLayoutAttributeLeading
+                                                                      relatedBy:NSLayoutRelationEqual
+                                                                         toItem:titleBarView
+                                                                      attribute:NSLayoutAttributeLeading
+                                                                     multiplier:1.0
+                                                                       constant:leftInset];
+    leftConstraint.priority = NSLayoutPriorityRequired;
+
+    // Pin to top edge with offset
+    NSLayoutConstraint* topConstraint = [NSLayoutConstraint constraintWithItem:containerView
+                                                                     attribute:NSLayoutAttributeTop
+                                                                     relatedBy:NSLayoutRelationEqual
+                                                                        toItem:titleBarView
+                                                                     attribute:NSLayoutAttributeTop
+                                                                    multiplier:1.0
+                                                                      constant:topInset];
+    topConstraint.priority = NSLayoutPriorityRequired;
+
+    // Preserve width
+    NSLayoutConstraint* widthConstraint = [NSLayoutConstraint constraintWithItem:containerView
+                                                                       attribute:NSLayoutAttributeWidth
+                                                                       relatedBy:NSLayoutRelationEqual
+                                                                          toItem:nil
+                                                                       attribute:NSLayoutAttributeNotAnAttribute
+                                                                      multiplier:1.0
+                                                                        constant:containerSize.width];
+    widthConstraint.priority = NSLayoutPriorityRequired;
+
+    // Preserve height
+    NSLayoutConstraint* heightConstraint = [NSLayoutConstraint constraintWithItem:containerView
+                                                                        attribute:NSLayoutAttributeHeight
+                                                                        relatedBy:NSLayoutRelationEqual
+                                                                           toItem:nil
+                                                                        attribute:NSLayoutAttributeNotAnAttribute
+                                                                       multiplier:1.0
+                                                                         constant:containerSize.height];
+    heightConstraint.priority = NSLayoutPriorityRequired;
+
+    [containerView addConstraints:@[widthConstraint, heightConstraint]];
+    [titleBarView addConstraints:@[leftConstraint, topConstraint]];
+}
+
 #pragma mark - Cleanup
 
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    if (_dragEventMonitor) {
+        [NSEvent removeMonitor:_dragEventMonitor];
+        _dragEventMonitor = nil;
+    }
     [_webViewConfiguration.userContentController removeScriptMessageHandlerForName:@"hermesinterop"];
+    [_webViewConfiguration.userContentController removeScriptMessageHandlerForName:@"hermesWindowDrag"];
     [_webView removeFromSuperview];
 }
 

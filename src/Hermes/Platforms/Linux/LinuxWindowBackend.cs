@@ -111,6 +111,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     public event System.Action? FocusIn;
     public event System.Action? FocusOut;
     public event System.Action<string>? WebMessageReceived;
+    public event System.Action? Maximized;
+    public event System.Action? Restored;
 
     public void Initialize(HermesWindowOptions options)
     {
@@ -120,25 +122,31 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         _options = options;
         _uiThreadId = Environment.CurrentManagedThreadId;
 
+        // CustomTitleBar on Linux enables chromeless mode for custom window chrome
+        if (_options.CustomTitleBar)
+        {
+            _options.Chromeless = true;
+        }
+
         EnsureGtkInitialized();
 
         // Create main window
         _window = new Gtk.Window(Gtk.WindowType.Toplevel);
-        _window.Title = options.Title;
-        _window.SetDefaultSize(options.Width, options.Height);
+        _window.Title = _options.Title;
+        _window.SetDefaultSize(_options.Width, _options.Height);
 
         // Position
-        if (options.CenterOnScreen)
+        if (_options.CenterOnScreen)
         {
             _window.SetPosition(Gtk.WindowPosition.Center);
         }
-        else if (options.X.HasValue && options.Y.HasValue)
+        else if (_options.X.HasValue && _options.Y.HasValue)
         {
-            _window.Move(options.X.Value, options.Y.Value);
+            _window.Move(_options.X.Value, _options.Y.Value);
         }
 
         // Chromeless (no decorations)
-        if (options.Chromeless)
+        if (_options.Chromeless)
         {
             _window.Decorated = false;
         }
@@ -368,10 +376,17 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         set
         {
             ThrowIfNotInitialized();
+            var wasMaximized = _window.IsMaximized;
             if (value)
                 _window.Maximize();
             else
                 _window.Unmaximize();
+
+            // Fire events if state changed
+            if (value && !wasMaximized)
+                Maximized?.Invoke();
+            else if (!value && wasMaximized)
+                Restored?.Invoke();
         }
     }
 
@@ -393,6 +408,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
                 _window.Deiconify();
         }
     }
+
+    public HermesPlatform Platform => HermesPlatform.Linux;
 
     public void NavigateToUrl(string url)
     {
