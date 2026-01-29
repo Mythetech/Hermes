@@ -14,6 +14,7 @@ internal sealed class StaticWebAssetsFileProvider : IFileProvider
     private readonly string[] _contentRoots;
     private readonly Dictionary<string, AssetInfo> _assets;
     private readonly IFileProvider _fallbackProvider;
+    private readonly string _baseDirectory;
 
     private StaticWebAssetsFileProvider(
         string[] contentRoots,
@@ -23,6 +24,7 @@ internal sealed class StaticWebAssetsFileProvider : IFileProvider
         _contentRoots = contentRoots;
         _assets = assets;
         _fallbackProvider = fallbackProvider;
+        _baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
     }
 
     /// <summary>
@@ -62,12 +64,21 @@ internal sealed class StaticWebAssetsFileProvider : IFileProvider
 
         if (_assets.TryGetValue(normalizedPath, out var asset))
         {
+            // Try 1: Absolute path from manifest (works in dev)
             var contentRoot = _contentRoots[asset.ContentRootIndex];
             var fullPath = Path.Combine(contentRoot, asset.SubPath);
 
             if (File.Exists(fullPath))
             {
                 return new PhysicalFileInfo(new FileInfo(fullPath));
+            }
+
+            // Try 2: Relative path under wwwroot (works in published builds)
+            // The asset path in manifest looks like "_content/PackageName/file.js"
+            var relativePath = Path.Combine(_baseDirectory, "wwwroot", normalizedPath);
+            if (File.Exists(relativePath))
+            {
+                return new PhysicalFileInfo(new FileInfo(relativePath));
             }
         }
 

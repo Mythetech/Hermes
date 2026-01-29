@@ -34,6 +34,12 @@
     <InternalsVisibleTo Include="Hermes.Benchmarks" />
   </ItemGroup>
 
+  <!-- MSBuild targets for static web asset handling (auto-imported by consuming projects) -->
+  <ItemGroup>
+    <None Include="build/Hermes.Blazor.targets" Pack="true" PackagePath="buildTransitive/net10.0/Mythetech.Hermes.Blazor.targets" />
+    <None Include="build/Hermes.Blazor.targets" Pack="true" PackagePath="build/net10.0/Mythetech.Hermes.Blazor.targets" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="10.*" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.*" />

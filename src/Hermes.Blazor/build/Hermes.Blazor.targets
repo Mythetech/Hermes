@@ -1,0 +1,16 @@
+<Project>
+  <!-- Copy static web assets from NuGet packages to output wwwroot for desktop Blazor apps -->
+  <!-- This is needed because the StaticWebAssetsFileProvider uses absolute paths that don't exist in published builds -->
+  <Target Name="HermesCopyStaticWebAssetsToOutput" AfterTargets="GenerateStaticWebAssetsManifest">
+    <ItemGroup>
+      <!-- Get all static web assets from packages (BasePath starts with _content) -->
+      <_HermesContentAssetsToCopy Include="@(StaticWebAsset)"
+                                   Condition="$([System.String]::Copy('%(BasePath)').StartsWith('_content'))" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(_HermesContentAssetsToCopy->'%(Identity)')"
+          DestinationFiles="@(_HermesContentAssetsToCopy->'$(OutputPath)wwwroot\%(BasePath)\%(RelativePath)')"
+          SkipUnchangedFiles="true"
+          Condition="'@(_HermesContentAssetsToCopy)' != ''" />
+  </Target>
+</Project>

@@ -132,7 +132,11 @@ internal sealed class HermesWebViewManager : WebViewManager
         var hasFileExtension = path.LastIndexOf('.') > path.LastIndexOf('/');
         var allowFallbackOnHostPage = !hasFileExtension;
 
-        if (TryGetResponseContent(url, allowFallbackOnHostPage, out var statusCode, out var statusMessage,
+        // Strip query string - TryGetResponseContent determines Content-Type from URL,
+        // and "file.js?v=1.0" would give wrong MIME type
+        var cleanUrl = uri.GetLeftPart(UriPartial.Path);
+
+        if (TryGetResponseContent(cleanUrl, allowFallbackOnHostPage, out var statusCode, out var statusMessage,
             out var content, out var headers))
         {
             if (path == "/" || path.EndsWith("index.html", StringComparison.OrdinalIgnoreCase))

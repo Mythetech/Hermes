@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--
+    This targets file is included in the Mythetech.Hermes.Blazor NuGet package.
+    It copies static web assets from NuGet packages to the output wwwroot folder
+    for desktop Blazor apps where the development-time paths don't exist.
+  -->
+
+  <Target Name="HermesCopyStaticWebAssetsToOutput" AfterTargets="GenerateStaticWebAssetsManifest">
+    <ItemGroup>
+      <!-- Get all static web assets from packages (BasePath starts with _content) -->
+      <_HermesContentAssetsToCopy Include="@(StaticWebAsset)"
+                                   Condition="$([System.String]::Copy('%(BasePath)').StartsWith('_content'))" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(_HermesContentAssetsToCopy->'%(Identity)')"
+          DestinationFiles="@(_HermesContentAssetsToCopy->'$(OutputPath)wwwroot\%(BasePath)\%(RelativePath)')"
+          SkipUnchangedFiles="true"
+          Condition="'@(_HermesContentAssetsToCopy)' != ''" />
+  </Target>
+</Project>
