@@ -19,11 +19,20 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
-  <!-- Native binary for CI packaging (passed via -p:NativeBinaryPath=...) -->
-  <ItemGroup Condition="'$(IsPackaging)' == 'true' AND '$(NativeBinaryPath)' != ''">
-    <None Include="$(NativeBinaryPath)/libHermes.Native.macOS.dylib"
-          Pack="true"
-          PackagePath="runtimes/osx/native/" />
+  <!-- Multi-RID packaging for CI (passed via -p:IsPackaging=true -p:ArtifactsPath=...) -->
+  <ItemGroup Condition="'$(IsPackaging)' == 'true' AND '$(ArtifactsPath)' != ''">
+    <!-- Runtime-specific assemblies from cross-platform builds -->
+    <None Include="$(ArtifactsPath)/dll-win-x64/Hermes.dll" Pack="true" PackagePath="runtimes/win-x64/lib/net10.0/" />
+    <None Include="$(ArtifactsPath)/dll-win-x64/Hermes.pdb" Pack="true" PackagePath="runtimes/win-x64/lib/net10.0/" />
+    <None Include="$(ArtifactsPath)/dll-linux-x64/Hermes.dll" Pack="true" PackagePath="runtimes/linux-x64/lib/net10.0/" />
+    <None Include="$(ArtifactsPath)/dll-linux-x64/Hermes.pdb" Pack="true" PackagePath="runtimes/linux-x64/lib/net10.0/" />
+    <None Include="$(ArtifactsPath)/dll-osx/Hermes.dll" Pack="true" PackagePath="runtimes/osx/lib/net10.0/" />
+    <None Include="$(ArtifactsPath)/dll-osx/Hermes.pdb" Pack="true" PackagePath="runtimes/osx/lib/net10.0/" />
+    <!-- macOS native library -->
+    <None Include="$(ArtifactsPath)/native/libHermes.Native.macOS.dylib" Pack="true" PackagePath="runtimes/osx/native/" />
+    <!-- MSBuild targets for conditional platform dependencies -->
+    <None Include="Hermes.targets" Pack="true" PackagePath="buildTransitive/net10.0/Mythetech.Hermes.targets" />
+    <None Include="Hermes.targets" Pack="true" PackagePath="build/net10.0/Mythetech.Hermes.targets" />
   </ItemGroup>
 
   <!-- SourceLink for debugging -->

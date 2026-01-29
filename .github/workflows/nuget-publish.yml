@@ -126,9 +126,6 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Install NuGet CLI
-        uses: nuget/setup-nuget@v2
-
       # Download platform-specific DLLs
       - name: Download Windows DLL
         uses: actions/download-artifact@v4
@@ -169,11 +166,18 @@ jobs:
             echo "VERSION=0.0.0-preview.${{ github.run_number }}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Build Hermes (for reference assembly)
+        run: dotnet build src/Hermes/Hermes.csproj -c Release --no-restore
+
       - name: Pack Hermes
         run: |
-          nuget pack src/Hermes/Hermes.nuspec \
-            -Version ${{ steps.version.outputs.VERSION }} \
-            -OutputDirectory packages
+          dotnet pack src/Hermes/Hermes.csproj \
+            -c Release \
+            --no-build \
+            -p:Version=${{ steps.version.outputs.VERSION }} \
+            -p:IsPackaging=true \
+            -p:ArtifactsPath=${{ github.workspace }}/artifacts \
+            -o packages
 
       - name: Build Hermes.Blazor
         run: dotnet build src/Hermes.Blazor/Hermes.Blazor.csproj -c Release --no-restore
