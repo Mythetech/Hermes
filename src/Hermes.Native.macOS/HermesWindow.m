@@ -119,43 +119,9 @@
 
         [self attachWebView];
 
-        // Set up event monitor for custom title bar dragging and double-click to zoom
-        if (_customTitleBar && !params->Chromeless) {
-            __weak typeof(self) weakSelf = self;
-            _dragEventMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown
-                                                                      handler:^NSEvent*(NSEvent* event) {
-                __strong typeof(weakSelf) strongSelf = weakSelf;
-                if (!strongSelf || event.window != strongSelf.window) {
-                    return event;
-                }
-
-                // Get click location in window coordinates
-                NSPoint locationInWindow = event.locationInWindow;
-                NSRect contentRect = strongSelf.window.contentView.frame;
-
-                // Title bar is at the top 38 pixels (matching CSS)
-                CGFloat titleBarHeight = 38.0;
-                CGFloat titleBarTop = contentRect.size.height;
-                CGFloat titleBarBottom = titleBarTop - titleBarHeight;
-
-                // Check if click is in title bar region
-                if (locationInWindow.y >= titleBarBottom && locationInWindow.y <= titleBarTop) {
-                    // Skip traffic light area (first 78 pixels)
-                    if (locationInWindow.x >= 78) {
-                        if (event.clickCount == 2) {
-                            // Double-click: toggle zoom (maximize/restore)
-                            [strongSelf.window zoom:nil];
-                        } else {
-                            // Single click: start window drag
-                            [strongSelf.window performWindowDragWithEvent:event];
-                        }
-                        return nil;  // Consume the event
-                    }
-                }
-
-                return event;  // Pass through
-            }];
-        }
+        // Window dragging is handled via JavaScript using -webkit-app-region CSS.
+        // The JS handler in attachWebView respects drag/no-drag regions,
+        // allowing interactive elements (buttons, menus) to receive clicks.
 
         if (startUrl) {
             [self navigateToUrl:startUrl];
@@ -170,11 +136,16 @@
         if (params->Minimized) {
             [_window miniaturize:nil];
         }
+
+        // Set up native drag monitors for custom title bar
+        [self setupDragMonitors];
     }
     return self;
 }
 
 - (void)attachWebView {
+    // JavaScript for message passing and drag region detection
+    // The drag detection informs native code whether to handle drag/zoom
     NSString* initScript = @"window.__receiveMessageCallbacks = [];"
         "window.__dispatchMessageCallback = function(message) {"
         "    window.__receiveMessageCallbacks.forEach(function(callback) { callback(message); });"
@@ -187,20 +158,39 @@
         "        window.__receiveMessageCallbacks.push(callback);"
         "    }"
         "};"
-        // Window drag support for -webkit-app-region: drag
-        "document.addEventListener('mousedown', function(e) {"
-        "    var el = e.target;"
-        "    while (el) {"
+        // Helper to check if element is in a no-drag region
+        "function __hermesIsNoDragRegion(el) {"
+        "    while (el && el !== document.body && el !== document.documentElement) {"
         "        var style = window.getComputedStyle(el);"
         "        var region = style.getPropertyValue('-webkit-app-region') || style.getPropertyValue('app-region');"
-        "        if (region === 'no-drag') return;"
-        "        if (region === 'drag') {"
-        "            window.webkit.messageHandlers.hermesWindowDrag.postMessage('drag');"
-        "            return;"
-        "        }"
+        "        if (region === 'no-drag') return true;"
+        "        if (region === 'drag') return false;"
         "        el = el.parentElement;"
         "    }"
-        "});";
+        "    return false;"
+        "}"
+        // Track click timing for double-click detection (only for drag regions)
+        "window.__hermesDragClick = { time: 0, x: 0, y: 0 };"
+        // Listen for mousedown to inform native about drag regions
+        "document.addEventListener('mousedown', function(e) {"
+        "    if (e.button !== 0) return;"
+        "    if (__hermesIsNoDragRegion(e.target)) {"
+        "        window.webkit.messageHandlers.hermesDragRegion.postMessage('no-drag');"
+        "        window.__hermesDragClick = { time: 0, x: 0, y: 0 };"
+        "        return;"
+        "    }"
+        "    var now = Date.now();"
+        "    var dx = e.screenX - window.__hermesDragClick.x;"
+        "    var dy = e.screenY - window.__hermesDragClick.y;"
+        "    var dist = Math.sqrt(dx*dx + dy*dy);"
+        "    if ((now - window.__hermesDragClick.time) < 300 && dist < 10) {"
+        "        window.webkit.messageHandlers.hermesDragRegion.postMessage('double-click');"
+        "        window.__hermesDragClick = { time: 0, x: 0, y: 0 };"
+        "    } else {"
+        "        window.webkit.messageHandlers.hermesDragRegion.postMessage('drag');"
+        "        window.__hermesDragClick = { time: now, x: e.screenX, y: e.screenY };"
+        "    }"
+        "}, true);";
 
     WKUserScript* userScript = [[WKUserScript alloc] initWithSource:initScript
                                                       injectionTime:WKUserScriptInjectionTimeAtDocumentStart
@@ -212,7 +202,7 @@
     _uiDelegate = [[HermesUiDelegate alloc] init];
     _uiDelegate.hermesWindow = self;
     [contentController addScriptMessageHandler:_uiDelegate name:@"hermesinterop"];
-    [contentController addScriptMessageHandler:_uiDelegate name:@"hermesWindowDrag"];
+    [contentController addScriptMessageHandler:_uiDelegate name:@"hermesDragRegion"];
 
     _webViewConfiguration.userContentController = contentController;
 
@@ -458,16 +448,104 @@
     [titleBarView addConstraints:@[leftConstraint, topConstraint]];
 }
 
+#pragma mark - Drag Support
+
+- (void)setupDragMonitors {
+    if (!_customTitleBar) return;
+
+    __weak typeof(self) weakSelf = self;
+    CGFloat titleBarHeight = 38.0;
+    CGFloat dragThreshold = 3.0;
+
+    // Monitor mouseDown to set up potential drag
+    // JavaScript will inform us if click was on a no-drag region (and cancel drag)
+    // JavaScript handles double-click detection for zoom (so buttons don't trigger zoom)
+    _mouseDownMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown
+                                                              handler:^NSEvent*(NSEvent* event) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf || event.window != strongSelf.window) return event;
+
+        // Check if click is in title bar area (top of window)
+        NSPoint windowPoint = event.locationInWindow;
+        CGFloat windowHeight = strongSelf.window.frame.size.height;
+        CGFloat distanceFromTop = windowHeight - windowPoint.y;
+
+        if (distanceFromTop > titleBarHeight) {
+            strongSelf.clickIsInNoDragRegion = NO;
+            return event;  // Not in title bar
+        }
+
+        // Reset flag - JS will set it if click is on no-drag region
+        strongSelf.clickIsInNoDragRegion = NO;
+
+        // Set up potential drag (JS will cancel if needed)
+        strongSelf.potentialDrag = YES;
+        strongSelf.dragStartWindowOrigin = strongSelf.window.frame.origin;
+        strongSelf.dragStartMouseLocation = [NSEvent mouseLocation];
+
+        return event;  // Let event through
+    }];
+
+    // Monitor mouseDragged to actually move the window
+    _mouseDragMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:(NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp)
+                                                              handler:^NSEvent*(NSEvent* event) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return event;
+
+        if (event.type == NSEventTypeLeftMouseUp) {
+            strongSelf.potentialDrag = NO;
+            strongSelf.isDragging = NO;
+            strongSelf.clickIsInNoDragRegion = NO;
+            return event;
+        }
+
+        // MouseDragged
+        if (!strongSelf.potentialDrag && !strongSelf.isDragging) {
+            return event;
+        }
+
+        NSPoint currentMouse = [NSEvent mouseLocation];
+        CGFloat dx = currentMouse.x - strongSelf.dragStartMouseLocation.x;
+        CGFloat dy = currentMouse.y - strongSelf.dragStartMouseLocation.y;
+        CGFloat dist = sqrt(dx*dx + dy*dy);
+
+        // Start dragging if we've moved beyond threshold
+        if (strongSelf.potentialDrag && dist >= dragThreshold) {
+            strongSelf.potentialDrag = NO;
+            strongSelf.isDragging = YES;
+        }
+
+        if (strongSelf.isDragging) {
+            NSPoint newOrigin = NSMakePoint(strongSelf.dragStartWindowOrigin.x + dx,
+                                            strongSelf.dragStartWindowOrigin.y + dy);
+            [strongSelf.window setFrameOrigin:newOrigin];
+        }
+
+        return event;
+    }];
+}
+
+- (void)teardownDragMonitors {
+    if (_mouseDownMonitor) {
+        [NSEvent removeMonitor:_mouseDownMonitor];
+        _mouseDownMonitor = nil;
+    }
+    if (_mouseDragMonitor) {
+        [NSEvent removeMonitor:_mouseDragMonitor];
+        _mouseDragMonitor = nil;
+    }
+    _isDragging = NO;
+    _potentialDrag = NO;
+    _clickIsInNoDragRegion = NO;
+}
+
 #pragma mark - Cleanup
 
 - (void)dealloc {
+    [self teardownDragMonitors];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
-    if (_dragEventMonitor) {
-        [NSEvent removeMonitor:_dragEventMonitor];
-        _dragEventMonitor = nil;
-    }
     [_webViewConfiguration.userContentController removeScriptMessageHandlerForName:@"hermesinterop"];
-    [_webViewConfiguration.userContentController removeScriptMessageHandlerForName:@"hermesWindowDrag"];
+    [_webViewConfiguration.userContentController removeScriptMessageHandlerForName:@"hermesDragRegion"];
     [_webView removeFromSuperview];
 }
 

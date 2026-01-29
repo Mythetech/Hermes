@@ -7,6 +7,12 @@
         <span class="title-bar-title">@Window.Title</span>
     </div>
 
+    <div class="title-bar-actions">
+        <button class="action-btn" @onclick="HandleTestClick" title="Test Button">
+            Test (@_clickCount)
+        </button>
+    </div>
+
     @if (PlatformClass != "macos")
     {
         <div class="window-controls">
@@ -42,6 +48,13 @@
 @code {
     private string PlatformClass => Backend.Platform.ToString().ToLowerInvariant();
     private bool IsMaximized { get; set; }
+    private int _clickCount;
+
+    private void HandleTestClick()
+    {
+        _clickCount++;
+        Console.WriteLine($"Title bar button clicked! Count: {_clickCount}");
+    }
 
     protected override void OnInitialized()
     {

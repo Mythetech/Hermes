@@ -68,6 +68,32 @@ Programmatic clipboard access for copy/paste operations.
 
 ---
 
+### Hermes.Web - JavaScript/TypeScript SPA Support
+**Status:** Research complete, ready for implementation
+**Platforms:** All
+
+Enable React, Vue, Angular, Svelte and other JS/TS frameworks as an alternative to Blazor. The core infrastructure already supports this - the `window.external` bridge is injected at the native level.
+
+**Research & API Design:** [.claude/plans/elegant-pondering-goose.md](/.claude/plans/elegant-pondering-goose.md)
+
+**New package:** `Hermes.Web` providing:
+- [ ] Static file serving with SPA fallback (`UseStaticFiles()`, `UseSpaFallback()`)
+- [ ] Dev server proxy for Vite/Webpack HMR (`UseDevServer()`)
+- [ ] Auto-detect mode (dev server if running, else static files)
+- [ ] Type-safe C# ↔ JS interop bridge (`InteropBridge`)
+- [ ] TypeScript definitions package (`@hermes/bridge`)
+- [ ] Sample apps (React, Vue, Angular, Svelte)
+
+**Enterprise value:**
+- Broader developer pool (React/Vue/Angular >> Blazor adoption)
+- Electron migration path for existing web apps
+- Smaller bundle size (no Blazor runtime)
+- Mature JS tooling ecosystem (Vite, ESLint, etc.)
+
+**Licensing consideration:** Potential hybrid model - free for npm/JS usage, commercial license for C# integration. Positions Hermes as premium alternative to Photino with proper native OS support.
+
+---
+
 ## Medium Priority
 
 ### Global Hotkeys

@@ -84,6 +84,7 @@ internal sealed class MockHermesWindowBackend : IHermesWindowBackend
     public (int X, int Y) Position { get; set; }
     public bool IsMaximized { get; set; }
     public bool IsMinimized { get; set; }
+    public HermesPlatform Platform => HermesPlatform.macOS;
 
     public void Initialize(HermesWindowOptions options) { }
     public void Show() { }
@@ -92,7 +93,7 @@ internal sealed class MockHermesWindowBackend : IHermesWindowBackend
     public void NavigateToUrl(string url) { }
     public void NavigateToString(string html) { }
     public void SendWebMessage(string message) { }
-    public void RegisterCustomScheme(string scheme, Func<string, Stream?> handler) { }
+    public void RegisterCustomScheme(string scheme, Func<string, (Stream? Content, string? ContentType)> handler) { }
     public void Dispose() { }
 
     public event Action? Closing;
@@ -101,6 +102,8 @@ internal sealed class MockHermesWindowBackend : IHermesWindowBackend
     public event Action? FocusIn;
     public event Action? FocusOut;
     public event Action<string>? WebMessageReceived;
+    public event Action? Maximized;
+    public event Action? Restored;
 
     // Suppress warnings for unused events
     private void SuppressWarnings()
@@ -111,5 +114,7 @@ internal sealed class MockHermesWindowBackend : IHermesWindowBackend
         FocusIn?.Invoke();
         FocusOut?.Invoke();
         WebMessageReceived?.Invoke(string.Empty);
+        Maximized?.Invoke();
+        Restored?.Invoke();
     }
 }

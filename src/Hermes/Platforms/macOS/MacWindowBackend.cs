@@ -20,7 +20,7 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
     private readonly List<Delegate> _pinnedDelegates = new();
 
     // Custom scheme handlers registered before Initialize()
-    private readonly Dictionary<string, Func<string, Stream?>> _customSchemeHandlers = new();
+    private readonly Dictionary<string, Func<string, (Stream? Content, string? ContentType)>> _customSchemeHandlers = new();
     private MacNativeDelegates.CustomSchemeCallback? _customSchemeCallback;
 
     // Cached options for deferred initialization
@@ -249,7 +249,7 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
         MacNative.WindowSendWebMessage(_windowHandle, message);
     }
 
-    public void RegisterCustomScheme(string scheme, Func<string, Stream?> handler)
+    public void RegisterCustomScheme(string scheme, Func<string, (Stream? Content, string? ContentType)> handler)
     {
         if (_initialized)
         {
@@ -468,7 +468,7 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
 
             if (_customSchemeHandlers.TryGetValue(scheme, out var handler))
             {
-                var stream = handler(url);
+                var (stream, handlerContentType) = handler(url);
                 if (stream is not null)
                 {
                     using var ms = new MemoryStream();
@@ -479,8 +479,8 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
                     var resultPtr = Marshal.AllocHGlobal(numBytes);
                     Marshal.Copy(data, 0, resultPtr, numBytes);
 
-                    // Allocate content type string (native code will free)
-                    var contentType = GetContentType(uri.AbsolutePath);
+                    // Use Content-Type from handler if provided, otherwise fall back to extension-based detection
+                    var contentType = handlerContentType ?? GetContentType(uri.AbsolutePath);
                     contentTypePtr = Marshal.StringToHGlobalAnsi(contentType);
 
                     return resultPtr;

@@ -87,6 +87,31 @@
             font-size: 0.875rem;
         }
 
+        /* Title bar actions (test buttons, etc.) */
+        .title-bar-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: auto;
+            margin-right: 1rem;
+            -webkit-app-region: no-drag;
+        }
+
+        .action-btn {
+            padding: 0.25rem 0.75rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .action-btn:hover {
+            background: var(--primary-dark);
+        }
+
         /* Window controls (Windows/Linux only) */
         .window-controls {
             display: flex;

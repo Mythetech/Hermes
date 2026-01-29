@@ -38,7 +38,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     private TaskCompletionSource? _webViewReady;
 
     private readonly ConcurrentQueue<(Action Action, TaskCompletionSource Tcs)> _invokeQueue = new();
-    private readonly Dictionary<string, Func<string, Stream?>> _customSchemeHandlers = new();
+    private readonly Dictionary<string, Func<string, (Stream? Content, string? ContentType)>> _customSchemeHandlers = new();
 
     private WindowsMenuBackend? _menuBackend;
 
@@ -309,7 +309,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         _webView?.PostWebMessageAsJson(json);
     }
 
-    public void RegisterCustomScheme(string scheme, Func<string, Stream?> handler)
+    public void RegisterCustomScheme(string scheme, Func<string, (Stream? Content, string? ContentType)> handler)
     {
         _customSchemeHandlers[scheme] = handler;
 
@@ -637,10 +637,11 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
             if (_customSchemeHandlers.TryGetValue(scheme, out var handler))
             {
-                var stream = handler(e.Request.Uri);
+                var (stream, handlerContentType) = handler(e.Request.Uri);
                 if (stream is not null)
                 {
-                    var contentType = GetContentType(uri.AbsolutePath);
+                    // Use Content-Type from handler if provided, otherwise fall back to extension-based detection
+                    var contentType = handlerContentType ?? GetContentType(uri.AbsolutePath);
                     if (isSmokeTest) Console.WriteLine($"RESOURCE_RESPONSE:200,{contentType},{stream.Length}bytes");
                     var headers = $"Content-Type: {contentType}\r\n" +
                                   "Access-Control-Allow-Origin: *\r\n" +

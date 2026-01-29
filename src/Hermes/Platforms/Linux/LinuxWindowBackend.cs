@@ -98,7 +98,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     private int _lastY;
 
     private readonly ConcurrentQueue<(System.Action Action, TaskCompletionSource Tcs)> _invokeQueue = new();
-    private readonly Dictionary<string, Func<string, Stream?>> _customSchemeHandlers = new();
+    private readonly Dictionary<string, Func<string, (Stream? Content, string? ContentType)>> _customSchemeHandlers = new();
     private readonly HashSet<string> _registeredSchemes = new();
     // Store callbacks to prevent GC - WebKit calls these from native code
     private readonly List<WebKit.URISchemeRequestCallback> _schemeCallbacks = new();
@@ -440,7 +440,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         _webView.RunJavascript(script, null, null);
     }
 
-    public void RegisterCustomScheme(string scheme, Func<string, Stream?> handler)
+    public void RegisterCustomScheme(string scheme, Func<string, (Stream? Content, string? ContentType)> handler)
     {
         _customSchemeHandlers[scheme] = handler;
 
@@ -479,14 +479,15 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
             if (_customSchemeHandlers.TryGetValue(scheme, out var handler))
             {
-                var stream = handler(uri);
+                var (stream, handlerContentType) = handler(uri);
                 if (stream != null)
                 {
                     try
                     {
                         // Read stream to bytes
                         var bytes = ReadStreamToBytes(stream);
-                        var mimeType = GetMimeType(uri);
+                        // Use Content-Type from handler if provided, otherwise fall back to extension-based detection
+                        var mimeType = handlerContentType ?? GetMimeType(uri);
 
                         Console.WriteLine($"[Hermes] Serving {uri} ({bytes.Length} bytes, {mimeType})");
 

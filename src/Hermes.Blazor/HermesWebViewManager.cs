@@ -121,13 +121,13 @@ internal sealed class HermesWebViewManager : WebViewManager
         MessageReceived(new Uri(AppBaseUri), message);
     }
 
-    private Stream? HandleWebRequest(string url)
+    private (Stream? Content, string? ContentType) HandleWebRequest(string url)
     {
         var uri = new Uri(url);
         var path = uri.AbsolutePath;
 
         if (path.Contains("blazor.web.js") || path.Contains("aspnetcore-browser-refresh.js"))
-            return null;
+            return (null, null);
 
         var hasFileExtension = path.LastIndexOf('.') > path.LastIndexOf('/');
         var allowFallbackOnHostPage = !hasFileExtension;
@@ -140,10 +140,11 @@ internal sealed class HermesWebViewManager : WebViewManager
             else if (path.Contains("blazor.webview.js"))
                 StartupLog.Log("WebView", "Serving blazor.webview.js");
 
-            return content;
+            headers.TryGetValue("Content-Type", out var contentType);
+            return (content, contentType);
         }
 
-        return null;
+        return (null, null);
     }
 
     protected override ValueTask DisposeAsyncCore()

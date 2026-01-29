@@ -34,7 +34,17 @@
 @property (nonatomic, assign) NSRect premaximizedFrame;
 @property (nonatomic, assign) BOOL devToolsEnabled;
 @property (nonatomic, assign) BOOL customTitleBar;
-@property (nonatomic, strong) id dragEventMonitor;
+
+// Drag tracking (hybrid approach - JS informs about no-drag regions)
+@property (nonatomic, strong) id mouseDownMonitor;
+@property (nonatomic, strong) id mouseDragMonitor;
+@property (nonatomic, assign) BOOL isDragging;
+@property (nonatomic, assign) BOOL potentialDrag;
+@property (nonatomic, assign) NSPoint dragStartWindowOrigin;
+@property (nonatomic, assign) NSPoint dragStartMouseLocation;
+@property (nonatomic, assign) NSTimeInterval lastClickTime;
+@property (nonatomic, assign) NSPoint lastClickLocation;
+@property (nonatomic, assign) BOOL clickIsInNoDragRegion;
 
 // Initialization
 - (instancetype)initWithParams:(const HermesWindowParams*)params;
@@ -70,6 +80,10 @@
 - (void)attachWebView;
 - (CGFloat)convertYFromTopLeft:(CGFloat)y height:(CGFloat)height;
 - (CGFloat)convertYToTopLeft:(CGFloat)y height:(CGFloat)height;
+
+// Drag support
+- (void)setupDragMonitors;
+- (void)teardownDragMonitors;
 
 @end
 

@@ -95,9 +95,9 @@ public interface IHermesWindowBackend : IDisposable
 
     /// <summary>
     /// Register a custom URL scheme handler.
-    /// The handler receives the URL and returns content stream, or null for 404.
+    /// The handler receives the URL and returns (content stream, content type), or (null, null) for 404.
     /// </summary>
-    void RegisterCustomScheme(string scheme, Func<string, Stream?> handler);
+    void RegisterCustomScheme(string scheme, Func<string, (Stream? Content, string? ContentType)> handler);
 
     #endregion
 

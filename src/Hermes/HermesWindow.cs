@@ -242,7 +242,7 @@ public sealed class HermesWindow : IDisposable
     /// <summary>
     /// Register a custom URL scheme handler.
     /// </summary>
-    public HermesWindow RegisterCustomScheme(string scheme, Func<string, Stream?> handler)
+    public HermesWindow RegisterCustomScheme(string scheme, Func<string, (Stream? Content, string? ContentType)> handler)
     {
         _backend.RegisterCustomScheme(scheme, handler);
         return this;

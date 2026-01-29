@@ -15,11 +15,21 @@
                 _hermesWindow.onWebMessage(messageUtf8);
             }
         }
-    } else if ([message.name isEqualToString:@"hermesWindowDrag"]) {
-        // Start window drag using the current event
-        NSEvent* currentEvent = [NSApp currentEvent];
-        if (currentEvent && _hermesWindow) {
-            [_hermesWindow.window performWindowDragWithEvent:currentEvent];
+    } else if ([message.name isEqualToString:@"hermesDragRegion"]) {
+        NSString* body = message.body;
+        if ([body isEqualToString:@"no-drag"]) {
+            // Click was on a no-drag element - cancel any pending drag
+            _hermesWindow.clickIsInNoDragRegion = YES;
+            _hermesWindow.potentialDrag = NO;
+        } else if ([body isEqualToString:@"double-click"]) {
+            // Double-click on draggable region - zoom the window
+            if (!_hermesWindow.clickIsInNoDragRegion) {
+                [_hermesWindow.window zoom:nil];
+            }
+            _hermesWindow.clickIsInNoDragRegion = NO;
+        } else if ([body isEqualToString:@"drag"]) {
+            // Single click on draggable region - allow drag
+            _hermesWindow.clickIsInNoDragRegion = NO;
         }
     }
 }
