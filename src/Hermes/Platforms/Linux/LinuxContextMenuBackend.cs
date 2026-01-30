@@ -1,118 +1,77 @@
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Hermes.Abstractions;
-using Gtk;
 
 namespace Hermes.Platforms.Linux;
 
 [SupportedOSPlatform("linux")]
 internal sealed class LinuxContextMenuBackend : IContextMenuBackend
 {
-    private readonly Gtk.Window _window;
-    private readonly Gtk.Menu _menu;
-
-    private readonly Dictionary<string, MenuItem> _itemsByCommandId = new();
-    private readonly Dictionary<MenuItem, string> _commandIdByItem = new();
-
+    private readonly IntPtr _windowHandle;
+    private readonly IntPtr _contextMenuHandle;
+    private readonly LinuxNativeDelegates.MenuItemCallback _menuCallback;
     private bool _disposed;
 
     public event Action<string>? MenuItemClicked;
 
-    internal LinuxContextMenuBackend(Gtk.Window window)
+    internal LinuxContextMenuBackend(IntPtr windowHandle)
     {
-        _window = window;
-        _menu = new Gtk.Menu();
+        _windowHandle = windowHandle;
+
+        // Create callback and keep it alive for the menu's lifetime
+        _menuCallback = OnMenuItemClicked;
+
+        _contextMenuHandle = LinuxNative.ContextMenuCreate(
+            windowHandle,
+            Marshal.GetFunctionPointerForDelegate(_menuCallback));
+
+        if (_contextMenuHandle == IntPtr.Zero)
+            throw new InvalidOperationException("Failed to create native context menu.");
     }
 
     public void AddItem(string itemId, string label, string? accelerator = null)
     {
-        var menuItem = new MenuItem(label);
-        _itemsByCommandId[itemId] = menuItem;
-        _commandIdByItem[menuItem] = itemId;
-
-        menuItem.Activated += OnMenuItemActivated;
-
-        _menu.Append(menuItem);
-        menuItem.ShowAll();
+        LinuxNative.ContextMenuAddItem(_contextMenuHandle, itemId, label, accelerator);
     }
 
     public void AddSeparator()
     {
-        var separator = new SeparatorMenuItem();
-        _menu.Append(separator);
-        separator.ShowAll();
+        LinuxNative.ContextMenuAddSeparator(_contextMenuHandle);
     }
 
     public void RemoveItem(string itemId)
     {
-        if (!_itemsByCommandId.TryGetValue(itemId, out var menuItem))
-            return;
-
-        _menu.Remove(menuItem);
-        menuItem.Destroy();
-
-        _itemsByCommandId.Remove(itemId);
-        _commandIdByItem.Remove(menuItem);
+        LinuxNative.ContextMenuRemoveItem(_contextMenuHandle, itemId);
     }
 
     public void Clear()
     {
-        foreach (var child in _menu.Children)
-        {
-            _menu.Remove(child);
-            child.Destroy();
-        }
-
-        _itemsByCommandId.Clear();
-        _commandIdByItem.Clear();
+        LinuxNative.ContextMenuClear(_contextMenuHandle);
     }
 
     public void SetItemEnabled(string itemId, bool enabled)
     {
-        if (_itemsByCommandId.TryGetValue(itemId, out var menuItem))
-        {
-            menuItem.Sensitive = enabled;
-        }
+        LinuxNative.ContextMenuSetItemEnabled(_contextMenuHandle, itemId, enabled);
     }
 
     public void SetItemChecked(string itemId, bool isChecked)
     {
-        if (_itemsByCommandId.TryGetValue(itemId, out var menuItem))
-        {
-            if (menuItem is CheckMenuItem checkItem)
-            {
-                checkItem.Active = isChecked;
-            }
-        }
+        LinuxNative.ContextMenuSetItemChecked(_contextMenuHandle, itemId, isChecked);
     }
 
     public void SetItemLabel(string itemId, string label)
     {
-        if (_itemsByCommandId.TryGetValue(itemId, out var menuItem))
-        {
-            if (menuItem.Child is Label labelWidget)
-            {
-                labelWidget.Text = label;
-            }
-        }
+        LinuxNative.ContextMenuSetItemLabel(_contextMenuHandle, itemId, label);
     }
 
     public void Show(int x, int y)
     {
-        _menu.ShowAll();
-
-        // Popup at the specified location
-        // The position func receives the menu's natural size and returns the desired x,y
-        _menu.Popup(null, null, (Gtk.Menu menu, out int menuX, out int menuY, out bool pushIn) =>
-        {
-            menuX = x;
-            menuY = y;
-            pushIn = true;
-        }, 0, Gtk.Global.CurrentEventTime);
+        LinuxNative.ContextMenuShow(_contextMenuHandle, x, y);
     }
 
     public void Hide()
     {
-        _menu.Popdown();
+        LinuxNative.ContextMenuHide(_contextMenuHandle);
     }
 
     public void Dispose()
@@ -120,19 +79,15 @@ internal sealed class LinuxContextMenuBackend : IContextMenuBackend
         if (_disposed) return;
         _disposed = true;
 
-        foreach (var item in _itemsByCommandId.Values)
+        if (_contextMenuHandle != IntPtr.Zero)
         {
-            item.Activated -= OnMenuItemActivated;
+            LinuxNative.ContextMenuDestroy(_contextMenuHandle);
         }
-
-        _menu.Destroy();
     }
 
-    private void OnMenuItemActivated(object? sender, EventArgs args)
+    private void OnMenuItemClicked(IntPtr itemIdPtr)
     {
-        if (sender is MenuItem menuItem && _commandIdByItem.TryGetValue(menuItem, out var commandId))
-        {
-            MenuItemClicked?.Invoke(commandId);
-        }
+        var itemId = Marshal.PtrToStringUTF8(itemIdPtr) ?? "";
+        MenuItemClicked?.Invoke(itemId);
     }
 }
