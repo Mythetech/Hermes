@@ -3,6 +3,9 @@ using Hermes;
 using Hermes.Blazor;
 using Microsoft.Extensions.DependencyInjection;
 
+// Check for fast startup mode via env var or arg
+var useFastStartup = args.Contains("--fast") || Environment.GetEnvironmentVariable("HERMES_FAST_STARTUP") == "1";
+
 // Start timing from the very beginning
 var sw = Stopwatch.StartNew();
 
@@ -11,6 +14,11 @@ HermesWindow.Prewarm();
 
 // Build the app with minimal configuration
 var builder = HermesBlazorAppBuilder.CreateSlimBuilder();
+
+if (useFastStartup)
+{
+    builder.UseFastStartup();
+}
 
 builder.ConfigureWindow(options =>
 {
@@ -27,6 +35,13 @@ builder.RootComponents.Add<HermesTestApp.App>("#app");
 var app = builder.Build();
 
 // Run the app - will block until window closes
-app.Run();
+if (useFastStartup)
+{
+    app.RunWithFastStartup();
+}
+else
+{
+    app.Run();
+}
 
 await app.DisposeAsync();

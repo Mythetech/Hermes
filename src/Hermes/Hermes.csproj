@@ -9,6 +9,22 @@
     <NoWarn>$(NoWarn);CS8500;IL2026;IL3050;IL2050</NoWarn>
   </PropertyGroup>
 
+  <!-- Ready-to-Run (R2R) for faster startup without full AOT limitations -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <TieredCompilation>true</TieredCompilation>
+    <TieredCompilationQuickJit>true</TieredCompilationQuickJit>
+  </PropertyGroup>
+
+  <!-- Native AOT optimization settings when publishing with AOT -->
+  <PropertyGroup Condition="'$(PublishAot)' == 'true'">
+    <OptimizationPreference>Speed</OptimizationPreference>
+    <IlcOptimizationPreference>Speed</IlcOptimizationPreference>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <StackTraceSupport>false</StackTraceSupport>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+  </PropertyGroup>
+
   <!-- NuGet Package Metadata -->
   <PropertyGroup>
     <PackageId>Mythetech.Hermes</PackageId>

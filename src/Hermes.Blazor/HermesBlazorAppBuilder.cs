@@ -23,6 +23,8 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
     private IFileProvider? _fileProvider;
     private Action<HermesWindowOptions>? _windowConfiguration;
     private string _hostPage = "index.html";
+    private string? _loadingHtml;
+    private bool _deferWindowShow;
 
     private HermesBlazorAppBuilder(string[]? args, bool addDefaultConfiguration)
     {
@@ -128,6 +130,29 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
     }
 
     /// <summary>
+    /// Sets custom HTML to display during fast startup loading.
+    /// This HTML is shown immediately when using <see cref="HermesBlazorApp.RunWithFastStartup"/>,
+    /// before Blazor components are initialized.
+    /// </summary>
+    /// <param name="html">Custom HTML to display. If null, a default spinner is used.</param>
+    public HermesBlazorAppBuilder UseLoadingHtml(string? html)
+    {
+        _loadingHtml = html;
+        return this;
+    }
+
+    /// <summary>
+    /// Configures the builder to defer showing the window until <see cref="HermesBlazorApp.Run"/>
+    /// or <see cref="HermesBlazorApp.RunWithFastStartup"/> is called. This is required for
+    /// fast startup mode to work properly.
+    /// </summary>
+    public HermesBlazorAppBuilder UseFastStartup()
+    {
+        _deferWindowShow = true;
+        return this;
+    }
+
+    /// <summary>
     /// Builds the application.
     /// </summary>
     [RequiresDynamicCode("Blazor WebView requires dynamic code for component rendering")]
@@ -177,9 +202,13 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         // are marshaled back to the UI thread via the message loop
         SynchronizationContext.SetSynchronizationContext(syncContext);
 
-        window.Show();
+        // For fast startup mode, defer showing until Run/RunWithFastStartup is called
+        if (!_deferWindowShow)
+        {
+            window.Show();
+        }
 
-        var app = new HermesBlazorApp(serviceProvider, _hostBuilder.Configuration, window, webViewManager, syncContext);
+        var app = new HermesBlazorApp(serviceProvider, _hostBuilder.Configuration, window, webViewManager, syncContext, _loadingHtml, windowShownDuringBuild: !_deferWindowShow);
 
         foreach (var component in RootComponents.GetComponents())
         {

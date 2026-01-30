@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -692,6 +693,15 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
     private static bool s_resolverRegistered;
 
+    /// <summary>
+    /// Patches GtkSharp's internal library resolver to support webkit2gtk-4.1 on Ubuntu 24.04+.
+    /// This uses reflection and is not compatible with Native AOT trimming.
+    /// </summary>
+    /// <remarks>
+    /// When publishing with Native AOT, this method will be a no-op and the application
+    /// should ensure webkit2gtk-4.0 is available or use a custom library resolver.
+    /// </remarks>
+    [RequiresUnreferencedCode("Uses reflection to patch GtkSharp's internal library definitions")]
     private static void RegisterWebKitLibraryResolver()
     {
         if (s_resolverRegistered) return;

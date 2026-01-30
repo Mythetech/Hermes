@@ -16,6 +16,8 @@ public sealed class HermesBlazorApp : IAsyncDisposable
     private readonly HermesWindow _window;
     private readonly HermesWebViewManager _webViewManager;
     private readonly HermesSynchronizationContext _syncContext;
+    private readonly string? _loadingHtml;
+    private readonly bool _windowShownDuringBuild;
     private bool _disposed;
 
     internal HermesBlazorApp(
@@ -23,13 +25,17 @@ public sealed class HermesBlazorApp : IAsyncDisposable
         IConfiguration configuration,
         HermesWindow window,
         HermesWebViewManager webViewManager,
-        HermesSynchronizationContext syncContext)
+        HermesSynchronizationContext syncContext,
+        string? loadingHtml = null,
+        bool windowShownDuringBuild = true)
     {
         _services = services;
         _configuration = configuration;
         _window = window;
         _webViewManager = webViewManager;
         _syncContext = syncContext;
+        _loadingHtml = loadingHtml;
+        _windowShownDuringBuild = windowShownDuringBuild;
 
         RootComponents = new HermesRootComponents(_webViewManager);
     }
@@ -61,6 +67,12 @@ public sealed class HermesBlazorApp : IAsyncDisposable
     {
         SynchronizationContext.SetSynchronizationContext(_syncContext);
 
+        // If window wasn't shown during Build() (deferred show mode), show it now
+        if (!_windowShownDuringBuild)
+        {
+            _window.Show();
+        }
+
         // Fire-and-forget component initialization - don't block waiting for it.
         // The actual component rendering happens after Navigate when Blazor's JS boots.
         // Blocking here would deadlock on Windows because the async continuations
@@ -69,6 +81,61 @@ public sealed class HermesBlazorApp : IAsyncDisposable
 
         _webViewManager.Navigate("/");
         _window.WaitForClose();
+    }
+
+    /// <summary>
+    /// Run the application with optimized two-stage startup for faster perceived performance.
+    /// Shows the window immediately with loading content, then initializes Blazor in the background.
+    /// This method blocks until the window is closed.
+    /// </summary>
+    /// <remarks>
+    /// This approach provides faster perceived startup by showing the window before Blazor
+    /// is fully initialized. The window displays a loading state while Blazor components
+    /// are being set up, then navigates to the actual content once ready.
+    /// </remarks>
+    public void RunWithFastStartup()
+    {
+        SynchronizationContext.SetSynchronizationContext(_syncContext);
+
+        // Phase 1: Show window immediately with loading state (fast - native only)
+        _window.ShowWithLoadingState(_loadingHtml);
+
+        // Phase 2: Initialize Blazor components asynchronously (can be slower)
+        // This runs on the UI thread via the synchronization context
+        _ = InitializeAndNavigateAsync();
+
+        // Phase 3: Enter message loop (required for async continuations)
+        _window.WaitForClose();
+    }
+
+    private async Task InitializeAndNavigateAsync()
+    {
+        try
+        {
+            // Wait a frame to ensure window is fully visible
+            await Task.Yield();
+
+            // Initialize root components
+            await RootComponents.InitializeAsync();
+
+            // Navigate to actual content, replacing the loading state
+            _webViewManager.Navigate("/");
+        }
+        catch (Exception ex)
+        {
+            // Navigate to error page if initialization fails
+            var errorHtml = $@"<!DOCTYPE html>
+<html>
+<head><style>
+    body {{ font-family: sans-serif; padding: 20px; color: #c00; }}
+</style></head>
+<body>
+    <h1>Startup Error</h1>
+    <pre>{System.Net.WebUtility.HtmlEncode(ex.ToString())}</pre>
+</body>
+</html>";
+            _window.LoadHtml(errorHtml);
+        }
     }
 
     public async ValueTask DisposeAsync()

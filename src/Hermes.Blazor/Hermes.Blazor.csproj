@@ -10,6 +10,11 @@
     <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
   </PropertyGroup>
 
+  <!-- Ready-to-Run (R2R) for faster startup -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <PublishReadyToRun>true</PublishReadyToRun>
+  </PropertyGroup>
+
   <!-- NuGet Package Metadata -->
   <PropertyGroup>
     <PackageId>Mythetech.Hermes.Blazor</PackageId>

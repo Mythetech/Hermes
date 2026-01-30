@@ -7,6 +7,13 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!-- Ready-to-Run (R2R) for faster startup -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <TieredCompilation>true</TieredCompilation>
+    <TieredCompilationQuickJit>true</TieredCompilationQuickJit>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Hermes.Blazor\Hermes.Blazor.csproj" />
   </ItemGroup>
@@ -22,6 +29,14 @@
           DestinationFolder="$(OutputPath)"
           SkipUnchangedFiles="true" />
     <Message Importance="high" Text="Copied native macOS library to $(OutputPath)" />
+  </Target>
+
+  <!-- Copy native library on macOS publish -->
+  <Target Name="CopyNativeLibraryOnPublish" AfterTargets="Publish" Condition="$([MSBuild]::IsOSPlatform('OSX')) OR $(RuntimeIdentifier.StartsWith('osx'))">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)..\..\src\Hermes.Native.macOS\lib\libHermes.Native.macOS.dylib"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Copied native macOS library to $(PublishDir)" />
   </Target>
 
 </Project>

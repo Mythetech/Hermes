@@ -372,6 +372,54 @@ public sealed class HermesWindow : IDisposable
 
     #region Lifecycle
 
+    private const string DefaultLoadingHtml = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {
+                    margin: 0;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    background: #f5f5f5;
+                    color: #333;
+                }
+                @media (prefers-color-scheme: dark) {
+                    body { background: #1a1a1a; color: #e0e0e0; }
+                }
+                .loader {
+                    width: 24px;
+                    height: 24px;
+                    border: 3px solid #ddd;
+                    border-top-color: #3498db;
+                    border-radius: 50%;
+                    animation: spin 1s linear infinite;
+                }
+                @keyframes spin { to { transform: rotate(360deg); } }
+            </style>
+        </head>
+        <body><div class="loader"></div></body>
+        </html>
+        """;
+
+    /// <summary>
+    /// Show the window immediately with loading content, then return.
+    /// Use this for faster perceived startup when Blazor initialization can happen after the window is visible.
+    /// </summary>
+    /// <param name="loadingHtml">Optional custom HTML to display while loading. Defaults to a simple spinner.</param>
+    public void ShowWithLoadingState(string? loadingHtml = null)
+    {
+        // Set the initial content to the loading HTML
+        _options.StartHtml = loadingHtml ?? DefaultLoadingHtml;
+        _options.StartUrl = null;
+
+        EnsureInitialized();
+        _backend.Show();
+    }
+
     /// <summary>
     /// Show the window and return immediately.
     /// </summary>
