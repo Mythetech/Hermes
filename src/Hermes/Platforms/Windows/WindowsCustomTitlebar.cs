@@ -37,7 +37,10 @@ internal sealed class WindowsCustomTitlebar
             cyTopHeight = _titlebarHeight
         };
 
-        DwmExtendFrameIntoClientArea(_hwnd.Value, in margins);
+        unsafe
+        {
+            DwmExtendFrameIntoClientArea((nint)_hwnd.Value, in margins);
+        }
 
         // Apply dark mode based on system setting
         WindowsTheme.ApplyDarkModeToWindow(_hwnd, WindowsTheme.IsDarkMode);
@@ -53,7 +56,10 @@ internal sealed class WindowsCustomTitlebar
         {
             cyTopHeight = _titlebarHeight
         };
-        DwmExtendFrameIntoClientArea(_hwnd.Value, in margins);
+        unsafe
+        {
+            DwmExtendFrameIntoClientArea((nint)_hwnd.Value, in margins);
+        }
     }
 
     public LRESULT HandleNcCalcSize(WPARAM wParam, LPARAM lParam)
@@ -78,7 +84,7 @@ internal sealed class WindowsCustomTitlebar
                 if (PInvoke.IsZoomed(_hwnd))
                 {
                     // Get the monitor's work area to constrain the window
-                    var monitor = MonitorFromWindow(_hwnd.Value, MONITOR_FROM_FLAGS.MONITOR_DEFAULTTONEAREST);
+                    var monitor = MonitorFromWindow((nint)_hwnd.Value, MONITOR_FROM_FLAGS.MONITOR_DEFAULTTONEAREST);
                     MONITORINFO mi = default;
                     mi.cbSize = (uint)sizeof(MONITORINFO);
 
