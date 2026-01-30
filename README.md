@@ -3,7 +3,7 @@
 A modern, AOT-compatible native desktop framework for .NET 10.
 
 [![NuGet](https://img.shields.io/nuget/v/Mythetech.Hermes)](https://www.nuget.org/packages/Mythetech.Hermes)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-Elastic%20License%202.0-blue)](LICENSE)
 
 ## Overview
 
@@ -11,7 +11,7 @@ Hermes is a cross-platform desktop framework that enables .NET developers to cre
 
 Designed for .NET 10 and modern development workflows, Hermes prioritizes AOT compatibility, minimal native code, and runtime performance. Unlike frameworks that rely on large C++ codebases, Hermes uses pure C# on Windows (via CsWin32 source generators) and thin native shims on macOS and Linux—totaling approximately 3,800 lines of native code compared to 12,300+ in similar frameworks.
 
-Hermes builds upon patterns established by [Photino](https://github.com/nickg/Photino) and is licensed under Apache 2.0. See [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES/) for attribution.
+Hermes builds upon patterns established by [Photino](https://github.com/nickg/Photino). See [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES/) for attribution.
 
 ## Features
 
@@ -157,6 +157,8 @@ For detailed technical information, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## License
 
-Hermes is licensed under the [Apache License 2.0](LICENSE).
+Hermes is source-available under the [Elastic License 2.0](LICENSE).
+
+**Free for:** non-commercial use, educational use, open source projects, and commercial use under $1M annual revenue. See [COMMERCIAL.md](COMMERCIAL.md) for details.
 
 This project incorporates patterns from Photino. See [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES/) for attribution details.
