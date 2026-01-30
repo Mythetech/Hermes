@@ -249,6 +249,9 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
 
         if (options.MaxWidth.HasValue || options.MaxHeight.HasValue)
             window.SetMaxSize(options.MaxWidth ?? int.MaxValue, options.MaxHeight ?? int.MaxValue);
+
+        if (options.WindowStateKey is not null)
+            window.RememberWindowState(string.IsNullOrEmpty(options.WindowStateKey) ? null : options.WindowStateKey);
     }
 
     private static IHermesWindowBackend GetBackend(HermesWindow window) =>

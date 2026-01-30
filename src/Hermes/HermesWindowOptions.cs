@@ -114,4 +114,11 @@ public sealed class HermesWindowOptions
     /// On Windows/Linux: Enables chromeless mode for fully custom window chrome.
     /// </summary>
     public bool CustomTitleBar { get; set; }
+
+    /// <summary>
+    /// Key used to persist window state. If set to non-null, window position, size, and
+    /// maximized state are saved on close and restored on next launch.
+    /// Use empty string to auto-derive key from window title.
+    /// </summary>
+    public string? WindowStateKey { get; set; }
 }

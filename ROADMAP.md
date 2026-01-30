@@ -94,6 +94,61 @@ Enable React, Vue, Angular, Svelte and other JS/TS frameworks as an alternative 
 
 ---
 
+### Single Instance Support
+**Status:** Not started
+**Platforms:** All
+**Complexity:** Low
+
+Ensure only one instance of the application runs at a time.
+
+| Platform | API |
+|----------|-----|
+| Windows | CreateMutex / named pipe |
+| macOS | NSDistributedNotificationCenter / file lock |
+| Linux | File lock in /tmp or D-Bus |
+
+**Proposed API:**
+```csharp
+HermesWindow.Create()
+    .SingleInstance(onSecondInstance: args => {
+        // Bring existing window to front
+    })
+```
+
+**Features needed:**
+- [ ] Detect existing instance
+- [ ] Callback when second instance launches
+- [ ] Pass command line args to existing instance
+
+---
+
+### Opener (External App Launcher)
+**Status:** Not started
+**Platforms:** All
+**Complexity:** Low
+
+Open files, folders, and URLs in their default applications.
+
+| Platform | API |
+|----------|-----|
+| Windows | ShellExecute |
+| macOS | NSWorkspace.open() |
+| Linux | xdg-open / gio open |
+
+**Proposed API:**
+```csharp
+HermesApplication.OpenUrl("https://example.com");
+HermesApplication.OpenFile("/path/to/file.pdf");
+HermesApplication.RevealInFileManager("/path/to/file.txt");
+```
+
+**Features needed:**
+- [ ] Open URL in default browser
+- [ ] Open file in default application
+- [ ] Reveal file/folder in file manager
+
+---
+
 ## Medium Priority
 
 ### Global Hotkeys
@@ -128,6 +183,54 @@ Native drag and drop support for files and data.
 **Platforms:** All
 
 Transparent and translucent window backgrounds for overlay/HUD applications.
+
+---
+
+### Key-Value Store
+**Status:** Not started
+**Platforms:** All
+**Complexity:** Medium
+
+Simple persistent storage for app settings and preferences.
+
+**Proposed API:**
+```csharp
+var store = HermesStore.Open("settings");
+store.Set("theme", "dark");
+var theme = store.Get<string>("theme");
+await store.SaveAsync();
+```
+
+**Features needed:**
+- [ ] Get/set typed values
+- [ ] Automatic persistence to app data directory
+- [ ] JSON-based storage
+
+---
+
+### Autostart (Launch at Login)
+**Status:** Not started
+**Platforms:** All
+**Complexity:** Medium
+
+Register application to launch at system startup.
+
+| Platform | API |
+|----------|-----|
+| Windows | Registry HKCU\...\Run or Task Scheduler |
+| macOS | SMAppService (macOS 13+) or Login Items |
+| Linux | XDG autostart (~/.config/autostart/) |
+
+**Proposed API:**
+```csharp
+HermesApplication.SetAutostart(enabled: true);
+bool isEnabled = HermesApplication.AutostartEnabled;
+```
+
+**Features needed:**
+- [ ] Enable/disable autostart
+- [ ] Query current state
+- [ ] Pass launch arguments
 
 ---
 
@@ -166,6 +269,8 @@ Transparent and translucent window backgrounds for overlay/HUD applications.
 - [x] JavaScript bridge (window.external)
 - [x] Windows accelerator enforcement
 - [x] Cross-platform error logging
+- [x] OS information (platform, version, architecture, locale)
+- [x] Window state persistence (position, size, maximized state)
 
 ---
 

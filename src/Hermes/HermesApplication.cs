@@ -12,6 +12,11 @@ public static class HermesApplication
     private static readonly object _dockMenuLock = new();
 
     /// <summary>
+    /// Gets information about the current operating system.
+    /// </summary>
+    public static OSInfo OSInfo => OSInfo.Current;
+
+    /// <summary>
     /// Gets the application dock menu. macOS only; returns null on other platforms.
     /// The dock menu appears when right-clicking the application's dock icon.
     /// Custom items appear above the default macOS entries (Options, Show All Windows, Hide, Quit).

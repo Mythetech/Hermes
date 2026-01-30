@@ -85,7 +85,8 @@ public static class Program
             options.Height = 768;
             options.CenterOnScreen = true;
             options.DevToolsEnabled = true;
-            options.CustomTitleBar = true;  // Enable custom title bar
+            options.CustomTitleBar = true;
+            options.WindowStateKey = "";  // Remember window size/position (uses title as key)
         });
 
         // Register the metrics service so components can report render time

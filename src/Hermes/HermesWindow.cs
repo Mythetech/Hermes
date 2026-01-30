@@ -1,5 +1,7 @@
 using Hermes.Abstractions;
+using Hermes.Diagnostics;
 using Hermes.Menu;
+using Hermes.Storage;
 
 namespace Hermes;
 
@@ -13,6 +15,7 @@ public sealed class HermesWindow : IDisposable
     private readonly HermesWindowOptions _options = new();
     private NativeMenuBar? _nativeMenuBar;
     private IDialogBackend? _dialogBackend;
+    private string? _windowStateKey;
     private bool _initialized;
     private bool _disposed;
 
@@ -198,6 +201,19 @@ public sealed class HermesWindow : IDisposable
     {
         ThrowIfInitialized();
         _options.CustomTitleBar = enabled;
+        return this;
+    }
+
+    /// <summary>
+    /// Enable window state persistence. Window position, size, and maximized state
+    /// will be saved on close and restored on next launch.
+    /// </summary>
+    /// <param name="key">Optional key identifying this window. Defaults to the window title if not specified.</param>
+    public HermesWindow RememberWindowState(string? key = null)
+    {
+        ThrowIfInitialized();
+        // Use empty string as sentinel to indicate "use title as key"
+        _options.WindowStateKey = key ?? string.Empty;
         return this;
     }
 
@@ -597,8 +613,70 @@ public sealed class HermesWindow : IDisposable
     private void EnsureInitialized()
     {
         if (_initialized) return;
+
+        // Restore saved window state before backend initialization
+        if (_options.WindowStateKey is not null)
+        {
+            // Resolve key: use title if empty string sentinel
+            _windowStateKey = string.IsNullOrEmpty(_options.WindowStateKey)
+                ? _options.Title
+                : _options.WindowStateKey;
+
+            RestoreWindowState();
+        }
+
         _backend.Initialize(_options);
+
+        // Subscribe to closing event for state persistence
+        if (_windowStateKey is not null)
+        {
+            _backend.Closing += SaveWindowState;
+        }
+
         _initialized = true;
+    }
+
+    private void RestoreWindowState()
+    {
+        if (_windowStateKey is null)
+            return;
+
+        if (WindowStateStore.Instance.TryGetState(_windowStateKey, out var state) && state is not null)
+        {
+            _options.X = state.X;
+            _options.Y = state.Y;
+            _options.Width = state.Width;
+            _options.Height = state.Height;
+            _options.Maximized = state.IsMaximized;
+            _options.CenterOnScreen = false; // Use saved position instead of centering
+
+            HermesLogger.Info($"Restored window state for '{_windowStateKey}'");
+        }
+    }
+
+    private void SaveWindowState()
+    {
+        if (_windowStateKey is null || !_initialized)
+            return;
+
+        try
+        {
+            var state = new WindowState
+            {
+                X = _backend.Position.X,
+                Y = _backend.Position.Y,
+                Width = _backend.Size.Width,
+                Height = _backend.Size.Height,
+                IsMaximized = _backend.IsMaximized
+            };
+
+            WindowStateStore.Instance.SaveState(_windowStateKey, state);
+            HermesLogger.Info($"Saved window state for '{_windowStateKey}'");
+        }
+        catch (Exception ex)
+        {
+            HermesLogger.Error($"Failed to save window state for '{_windowStateKey}': {ex.Message}");
+        }
     }
 
     private void ThrowIfInitialized()
