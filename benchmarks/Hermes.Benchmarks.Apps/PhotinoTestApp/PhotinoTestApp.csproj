@@ -8,8 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Reference local Photino.Blazor project -->
-    <ProjectReference Include="../../../../photino.Blazor/Photino.Blazor/Photino.Blazor.csproj" />
+    <PackageReference Include="Photino.Blazor" Version="4.0.13" />
   </ItemGroup>
 
   <!-- Copy wwwroot content to output -->
