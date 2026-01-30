@@ -136,7 +136,7 @@ Transparent and translucent window backgrounds for overlay/HUD applications.
 ### macOS-Specific
 
 - [ ] **Touch Bar support** - For MacBook Pro
-- [ ] **Dock menu customization** - Right-click dock icon menu
+- [x] **Dock menu customization** - Right-click dock icon menu
 - [ ] **Handoff/Continuity** - Apple ecosystem integration
 - [ ] **Native full screen mode** - macOS full screen with separate space
 

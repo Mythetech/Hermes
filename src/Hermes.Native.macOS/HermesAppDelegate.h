@@ -3,7 +3,14 @@
 
 #import <Cocoa/Cocoa.h>
 
+@class HermesDockMenu;
+
 @interface HermesAppDelegate : NSObject <NSApplicationDelegate>
+
+/// The dock menu shown when right-clicking the app's dock icon.
+/// Custom items appear above the default macOS entries.
+@property (nonatomic, strong) HermesDockMenu* dockMenu;
+
 @end
 
 #endif

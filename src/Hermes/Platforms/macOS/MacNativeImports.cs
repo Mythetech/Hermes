@@ -237,6 +237,52 @@ internal static partial class MacNative
 
     #endregion
 
+    #region Dock Menu Operations
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DockMenu_Create")]
+    internal static partial IntPtr DockMenuCreate(IntPtr callback);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DockMenu_Destroy")]
+    internal static partial void DockMenuDestroy(IntPtr dockMenu);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DockMenu_AddItem", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void DockMenuAddItem(IntPtr dockMenu, string itemId, string label);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DockMenu_AddSeparator")]
+    internal static partial void DockMenuAddSeparator(IntPtr dockMenu);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DockMenu_RemoveItem", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void DockMenuRemoveItem(IntPtr dockMenu, string itemId);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DockMenu_Clear")]
+    internal static partial void DockMenuClear(IntPtr dockMenu);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DockMenu_SetItemEnabled", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void DockMenuSetItemEnabled(IntPtr dockMenu, string itemId,
+                                                        [MarshalAs(UnmanagedType.U1)] bool enabled);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DockMenu_SetItemChecked", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void DockMenuSetItemChecked(IntPtr dockMenu, string itemId,
+                                                        [MarshalAs(UnmanagedType.U1)] bool isChecked);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DockMenu_SetItemLabel", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void DockMenuSetItemLabel(IntPtr dockMenu, string itemId, string label);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DockMenu_AddSubmenu", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void DockMenuAddSubmenu(IntPtr dockMenu, string submenuId, string label);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DockMenu_AddSubmenuItem", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void DockMenuAddSubmenuItem(IntPtr dockMenu, string submenuId,
+                                                        string itemId, string label);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DockMenu_AddSubmenuSeparator", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void DockMenuAddSubmenuSeparator(IntPtr dockMenu, string submenuId);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DockMenu_ClearSubmenu", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void DockMenuClearSubmenu(IntPtr dockMenu, string submenuId);
+
+    #endregion
+
     #region Memory Management
 
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Free")]

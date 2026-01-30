@@ -2,6 +2,7 @@
 #import "HermesWindow.h"
 #import "HermesMenu.h"
 #import "HermesContextMenu.h"
+#import "HermesDockMenu.h"
 #import "HermesDialogs.h"
 #import "HermesAppDelegate.h"
 #import <Cocoa/Cocoa.h>
@@ -517,6 +518,117 @@ char* Hermes_Dialog_ShowSaveFile(const char* title, const char* defaultPath,
 int Hermes_Dialog_ShowMessage(const char* title, const char* message,
                                int buttons, int icon) {
     return Hermes_ShowMessageDialog(title, message, buttons, icon);
+}
+
+#pragma mark - Dock Menu Operations
+
+void* Hermes_DockMenu_Create(MenuItemCallback callback) {
+    @autoreleasepool {
+        // Ensure app is registered
+        Hermes_App_Register();
+
+        HermesDockMenu* dockMenu = [[HermesDockMenu alloc] initWithCallback:callback];
+
+        // Wire up to the app delegate
+        g_appDelegate.dockMenu = dockMenu;
+
+        return (__bridge_retained void*)dockMenu;
+    }
+}
+
+void Hermes_DockMenu_Destroy(void* dockMenu) {
+    @autoreleasepool {
+        // Clear from app delegate
+        if (g_appDelegate.dockMenu == (__bridge HermesDockMenu*)dockMenu) {
+            g_appDelegate.dockMenu = nil;
+        }
+
+        HermesDockMenu* menu = (__bridge_transfer HermesDockMenu*)dockMenu;
+        (void)menu; // Release
+    }
+}
+
+void Hermes_DockMenu_AddItem(void* dockMenu, const char* itemId, const char* label) {
+    @autoreleasepool {
+        HermesDockMenu* menu = (__bridge HermesDockMenu*)dockMenu;
+        [menu addItem:[NSString stringWithUTF8String:itemId]
+                label:[NSString stringWithUTF8String:label]];
+    }
+}
+
+void Hermes_DockMenu_AddSeparator(void* dockMenu) {
+    @autoreleasepool {
+        HermesDockMenu* menu = (__bridge HermesDockMenu*)dockMenu;
+        [menu addSeparator];
+    }
+}
+
+void Hermes_DockMenu_RemoveItem(void* dockMenu, const char* itemId) {
+    @autoreleasepool {
+        HermesDockMenu* menu = (__bridge HermesDockMenu*)dockMenu;
+        [menu removeItem:[NSString stringWithUTF8String:itemId]];
+    }
+}
+
+void Hermes_DockMenu_Clear(void* dockMenu) {
+    @autoreleasepool {
+        HermesDockMenu* menu = (__bridge HermesDockMenu*)dockMenu;
+        [menu clear];
+    }
+}
+
+void Hermes_DockMenu_SetItemEnabled(void* dockMenu, const char* itemId, bool enabled) {
+    @autoreleasepool {
+        HermesDockMenu* menu = (__bridge HermesDockMenu*)dockMenu;
+        [menu setItemEnabled:[NSString stringWithUTF8String:itemId] enabled:enabled];
+    }
+}
+
+void Hermes_DockMenu_SetItemChecked(void* dockMenu, const char* itemId, bool checked) {
+    @autoreleasepool {
+        HermesDockMenu* menu = (__bridge HermesDockMenu*)dockMenu;
+        [menu setItemChecked:[NSString stringWithUTF8String:itemId] checked:checked];
+    }
+}
+
+void Hermes_DockMenu_SetItemLabel(void* dockMenu, const char* itemId, const char* label) {
+    @autoreleasepool {
+        HermesDockMenu* menu = (__bridge HermesDockMenu*)dockMenu;
+        [menu setItemLabel:[NSString stringWithUTF8String:itemId]
+                     label:[NSString stringWithUTF8String:label]];
+    }
+}
+
+void Hermes_DockMenu_AddSubmenu(void* dockMenu, const char* submenuId, const char* label) {
+    @autoreleasepool {
+        HermesDockMenu* menu = (__bridge HermesDockMenu*)dockMenu;
+        [menu addSubmenu:[NSString stringWithUTF8String:submenuId]
+                   label:[NSString stringWithUTF8String:label]];
+    }
+}
+
+void Hermes_DockMenu_AddSubmenuItem(void* dockMenu, const char* submenuId,
+                                     const char* itemId, const char* label) {
+    @autoreleasepool {
+        HermesDockMenu* menu = (__bridge HermesDockMenu*)dockMenu;
+        [menu addSubmenuItem:[NSString stringWithUTF8String:submenuId]
+                      itemId:[NSString stringWithUTF8String:itemId]
+                       label:[NSString stringWithUTF8String:label]];
+    }
+}
+
+void Hermes_DockMenu_AddSubmenuSeparator(void* dockMenu, const char* submenuId) {
+    @autoreleasepool {
+        HermesDockMenu* menu = (__bridge HermesDockMenu*)dockMenu;
+        [menu addSubmenuSeparator:[NSString stringWithUTF8String:submenuId]];
+    }
+}
+
+void Hermes_DockMenu_ClearSubmenu(void* dockMenu, const char* submenuId) {
+    @autoreleasepool {
+        HermesDockMenu* menu = (__bridge HermesDockMenu*)dockMenu;
+        [menu clearSubmenu:[NSString stringWithUTF8String:submenuId]];
+    }
 }
 
 #pragma mark - Memory Management
