@@ -179,6 +179,7 @@ runs:
         export HERMES_SMOKE_TEST=1
         export HERMES_SMOKE_TEST_EXIT=1
         export DISPLAY=:99
+        export GDK_BACKEND=x11
 
         APP_PATH="${{ inputs.app_path }}"
         TIMEOUT="${{ inputs.timeout }}"
@@ -189,9 +190,25 @@ runs:
         # Start virtual display
         Xvfb :99 -screen 0 1920x1080x24 &
         XVFB_PID=$!
-        sleep 2
+        sleep 3
 
         chmod +x "$APP_PATH"
+
+        # Debug: Show app directory contents and check for native library
+        APP_DIR=$(dirname "$APP_PATH")
+        echo "=== App Directory Contents ==="
+        ls -la "$APP_DIR"
+        echo ""
+
+        # Check if native library exists and its dependencies
+        if [ -f "$APP_DIR/libHermes.Native.Linux.so" ]; then
+          echo "Native library found: $APP_DIR/libHermes.Native.Linux.so"
+          echo "Dependencies:"
+          ldd "$APP_DIR/libHermes.Native.Linux.so" 2>&1 || echo "ldd failed"
+        else
+          echo "WARNING: Native library NOT found in $APP_DIR"
+        fi
+        echo ""
 
         # Run with timeout
         set +e

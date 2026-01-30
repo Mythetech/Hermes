@@ -1,339 +1,171 @@
-using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using System.Text.Json;
+using System.Text;
 using Hermes.Abstractions;
-using Hermes.Diagnostics;
-using Gtk;
-using WebKit;
 
 namespace Hermes.Platforms.Linux;
 
 /// <summary>
-/// P/Invoke declarations for webkit2gtk-4.1 CORS header support.
-/// The GtkSharp binding doesn't expose URISchemeResponse, so we use native calls.
+/// Linux implementation of IHermesWindowBackend using native GTK3/WebKit2GTK library.
 /// </summary>
-internal static class WebKitNative
-{
-    // WebKit2GTK 4.1 uses libsoup3
-    private const string LibWebKit = "libwebkit2gtk-4.1.so.0";
-    private const string LibSoup = "libsoup-3.0.so.0";
-
-    // SoupMessageHeadersType enum
-    private const int SOUP_MESSAGE_HEADERS_RESPONSE = 1;
-
-    [DllImport(LibSoup)]
-    public static extern IntPtr soup_message_headers_new(int type);
-
-    [DllImport(LibSoup)]
-    public static extern void soup_message_headers_append(IntPtr headers, string name, string value);
-
-    [DllImport(LibSoup)]
-    public static extern void soup_message_headers_free(IntPtr headers);
-
-    [DllImport(LibWebKit)]
-    public static extern IntPtr webkit_uri_scheme_response_new(IntPtr input_stream, long stream_length);
-
-    [DllImport(LibWebKit)]
-    public static extern void webkit_uri_scheme_response_set_content_type(IntPtr response, string content_type);
-
-    [DllImport(LibWebKit)]
-    public static extern void webkit_uri_scheme_response_set_http_headers(IntPtr response, IntPtr headers);
-
-    [DllImport(LibWebKit)]
-    public static extern void webkit_uri_scheme_request_finish_with_response(IntPtr request, IntPtr response);
-
-    /// <summary>
-    /// Finish a URI scheme request with CORS headers to allow fetch() API access.
-    /// </summary>
-    public static void FinishWithCorsHeaders(URISchemeRequest request, GLib.InputStream inputStream, long contentLength, string contentType)
-    {
-        // Create SoupMessageHeaders for the response
-        var headers = soup_message_headers_new(SOUP_MESSAGE_HEADERS_RESPONSE);
-        try
-        {
-            // Add CORS headers to allow fetch() from the app origin
-            // Cannot use wildcard "*" when credentials mode is used - must specify actual origin
-            soup_message_headers_append(headers, "Access-Control-Allow-Origin", "app://localhost");
-            soup_message_headers_append(headers, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-            soup_message_headers_append(headers, "Access-Control-Allow-Headers", "Content-Type, Authorization");
-            soup_message_headers_append(headers, "Access-Control-Allow-Credentials", "true");
-
-            // Create URI scheme response
-            var response = webkit_uri_scheme_response_new(inputStream.Handle, contentLength);
-            webkit_uri_scheme_response_set_content_type(response, contentType);
-            webkit_uri_scheme_response_set_http_headers(response, headers);
-
-            // Finish with the response (this transfers ownership of headers to the response)
-            webkit_uri_scheme_request_finish_with_response(request.Handle, response);
-        }
-        catch
-        {
-            // If P/Invoke fails, clean up headers
-            soup_message_headers_free(headers);
-            throw;
-        }
-    }
-}
-
 [SupportedOSPlatform("linux")]
 internal sealed class LinuxWindowBackend : IHermesWindowBackend
 {
     private static bool s_gtkInitialized;
     private static readonly object s_initLock = new();
 
-    private Gtk.Window _window = null!;
-    private WebKit.WebView _webView = null!;
-    private WebKit.UserContentManager _userContentManager = null!;
-    private VBox _mainContainer = null!;
-    private HermesWindowOptions _options = null!;
-    private bool _isInitialized;
-    private bool _isDisposed;
+    private IntPtr _windowHandle;
     private int _uiThreadId;
+    private bool _initialized;
+    private bool _disposed;
 
-    private int _lastWidth;
-    private int _lastHeight;
-    private int _lastX;
-    private int _lastY;
+    // Keep strong references to delegates to prevent GC during window lifetime
+    private readonly List<Delegate> _pinnedDelegates = new();
 
-    private readonly ConcurrentQueue<(System.Action Action, TaskCompletionSource Tcs)> _invokeQueue = new();
+    // Custom scheme handlers registered before Initialize()
     private readonly Dictionary<string, Func<string, (Stream? Content, string? ContentType)>> _customSchemeHandlers = new();
-    private readonly HashSet<string> _registeredSchemes = new();
-    // Store callbacks to prevent GC - WebKit calls these from native code
-    private readonly List<WebKit.URISchemeRequestCallback> _schemeCallbacks = new();
+    private LinuxNativeDelegates.CustomSchemeCallback? _customSchemeCallback;
 
+    // Cached options for deferred initialization
+    private string _pendingTitle = "Hermes Window";
+    private int _pendingWidth = 800;
+    private int _pendingHeight = 600;
+
+    // Menu backend (lazily created)
     private LinuxMenuBackend? _menuBackend;
 
-    public event System.Action? Closing;
-    public event System.Action<int, int>? Resized;
-    public event System.Action<int, int>? Moved;
-    public event System.Action? FocusIn;
-    public event System.Action? FocusOut;
-    public event System.Action<string>? WebMessageReceived;
-    public event System.Action? Maximized;
-    public event System.Action? Restored;
+    #region Lifecycle
 
     public void Initialize(HermesWindowOptions options)
     {
-        if (_isInitialized)
-            throw new InvalidOperationException("Window already initialized");
+        if (_initialized)
+            throw new InvalidOperationException("Window has already been initialized.");
 
-        _options = options;
+        // Ensure GTK is initialized before creating any windows
+        EnsureGtkInitialized();
+
         _uiThreadId = Environment.CurrentManagedThreadId;
 
         // CustomTitleBar on Linux enables chromeless mode for custom window chrome
-        if (_options.CustomTitleBar)
+        if (options.CustomTitleBar)
         {
-            _options.Chromeless = true;
+            options.Chromeless = true;
         }
 
-        EnsureGtkInitialized();
-
-        // Create main window
-        _window = new Gtk.Window(Gtk.WindowType.Toplevel);
-        _window.Title = _options.Title;
-        _window.SetDefaultSize(_options.Width, _options.Height);
-
-        // Position
-        if (_options.CenterOnScreen)
+        // Create native parameter struct
+        var parameters = new HermesWindowParams
         {
-            _window.SetPosition(Gtk.WindowPosition.Center);
-        }
-        else if (_options.X.HasValue && _options.Y.HasValue)
-        {
-            _window.Move(_options.X.Value, _options.Y.Value);
-        }
-
-        // Chromeless (no decorations)
-        if (_options.Chromeless)
-        {
-            _window.Decorated = false;
-        }
-
-        // Resizable
-        _window.Resizable = options.Resizable;
-
-        // TopMost (keep above)
-        if (options.TopMost)
-        {
-            _window.KeepAbove = true;
-        }
-
-        // Size constraints
-        if (options.MinWidth.HasValue || options.MinHeight.HasValue ||
-            options.MaxWidth.HasValue || options.MaxHeight.HasValue)
-        {
-            var geometry = new Gdk.Geometry
-            {
-                MinWidth = options.MinWidth ?? 1,
-                MinHeight = options.MinHeight ?? 1,
-                MaxWidth = options.MaxWidth ?? int.MaxValue,
-                MaxHeight = options.MaxHeight ?? int.MaxValue
-            };
-
-            var hints = Gdk.WindowHints.MinSize | Gdk.WindowHints.MaxSize;
-            _window.SetGeometryHints(_window, geometry, hints);
-        }
-
-        // Icon
-        if (!string.IsNullOrEmpty(options.IconPath) && File.Exists(options.IconPath))
-        {
-            try
-            {
-                _window.SetIconFromFile(options.IconPath);
-            }
-            catch (Exception ex)
-            {
-                HermesLogger.Warning($"Failed to load window icon from '{options.IconPath}': {ex.Message}");
-            }
-        }
-
-        // Wire up window events
-        _window.DeleteEvent += OnWindowDeleteEvent;
-        _window.ConfigureEvent += OnWindowConfigureEvent;
-        _window.FocusInEvent += OnWindowFocusInEvent;
-        _window.FocusOutEvent += OnWindowFocusOutEvent;
-
-        // Create main container
-        _mainContainer = new VBox(false, 0);
-
-        // Initialize WebView
-        InitializeWebView();
-
-        // Add WebView to container (menu bar will be added above if needed)
-        _mainContainer.PackStart(_webView, true, true, 0);
-
-        _window.Add(_mainContainer);
-
-        _isInitialized = true;
-    }
-
-    private void InitializeWebView()
-    {
-        // Create UserContentManager for script message handling
-        _userContentManager = new WebKit.UserContentManager();
-
-        // Register script message handler for window.external.sendMessage()
-        _userContentManager.RegisterScriptMessageHandler("hermesHost");
-        _userContentManager.ScriptMessageReceived += OnScriptMessageReceived;
-
-        // Create WebView with user content manager
-        _webView = new WebKit.WebView(_userContentManager);
-
-        // Register custom URI schemes with the WebView's context
-        // Must happen after WebView creation but before any navigation
-        var context = _webView.Context;
-        foreach (var scheme in _customSchemeHandlers.Keys)
-        {
-            RegisterSchemeWithContext(context, scheme);
-        }
-
-        // Configure settings
-        var settings = _webView.Settings;
-        settings.EnableDeveloperExtras = _options.DevToolsEnabled;
-        settings.JavascriptCanAccessClipboard = true;
-        settings.EnableJavascript = true;
-        settings.EnableWriteConsoleMessagesToStdout = true;  // Route console.log to stdout for debugging
-
-        // Add load state tracking for diagnostics
-        _webView.LoadChanged += (sender, args) =>
-        {
-            Console.WriteLine($"[Hermes] WebView LoadChanged: {args.LoadEvent} - URI: {_webView.Uri}");
-            Console.Out.Flush();
+            Width = options.Width,
+            Height = options.Height,
+            MinWidth = options.MinWidth ?? 0,
+            MinHeight = options.MinHeight ?? 0,
+            MaxWidth = options.MaxWidth ?? 0,
+            MaxHeight = options.MaxHeight ?? 0,
+            UsePosition = options.X.HasValue && options.Y.HasValue,
+            X = options.X ?? 0,
+            Y = options.Y ?? 0,
+            CenterOnScreen = options.CenterOnScreen,
+            Chromeless = options.Chromeless,
+            Resizable = options.Resizable,
+            TopMost = options.TopMost,
+            Maximized = options.Maximized,
+            Minimized = options.Minimized,
+            DevToolsEnabled = options.DevToolsEnabled,
+            ContextMenuEnabled = options.ContextMenuEnabled,
+            CustomTitleBar = options.CustomTitleBar
         };
 
-        // Note: LoadFailed event handler removed - GtkSharp can't marshal GError type
-        // and causes "Unknown type GError" exception that crashes the app
+        // Marshal strings
+        parameters.Title = MarshalString(options.Title);
+        parameters.StartUrl = MarshalString(options.StartUrl);
+        parameters.StartHtml = MarshalString(options.StartHtml);
+        parameters.IconPath = MarshalString(options.IconPath);
 
-        // Disable context menu if requested
-        if (!_options.ContextMenuEnabled)
+        // Initialize custom scheme names array (must be done before WindowCreate)
+        parameters.CustomSchemeNames = new IntPtr[16];
+        var schemeNames = _customSchemeHandlers.Keys.ToArray();
+        for (int i = 0; i < Math.Min(schemeNames.Length, 16); i++)
         {
-            _webView.ContextMenu += (sender, args) =>
-            {
-                args.RetVal = true; // Suppress context menu
-            };
+            parameters.CustomSchemeNames[i] = MarshalString(schemeNames[i]);
         }
 
-        // Inject JavaScript bridge at document start
-        var bridgeScript = new WebKit.UserScript(
-            """
-            console.log('[Hermes JS] Bridge script injecting...');
-            window.external = {
-                sendMessage: function(message) {
-                    console.log('[Hermes JS] sendMessage called:', message.substring(0, 100));
-                    window.webkit.messageHandlers.hermesHost.postMessage(message);
-                },
-                receiveMessage: function(callback) {
-                    console.log('[Hermes JS] receiveMessage callback registered');
-                    window.__hermesReceiveCallback = callback;
-                }
-            };
-            console.log('[Hermes JS] Bridge ready, window.external:', typeof window.external);
-            // Test the message channel immediately
-            try {
-                window.webkit.messageHandlers.hermesHost.postMessage('__HERMES_BRIDGE_TEST__');
-                console.log('[Hermes JS] Test message sent successfully');
-            } catch (e) {
-                console.log('[Hermes JS] Test message failed:', e.message);
+        try
+        {
+            // Set up callbacks
+            SetupCallbacks(ref parameters);
+
+            // Create the window (schemes are registered from CustomSchemeNames during creation)
+            _windowHandle = LinuxNative.WindowCreate(ref parameters);
+            if (_windowHandle == IntPtr.Zero)
+                throw new InvalidOperationException("Failed to create native window.");
+
+            _initialized = true;
+        }
+        finally
+        {
+            // Free marshaled strings
+            FreeString(parameters.Title);
+            FreeString(parameters.StartUrl);
+            FreeString(parameters.StartHtml);
+            FreeString(parameters.IconPath);
+
+            // Free scheme name strings
+            foreach (var ptr in parameters.CustomSchemeNames)
+            {
+                FreeString(ptr);
             }
-            """,
-            WebKit.UserContentInjectedFrames.AllFrames,
-            WebKit.UserScriptInjectionTime.Start,
-            null,
-            null);
-        _userContentManager.AddScript(bridgeScript);
+        }
     }
 
     public void Show()
     {
-        ThrowIfNotInitialized();
-
-        if (_options.Maximized)
-            _window.Maximize();
-        else if (_options.Minimized)
-            _window.Iconify();
-
-        _window.ShowAll();
-
-        // Navigate to initial content
-        if (!string.IsNullOrEmpty(_options.StartUrl))
-            _webView.LoadUri(_options.StartUrl);
-        else if (!string.IsNullOrEmpty(_options.StartHtml))
-            _webView.LoadHtml(_options.StartHtml, "about:blank");
-    }
-
-    public void WaitForClose()
-    {
-        Show();
-        Gtk.Application.Run();
+        EnsureInitialized();
+        LinuxNative.WindowShow(_windowHandle);
     }
 
     public void Close()
     {
-        if (_isInitialized && _window != null)
+        if (_initialized && _windowHandle != IntPtr.Zero)
         {
-            GLib.Idle.Add(() =>
-            {
-                _window.Destroy();
-                Gtk.Application.Quit();
-                return false;
-            });
+            LinuxNative.WindowClose(_windowHandle);
         }
     }
+
+    public void WaitForClose()
+    {
+        EnsureInitialized();
+        LinuxNative.WindowWaitForClose(_windowHandle);
+    }
+
+    #endregion
+
+    #region Window Properties
 
     public string Title
     {
         get
         {
-            ThrowIfNotInitialized();
-            return _window.Title ?? string.Empty;
+            if (!_initialized) return _pendingTitle;
+
+            var buffer = Marshal.AllocHGlobal(1024);
+            try
+            {
+                LinuxNative.WindowGetTitle(_windowHandle, buffer, 1024);
+                return Marshal.PtrToStringUTF8(buffer) ?? "";
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
         }
         set
         {
-            ThrowIfNotInitialized();
-            _window.Title = value;
+            if (!_initialized)
+            {
+                _pendingTitle = value;
+                return;
+            }
+            LinuxNative.WindowSetTitle(_windowHandle, value);
         }
     }
 
@@ -341,14 +173,20 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     {
         get
         {
-            ThrowIfNotInitialized();
-            _window.GetSize(out int w, out int h);
-            return (w, h);
+            if (!_initialized) return (_pendingWidth, _pendingHeight);
+
+            LinuxNative.WindowGetSize(_windowHandle, out int width, out int height);
+            return (width, height);
         }
         set
         {
-            ThrowIfNotInitialized();
-            _window.Resize(value.Width, value.Height);
+            if (!_initialized)
+            {
+                _pendingWidth = value.Width;
+                _pendingHeight = value.Height;
+                return;
+            }
+            LinuxNative.WindowSetSize(_windowHandle, value.Width, value.Height);
         }
     }
 
@@ -356,14 +194,14 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     {
         get
         {
-            ThrowIfNotInitialized();
-            _window.GetPosition(out int x, out int y);
+            EnsureInitialized();
+            LinuxNative.WindowGetPosition(_windowHandle, out int x, out int y);
             return (x, y);
         }
         set
         {
-            ThrowIfNotInitialized();
-            _window.Move(value.X, value.Y);
+            EnsureInitialized();
+            LinuxNative.WindowSetPosition(_windowHandle, value.X, value.Y);
         }
     }
 
@@ -371,17 +209,14 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     {
         get
         {
-            ThrowIfNotInitialized();
-            return _window.IsMaximized;
+            if (!_initialized) return false;
+            return LinuxNative.WindowGetIsMaximized(_windowHandle);
         }
         set
         {
-            ThrowIfNotInitialized();
-            var wasMaximized = _window.IsMaximized;
-            if (value)
-                _window.Maximize();
-            else
-                _window.Unmaximize();
+            EnsureInitialized();
+            var wasMaximized = LinuxNative.WindowGetIsMaximized(_windowHandle);
+            LinuxNative.WindowSetIsMaximized(_windowHandle, value);
 
             // Fire events if state changed
             if (value && !wasMaximized)
@@ -395,177 +230,314 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     {
         get
         {
-            ThrowIfNotInitialized();
-            // GTK doesn't have a direct IsMinimized property; check window state
-            var state = _window.Window?.State ?? Gdk.WindowState.Withdrawn;
-            return (state & Gdk.WindowState.Iconified) != 0;
+            if (!_initialized) return false;
+            return LinuxNative.WindowGetIsMinimized(_windowHandle);
         }
         set
         {
-            ThrowIfNotInitialized();
-            if (value)
-                _window.Iconify();
-            else
-                _window.Deiconify();
+            EnsureInitialized();
+            LinuxNative.WindowSetIsMinimized(_windowHandle, value);
         }
     }
 
     public HermesPlatform Platform => HermesPlatform.Linux;
 
+    #endregion
+
+    #region WebView
+
     public void NavigateToUrl(string url)
     {
-        ThrowIfNotInitialized();
-        Console.WriteLine($"[Hermes] NavigateToUrl: {url}");
-        Console.Out.Flush();
-        _webView.LoadUri(url);
+        EnsureInitialized();
+        LinuxNative.WindowNavigateToUrl(_windowHandle, url);
     }
 
     public void NavigateToString(string html)
     {
-        ThrowIfNotInitialized();
-        _webView.LoadHtml(html, "about:blank");
+        EnsureInitialized();
+        LinuxNative.WindowNavigateToString(_windowHandle, html);
     }
 
     public void SendWebMessage(string message)
     {
-        ThrowIfNotInitialized();
-
-        Console.WriteLine($"[Hermes] SendWebMessage: {message.Substring(0, Math.Min(100, message.Length))}...");
-        Console.Out.Flush();
-
-        // Use JSON serialization for consistent escaping across platforms
-        var json = JsonSerializer.Serialize(message);
-        var script = $"if(window.__hermesReceiveCallback) window.__hermesReceiveCallback({json});";
-
-        // Run the JavaScript in the web view (fire-and-forget, no callback needed)
-        _webView.RunJavascript(script, null, null);
+        EnsureInitialized();
+        LinuxNative.WindowSendWebMessage(_windowHandle, message);
     }
 
     public void RegisterCustomScheme(string scheme, Func<string, (Stream? Content, string? ContentType)> handler)
     {
-        _customSchemeHandlers[scheme] = handler;
-
-        // If WebView exists, register with its context immediately
-        if (_webView != null)
+        if (_initialized)
         {
-            RegisterSchemeWithContext(_webView.Context, scheme);
-        }
-    }
-
-    private void RegisterSchemeWithContext(WebKit.WebContext context, string scheme)
-    {
-        // Avoid registering the same scheme twice - WebKit doesn't allow it
-        if (!_registeredSchemes.Add(scheme))
-        {
-            Console.WriteLine($"[Hermes] URI scheme '{scheme}' already registered, skipping");
+            // After initialization, only allow updating handlers for pre-registered schemes
+            if (!_customSchemeHandlers.ContainsKey(scheme))
+            {
+                throw new InvalidOperationException(
+                    "Custom schemes must be registered before Initialize() is called. " +
+                    "Register schemes before calling Show() or WaitForClose().");
+            }
+            // Update the handler for an existing scheme
+            _customSchemeHandlers[scheme] = handler;
             return;
         }
 
-        // Register scheme with security manager to allow access to local resources
-        // Required for WebKit2GTK >= 2.32 for custom schemes to work properly with Blazor
-        var securityManager = context.SecurityManager;
-        securityManager.RegisterUriSchemeAsLocal(scheme);
-        securityManager.RegisterUriSchemeAsSecure(scheme);
-        securityManager.RegisterUriSchemeAsCorsEnabled(scheme);
+        _customSchemeHandlers[scheme] = handler;
+    }
 
-        Console.WriteLine($"[Hermes] Registering URI scheme '{scheme}' with WebContext (SecurityManager configured)");
+    #endregion
 
-        // Create and store the callback to prevent garbage collection
-        // WebKit calls this from native code, so the delegate must stay alive
-        WebKit.URISchemeRequestCallback callback = (request) =>
+    #region Threading
+
+    public int UIThreadId => _uiThreadId;
+
+    public bool CheckAccess()
+    {
+        return Environment.CurrentManagedThreadId == _uiThreadId;
+    }
+
+    public void Invoke(Action action)
+    {
+        if (CheckAccess())
         {
-            var uri = request.Uri;
-            Console.WriteLine($"[Hermes] URI scheme handler called for: {uri}");
-            Console.Out.Flush();
+            action();
+            return;
+        }
+
+        Exception? capturedException = null;
+        using var waitHandle = new ManualResetEventSlim(false);
+
+        var invokeDelegate = new LinuxNativeDelegates.InvokeCallback(() =>
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                capturedException = ex;
+            }
+            finally
+            {
+                waitHandle.Set();
+            }
+        });
+
+        // Pin delegate during native call
+        var handle = GCHandle.Alloc(invokeDelegate);
+        try
+        {
+            LinuxNative.WindowInvoke(_windowHandle, Marshal.GetFunctionPointerForDelegate(invokeDelegate));
+            waitHandle.Wait();
+        }
+        finally
+        {
+            handle.Free();
+        }
+
+        if (capturedException is not null)
+        {
+            throw capturedException;
+        }
+    }
+
+    public void BeginInvoke(Action action)
+    {
+        var invokeDelegate = new LinuxNativeDelegates.InvokeCallback(() =>
+        {
+            try
+            {
+                action();
+            }
+            catch
+            {
+                // Swallow exceptions in async invoke
+            }
+        });
+
+        // Keep delegate alive - add to pinned list
+        _pinnedDelegates.Add(invokeDelegate);
+
+        LinuxNative.WindowBeginInvoke(_windowHandle, Marshal.GetFunctionPointerForDelegate(invokeDelegate));
+    }
+
+    #endregion
+
+    #region Events
+
+    public event Action? Closing;
+    public event Action<int, int>? Resized;
+    public event Action<int, int>? Moved;
+    public event Action? FocusIn;
+    public event Action? FocusOut;
+    public event Action<string>? WebMessageReceived;
+    public event Action? Maximized;
+    public event Action? Restored;
+
+    #endregion
+
+    #region Factory Methods
+
+    internal LinuxMenuBackend CreateMenuBackend()
+    {
+        EnsureInitialized();
+        _menuBackend ??= new LinuxMenuBackend(_windowHandle);
+        return _menuBackend;
+    }
+
+    internal LinuxDialogBackend CreateDialogBackend()
+    {
+        EnsureInitialized();
+        return new LinuxDialogBackend(_windowHandle);
+    }
+
+    internal LinuxContextMenuBackend CreateContextMenuBackend()
+    {
+        EnsureInitialized();
+        return new LinuxContextMenuBackend(_windowHandle);
+    }
+
+    #endregion
+
+    #region Private Helpers
+
+    private static void EnsureGtkInitialized()
+    {
+        if (s_gtkInitialized) return;
+
+        lock (s_initLock)
+        {
+            if (s_gtkInitialized) return;
+
+            // Initialize GTK via native library
+            int argc = 0;
+            IntPtr argv = IntPtr.Zero;
+            LinuxNative.AppInit(ref argc, ref argv);
+
+            s_gtkInitialized = true;
+        }
+    }
+
+    private void EnsureInitialized()
+    {
+        if (!_initialized)
+            throw new InvalidOperationException("Window has not been initialized. Call Initialize() first.");
+    }
+
+    private void SetupCallbacks(ref HermesWindowParams parameters)
+    {
+        // Create delegates
+        var closingDelegate = new LinuxNativeDelegates.ClosingCallback(OnNativeClosing);
+        var resizedDelegate = new LinuxNativeDelegates.ResizedCallback(OnNativeResized);
+        var movedDelegate = new LinuxNativeDelegates.MovedCallback(OnNativeMoved);
+        var focusInDelegate = new LinuxNativeDelegates.FocusCallback(OnNativeFocusIn);
+        var focusOutDelegate = new LinuxNativeDelegates.FocusCallback(OnNativeFocusOut);
+        var webMessageDelegate = new LinuxNativeDelegates.WebMessageCallback(OnNativeWebMessage);
+
+        // Store strong references to prevent GC
+        _pinnedDelegates.Add(closingDelegate);
+        _pinnedDelegates.Add(resizedDelegate);
+        _pinnedDelegates.Add(movedDelegate);
+        _pinnedDelegates.Add(focusInDelegate);
+        _pinnedDelegates.Add(focusOutDelegate);
+        _pinnedDelegates.Add(webMessageDelegate);
+
+        // Set up custom scheme callback if we have any handlers
+        if (_customSchemeHandlers.Count > 0)
+        {
+            _customSchemeCallback = new LinuxNativeDelegates.CustomSchemeCallback(OnNativeCustomScheme);
+            _pinnedDelegates.Add(_customSchemeCallback);
+            parameters.OnCustomScheme = Marshal.GetFunctionPointerForDelegate(_customSchemeCallback);
+        }
+
+        // Convert to function pointers
+        parameters.OnClosing = Marshal.GetFunctionPointerForDelegate(closingDelegate);
+        parameters.OnResized = Marshal.GetFunctionPointerForDelegate(resizedDelegate);
+        parameters.OnMoved = Marshal.GetFunctionPointerForDelegate(movedDelegate);
+        parameters.OnFocusIn = Marshal.GetFunctionPointerForDelegate(focusInDelegate);
+        parameters.OnFocusOut = Marshal.GetFunctionPointerForDelegate(focusOutDelegate);
+        parameters.OnWebMessage = Marshal.GetFunctionPointerForDelegate(webMessageDelegate);
+    }
+
+    private void OnNativeClosing()
+    {
+        Closing?.Invoke();
+    }
+
+    private void OnNativeResized(int width, int height)
+    {
+        Resized?.Invoke(width, height);
+    }
+
+    private void OnNativeMoved(int x, int y)
+    {
+        Moved?.Invoke(x, y);
+    }
+
+    private void OnNativeFocusIn()
+    {
+        FocusIn?.Invoke();
+    }
+
+    private void OnNativeFocusOut()
+    {
+        FocusOut?.Invoke();
+    }
+
+    private void OnNativeWebMessage(IntPtr messagePtr)
+    {
+        var message = Marshal.PtrToStringUTF8(messagePtr) ?? "";
+        WebMessageReceived?.Invoke(message);
+    }
+
+    private IntPtr OnNativeCustomScheme(IntPtr urlPtr, out int numBytes, out IntPtr contentTypePtr)
+    {
+        numBytes = 0;
+        contentTypePtr = IntPtr.Zero;
+
+        var url = Marshal.PtrToStringUTF8(urlPtr) ?? "";
+
+        try
+        {
+            var uri = new Uri(url);
+            var scheme = uri.Scheme;
 
             if (_customSchemeHandlers.TryGetValue(scheme, out var handler))
             {
-                var (stream, handlerContentType) = handler(uri);
-                if (stream != null)
+                var (stream, handlerContentType) = handler(url);
+                if (stream is not null)
                 {
-                    try
-                    {
-                        // Read stream to bytes
-                        var bytes = ReadStreamToBytes(stream);
-                        // Use Content-Type from handler if provided, otherwise fall back to extension-based detection
-                        var mimeType = handlerContentType ?? GetMimeType(uri);
+                    using var ms = new MemoryStream();
+                    stream.CopyTo(ms);
+                    var data = ms.ToArray();
 
-                        Console.WriteLine($"[Hermes] Serving {uri} ({bytes.Length} bytes, {mimeType})");
+                    numBytes = data.Length;
+                    var resultPtr = Marshal.AllocHGlobal(numBytes);
+                    Marshal.Copy(data, 0, resultPtr, numBytes);
 
-                        // Create GLib input stream from bytes
-                        // Allocate unmanaged memory and copy bytes (GLib takes ownership)
-                        var ptr = Marshal.AllocHGlobal(bytes.Length);
-                        Marshal.Copy(bytes, 0, ptr, bytes.Length);
+                    // Use Content-Type from handler if provided, otherwise fall back to extension-based detection
+                    var contentType = handlerContentType ?? GetContentType(uri.AbsolutePath);
+                    contentTypePtr = Marshal.StringToHGlobalAnsi(contentType);
 
-                        var inputStream = new GLib.MemoryInputStream();
-                        inputStream.AddData(ptr, bytes.Length, null);
-
-                        // Use P/Invoke to finish with CORS headers for fetch() API support
-                        WebKitNative.FinishWithCorsHeaders(request, inputStream, bytes.Length, mimeType);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[Hermes] Error serving {uri}: {ex.Message}");
-                        FinishWithError(request);
-                    }
-                }
-                else
-                {
-                    Console.WriteLine($"[Hermes] Handler returned null for {uri}");
-                    FinishWithError(request);
+                    return resultPtr;
                 }
             }
-            else
-            {
-                Console.WriteLine($"[Hermes] No handler found for scheme '{scheme}'");
-                FinishWithError(request);
-            }
-        };
-
-        // Store the callback to prevent GC
-        _schemeCallbacks.Add(callback);
-
-        context.RegisterUriScheme(scheme, callback);
-        Console.WriteLine($"[Hermes] URI scheme '{scheme}' registered successfully");
-        Console.Out.Flush();
-    }
-
-    private static void FinishWithError(WebKit.URISchemeRequest request)
-    {
-        // Return empty content with 404 status - FinishError requires GLib.Error which isn't available
-        // as a public type in the current WebKitGTKSharp binding
-        try
-        {
-            var emptyStream = new GLib.MemoryInputStream();
-            request.Finish(emptyStream, 0, "text/plain");
         }
         catch
         {
-            // If we can't even finish with empty content, just log and move on
-            HermesLogger.Warning($"Failed to handle URI scheme request: {request.Uri}");
+            // Return null for errors
         }
+
+        return IntPtr.Zero;
     }
 
-    private static byte[] ReadStreamToBytes(Stream stream)
+    private static string GetContentType(string path)
     {
-        using var ms = new MemoryStream();
-        stream.CopyTo(ms);
-        return ms.ToArray();
-    }
+        var extension = Path.GetExtension(path).ToLowerInvariant();
 
-    private static string GetMimeType(string uri)
-    {
-        var path = uri;
-        var queryIndex = uri.IndexOf('?');
-        if (queryIndex >= 0)
-            path = uri[..queryIndex];
-
-        // Handle root path or paths ending with / - these serve index.html
-        if (path.EndsWith('/') || path == "app://localhost" || path == "http://localhost")
+        // Root URL (/) serves index.html
+        if (string.IsNullOrEmpty(extension) && (path == "/" || string.IsNullOrEmpty(path)))
             return "text/html";
 
-        var ext = Path.GetExtension(path).ToLowerInvariant();
-        return ext switch
+        return extension switch
         {
             ".html" or ".htm" => "text/html",
             ".css" => "text/css",
@@ -581,275 +553,47 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
             ".eot" => "application/vnd.ms-fontobject",
             ".ico" => "image/x-icon",
             ".webp" => "image/webp",
-            ".xml" => "application/xml",
-            ".txt" => "text/plain",
             ".wasm" => "application/wasm",
+            ".dll" => "application/octet-stream",
+            ".pdb" => "application/octet-stream",
+            ".dat" => "application/octet-stream",
+            ".blat" => "application/octet-stream",
             _ => "application/octet-stream"
         };
     }
 
-    public int UIThreadId => _uiThreadId;
-
-    public bool CheckAccess() => Environment.CurrentManagedThreadId == _uiThreadId;
-
-    public void Invoke(System.Action action)
+    private static IntPtr MarshalString(string? str)
     {
-        if (CheckAccess())
-        {
-            action();
-            return;
-        }
-
-        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        GLib.Idle.Add(() =>
-        {
-            try
-            {
-                action();
-                tcs.SetResult();
-            }
-            catch (Exception ex)
-            {
-                tcs.SetException(ex);
-            }
-            return false; // Remove idle handler after execution
-        });
-
-        tcs.Task.GetAwaiter().GetResult();
+        if (str is null) return IntPtr.Zero;
+        var bytes = Encoding.UTF8.GetBytes(str + '\0');
+        var ptr = Marshal.AllocHGlobal(bytes.Length);
+        Marshal.Copy(bytes, 0, ptr, bytes.Length);
+        return ptr;
     }
 
-    public void BeginInvoke(System.Action action)
+    private static void FreeString(IntPtr ptr)
     {
-        if (CheckAccess())
-        {
-            action();
-            return;
-        }
-
-        // Fire-and-forget
-        GLib.Idle.Add(() =>
-        {
-            try
-            {
-                action();
-            }
-            catch (Exception ex)
-            {
-                HermesLogger.Error("Exception in BeginInvoke callback", ex);
-            }
-            return false;
-        });
+        if (ptr != IntPtr.Zero)
+            Marshal.FreeHGlobal(ptr);
     }
+
+    #endregion
+
+    #region IDisposable
 
     public void Dispose()
     {
-        if (_isDisposed) return;
-        _isDisposed = true;
+        if (_disposed) return;
+        _disposed = true;
 
-        _webView?.Dispose();
-        _userContentManager?.Dispose();
-        _mainContainer?.Dispose();
-        _window?.Dispose();
-    }
-
-    internal LinuxMenuBackend CreateMenuBackend()
-    {
-        ThrowIfNotInitialized();
-        _menuBackend ??= new LinuxMenuBackend(_window, _mainContainer, _webView);
-        return _menuBackend;
-    }
-
-    internal LinuxDialogBackend CreateDialogBackend()
-    {
-        ThrowIfNotInitialized();
-        return new LinuxDialogBackend(_window);
-    }
-
-    internal LinuxContextMenuBackend CreateContextMenuBackend()
-    {
-        ThrowIfNotInitialized();
-        return new LinuxContextMenuBackend(_window);
-    }
-
-    internal Gtk.Window Window => _window;
-
-    private static void EnsureGtkInitialized()
-    {
-        if (s_gtkInitialized) return;
-
-        lock (s_initLock)
+        if (_windowHandle != IntPtr.Zero)
         {
-            if (s_gtkInitialized) return;
-
-            // Register native library resolver to handle webkit2gtk-4.0 -> 4.1 mapping
-            // Ubuntu 24.04+ only ships webkit2gtk-4.1, but GtkSharp bindings expect 4.0
-            RegisterWebKitLibraryResolver();
-
-            Gtk.Application.Init();
-            s_gtkInitialized = true;
-        }
-    }
-
-    private static bool s_resolverRegistered;
-
-    /// <summary>
-    /// Patches GtkSharp's internal library resolver to support webkit2gtk-4.1 on Ubuntu 24.04+.
-    /// This uses reflection and is not compatible with Native AOT trimming.
-    /// </summary>
-    /// <remarks>
-    /// When publishing with Native AOT, this method will be a no-op and the application
-    /// should ensure webkit2gtk-4.0 is available or use a custom library resolver.
-    /// </remarks>
-    [RequiresUnreferencedCode("Uses reflection to patch GtkSharp's internal library definitions")]
-    private static void RegisterWebKitLibraryResolver()
-    {
-        if (s_resolverRegistered) return;
-        s_resolverRegistered = true;
-
-        // GtkSharp uses its own GLibrary.Load mechanism with hardcoded library names.
-        // The standard NativeLibrary.SetDllImportResolver doesn't work because GtkSharp
-        // bypasses P/Invoke. We need to patch GLibrary's _libraryDefinitions dictionary
-        // via reflection to add webkit2gtk-4.1 support for Ubuntu 24.04+.
-        try
-        {
-            // Load WebkitGtkSharp assembly without triggering type initialization
-            var webkitAssembly = Assembly.Load("WebkitGtkSharp");
-
-            // Get the internal GLibrary class (compiled into each GtkSharp assembly)
-            var gLibraryType = webkitAssembly.GetType("GLibrary", throwOnError: false);
-            if (gLibraryType == null)
-            {
-                HermesLogger.Warning("Could not find GLibrary type for webkit2gtk-4.1 patching");
-                return;
-            }
-
-            // Get the _libraryDefinitions dictionary field
-            var definitionsField = gLibraryType.GetField("_libraryDefinitions",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            if (definitionsField == null)
-            {
-                HermesLogger.Warning("Could not find _libraryDefinitions field for webkit2gtk-4.1 patching");
-                return;
-            }
-
-            // Get the Library enum type
-            var libraryEnumType = webkitAssembly.GetType("Library", throwOnError: false);
-            if (libraryEnumType == null)
-            {
-                HermesLogger.Warning("Could not find Library enum for webkit2gtk-4.1 patching");
-                return;
-            }
-
-            // Get the Webkit enum value
-            var webkitEnumValue = Enum.Parse(libraryEnumType, "Webkit");
-
-            // Force the static constructor to run by accessing the field
-            // This initializes _libraryDefinitions with the default (4.0) values
-            var definitions = definitionsField.GetValue(null);
-            if (definitions == null)
-            {
-                HermesLogger.Warning("_libraryDefinitions is null");
-                return;
-            }
-
-            // The dictionary is Dictionary<Library, string[]> - use reflection to update it
-            var dictionaryType = definitions.GetType();
-            var indexer = dictionaryType.GetProperty("Item");
-
-            // Set new library names that include webkit2gtk-4.1 variants first
-            // On Ubuntu 24.04+, only 4.1 is available, so we try those first
-            var newLibraryNames = new[]
-            {
-                "libwebkit2gtk-4.1.so.0",  // Ubuntu 24.04+ (try first)
-                "libwebkit2gtk-4.1.so",
-                "libwebkit2gtk-4.0.so.37", // Ubuntu 22.04 and older
-                "libwebkit2gtk-4.0.dll",
-                "libwebkit2gtk-4.0.dylib",
-                "libwebkit2gtk-4.0.0.dll"
-            };
-
-            indexer?.SetValue(definitions, newLibraryNames, new[] { webkitEnumValue });
-            HermesLogger.Info("Patched GLibrary to support webkit2gtk-4.1");
-        }
-        catch (Exception ex)
-        {
-            HermesLogger.Warning($"Failed to patch webkit2gtk library definitions: {ex.Message}");
-        }
-    }
-
-    private void OnWindowDeleteEvent(object? sender, DeleteEventArgs args)
-    {
-        Closing?.Invoke();
-        args.RetVal = false; // Allow close to proceed
-    }
-
-    private void OnWindowConfigureEvent(object? sender, ConfigureEventArgs args)
-    {
-        var evt = args.Event;
-
-        // Fire Resized only when size actually changed
-        if (evt.Width != _lastWidth || evt.Height != _lastHeight)
-        {
-            _lastWidth = evt.Width;
-            _lastHeight = evt.Height;
-            Resized?.Invoke(evt.Width, evt.Height);
+            LinuxNative.WindowDestroy(_windowHandle);
+            _windowHandle = IntPtr.Zero;
         }
 
-        // Fire Moved only when position actually changed
-        if (evt.X != _lastX || evt.Y != _lastY)
-        {
-            _lastX = evt.X;
-            _lastY = evt.Y;
-            Moved?.Invoke(evt.X, evt.Y);
-        }
+        _pinnedDelegates.Clear();
     }
 
-    private void OnWindowFocusInEvent(object? sender, FocusInEventArgs args)
-    {
-        FocusIn?.Invoke();
-    }
-
-    private void OnWindowFocusOutEvent(object? sender, FocusOutEventArgs args)
-    {
-        FocusOut?.Invoke();
-    }
-
-    private void OnScriptMessageReceived(object? sender, ScriptMessageReceivedArgs args)
-    {
-        Console.WriteLine("[Hermes] OnScriptMessageReceived called");
-        Console.Out.Flush();
-
-        try
-        {
-            var jsResult = args.JsResult;
-            // Use JsValue property from the develop package
-            var value = jsResult.JsValue;
-
-            if (value.IsString)
-            {
-                var message = value.ToString();
-                Console.WriteLine($"[Hermes] JS message received: {message.Substring(0, Math.Min(100, message.Length))}...");
-                Console.Out.Flush();
-                WebMessageReceived?.Invoke(message);
-            }
-            else
-            {
-                Console.WriteLine($"[Hermes] JS message is not a string, IsString={value.IsString}");
-                Console.Out.Flush();
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Hermes] Failed to parse JavaScript message: {ex.Message}");
-            Console.Out.Flush();
-            HermesLogger.Warning($"Failed to parse JavaScript message result: {ex.Message}");
-        }
-    }
-
-    private void ThrowIfNotInitialized()
-    {
-        if (!_isInitialized)
-            throw new InvalidOperationException("Window not initialized. Call Initialize() first.");
-    }
+    #endregion
 }

@@ -46,6 +46,8 @@
     <None Include="$(CIArtifactsPath)/dll-osx/Hermes.pdb" Pack="true" PackagePath="runtimes/osx/lib/net10.0/" />
     <!-- macOS native library -->
     <None Include="$(CIArtifactsPath)/native/libHermes.Native.macOS.dylib" Pack="true" PackagePath="runtimes/osx/native/" />
+    <!-- Linux native library -->
+    <None Include="$(CIArtifactsPath)/native/libHermes.Native.Linux.so" Pack="true" PackagePath="runtimes/linux-x64/native/" />
     <!-- MSBuild targets for conditional platform dependencies -->
     <None Include="Hermes.targets" Pack="true" PackagePath="buildTransitive/net10.0/Mythetech.Hermes.targets" />
     <None Include="Hermes.targets" Pack="true" PackagePath="build/net10.0/Mythetech.Hermes.targets" />
@@ -86,13 +88,15 @@
     <Compile Remove="Platforms/Windows/**/*.cs" />
   </ItemGroup>
 
-  <!-- Linux dependencies and source files -->
-  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
-    <PackageReference Include="GtkSharp" Version="3.24.24.117-develop" />
-    <PackageReference Include="WebkitGtkSharp" Version="3.24.24.117-develop" />
-  </ItemGroup>
+  <!-- Linux source files (no managed dependencies - uses native library) -->
   <ItemGroup Condition="!$([MSBuild]::IsOSPlatform('Linux'))">
     <Compile Remove="Platforms/Linux/**/*.cs" />
+  </ItemGroup>
+  <!-- Native library copy for local development -->
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <None Include="$(MSBuildThisFileDirectory)../Hermes.Native.Linux/lib/libHermes.Native.Linux.so"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('$(MSBuildThisFileDirectory)../Hermes.Native.Linux/lib/libHermes.Native.Linux.so')" />
   </ItemGroup>
 
   <!-- macOS source files -->

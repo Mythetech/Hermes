@@ -1,191 +1,181 @@
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Hermes.Abstractions;
-using Gtk;
 
 namespace Hermes.Platforms.Linux;
 
 [SupportedOSPlatform("linux")]
 internal sealed class LinuxDialogBackend : IDialogBackend
 {
-    private readonly Gtk.Window _parentWindow;
+    private readonly IntPtr _windowHandle;
 
-    internal LinuxDialogBackend(Gtk.Window parentWindow)
+    internal LinuxDialogBackend(IntPtr windowHandle)
     {
-        _parentWindow = parentWindow;
+        _windowHandle = windowHandle;
     }
 
     public string[]? ShowOpenFile(string title, string? defaultPath, bool multiSelect, DialogFilter[]? filters)
     {
-        using var dialog = new FileChooserDialog(
-            title,
-            _parentWindow,
-            FileChooserAction.Open,
-            "Cancel", ResponseType.Cancel,
-            "Open", ResponseType.Accept);
+        var (filtersPtr, filterCount) = MarshalFilters(filters);
 
-        dialog.SelectMultiple = multiSelect;
-
-        if (!string.IsNullOrEmpty(defaultPath) && Directory.Exists(defaultPath))
+        try
         {
-            dialog.SetCurrentFolder(defaultPath);
+            var resultPtr = LinuxNative.DialogShowOpenFile(
+                _windowHandle,
+                title,
+                defaultPath,
+                multiSelect,
+                filtersPtr,
+                filterCount,
+                out int resultCount);
+
+            return UnmarshalStringArray(resultPtr, resultCount);
         }
-
-        ApplyFilters(dialog, filters);
-
-        var response = (ResponseType)dialog.Run();
-
-        if (response == ResponseType.Accept)
+        finally
         {
-            var filenames = dialog.Filenames;
-            dialog.Destroy();
-            return filenames;
+            FreeFilters(filtersPtr, filterCount);
         }
-
-        dialog.Destroy();
-        return null;
     }
 
     public string[]? ShowOpenFolder(string title, string? defaultPath, bool multiSelect)
     {
-        using var dialog = new FileChooserDialog(
+        var resultPtr = LinuxNative.DialogShowOpenFolder(
+            _windowHandle,
             title,
-            _parentWindow,
-            FileChooserAction.SelectFolder,
-            "Cancel", ResponseType.Cancel,
-            "Select", ResponseType.Accept);
+            defaultPath,
+            multiSelect,
+            out int resultCount);
 
-        dialog.SelectMultiple = multiSelect;
-
-        if (!string.IsNullOrEmpty(defaultPath) && Directory.Exists(defaultPath))
-        {
-            dialog.SetCurrentFolder(defaultPath);
-        }
-
-        var response = (ResponseType)dialog.Run();
-
-        if (response == ResponseType.Accept)
-        {
-            var filenames = dialog.Filenames;
-            dialog.Destroy();
-            return filenames;
-        }
-
-        dialog.Destroy();
-        return null;
+        return UnmarshalStringArray(resultPtr, resultCount);
     }
 
     public string? ShowSaveFile(string title, string? defaultPath, DialogFilter[]? filters, string? defaultFileName)
     {
-        using var dialog = new FileChooserDialog(
-            title,
-            _parentWindow,
-            FileChooserAction.Save,
-            "Cancel", ResponseType.Cancel,
-            "Save", ResponseType.Accept);
+        var (filtersPtr, filterCount) = MarshalFilters(filters);
 
-        dialog.DoOverwriteConfirmation = true;
-
-        if (!string.IsNullOrEmpty(defaultPath) && Directory.Exists(defaultPath))
+        try
         {
-            dialog.SetCurrentFolder(defaultPath);
-        }
+            var resultPtr = LinuxNative.DialogShowSaveFile(
+                _windowHandle,
+                title,
+                defaultPath,
+                filtersPtr,
+                filterCount,
+                defaultFileName);
 
-        if (!string.IsNullOrEmpty(defaultFileName))
+            if (resultPtr == IntPtr.Zero)
+                return null;
+
+            var result = Marshal.PtrToStringUTF8(resultPtr);
+            LinuxNative.Free(resultPtr);
+            return result;
+        }
+        finally
         {
-            dialog.CurrentName = defaultFileName;
+            FreeFilters(filtersPtr, filterCount);
         }
-
-        ApplyFilters(dialog, filters);
-
-        var response = (ResponseType)dialog.Run();
-
-        if (response == ResponseType.Accept)
-        {
-            var filename = dialog.Filename;
-            dialog.Destroy();
-            return filename;
-        }
-
-        dialog.Destroy();
-        return null;
     }
 
-    public Abstractions.DialogResult ShowMessage(string title, string message, DialogButtons buttons, DialogIcon icon)
+    public DialogResult ShowMessage(string title, string message, DialogButtons buttons, DialogIcon icon)
     {
-        var gtkButtons = buttons switch
+        // Map to native enum values
+        var nativeButtons = buttons switch
         {
-            DialogButtons.Ok => ButtonsType.Ok,
-            DialogButtons.OkCancel => ButtonsType.OkCancel,
-            DialogButtons.YesNo => ButtonsType.YesNo,
-            DialogButtons.YesNoCancel => ButtonsType.None, // Need custom buttons
-            _ => ButtonsType.Ok
+            DialogButtons.Ok => 0,          // DialogButtons_Ok
+            DialogButtons.OkCancel => 1,    // DialogButtons_OkCancel
+            DialogButtons.YesNo => 2,       // DialogButtons_YesNo
+            DialogButtons.YesNoCancel => 3, // DialogButtons_YesNoCancel
+            _ => 0
         };
 
-        var gtkMessageType = icon switch
+        var nativeIcon = icon switch
         {
-            DialogIcon.Info => MessageType.Info,
-            DialogIcon.Warning => MessageType.Warning,
-            DialogIcon.Error => MessageType.Error,
-            DialogIcon.Question => MessageType.Question,
-            _ => MessageType.Info
+            DialogIcon.Info => 0,     // DialogIcon_Info
+            DialogIcon.Warning => 1,  // DialogIcon_Warning
+            DialogIcon.Error => 2,    // DialogIcon_Error
+            DialogIcon.Question => 3, // DialogIcon_Question
+            _ => 0
         };
 
-        using var dialog = new MessageDialog(
-            _parentWindow,
-            DialogFlags.Modal | DialogFlags.DestroyWithParent,
-            gtkMessageType,
-            gtkButtons,
-            message);
+        var nativeResult = LinuxNative.DialogShowMessage(
+            _windowHandle,
+            title,
+            message,
+            nativeButtons,
+            nativeIcon);
 
-        dialog.Title = title;
-
-        // Add custom buttons for YesNoCancel
-        if (buttons == DialogButtons.YesNoCancel)
+        // Map native result back to DialogResult
+        return nativeResult switch
         {
-            dialog.AddButton("Yes", ResponseType.Yes);
-            dialog.AddButton("No", ResponseType.No);
-            dialog.AddButton("Cancel", ResponseType.Cancel);
-        }
-
-        var response = (ResponseType)dialog.Run();
-        dialog.Destroy();
-
-        return response switch
-        {
-            ResponseType.Ok => Abstractions.DialogResult.Ok,
-            ResponseType.Cancel => Abstractions.DialogResult.Cancel,
-            ResponseType.Yes => Abstractions.DialogResult.Yes,
-            ResponseType.No => Abstractions.DialogResult.No,
-            ResponseType.DeleteEvent => Abstractions.DialogResult.Cancel, // Window closed
-            _ => Abstractions.DialogResult.Cancel
+            0 => DialogResult.Ok,     // DialogResult_Ok
+            1 => DialogResult.Cancel, // DialogResult_Cancel
+            2 => DialogResult.Yes,    // DialogResult_Yes
+            3 => DialogResult.No,     // DialogResult_No
+            _ => DialogResult.Cancel
         };
     }
 
-    private static void ApplyFilters(FileChooserDialog dialog, DialogFilter[]? filters)
+    #region Private Helpers
+
+    /// <summary>
+    /// Unmarshals a native string array and frees the native memory.
+    /// </summary>
+    private static string[]? UnmarshalStringArray(IntPtr ptr, int count)
+    {
+        if (ptr == IntPtr.Zero || count == 0)
+            return null;
+
+        var result = new string[count];
+        for (int i = 0; i < count; i++)
+        {
+            var strPtr = Marshal.ReadIntPtr(ptr, i * IntPtr.Size);
+            result[i] = Marshal.PtrToStringUTF8(strPtr) ?? "";
+        }
+
+        LinuxNative.FreeStringArray(ptr, count);
+        return result;
+    }
+
+    /// <summary>
+    /// Marshals DialogFilter array to native format.
+    /// Each filter is encoded as "Name|ext1;ext2;ext3" string.
+    /// </summary>
+    private static (IntPtr, int) MarshalFilters(DialogFilter[]? filters)
     {
         if (filters == null || filters.Length == 0)
+            return (IntPtr.Zero, 0);
+
+        // Allocate array of pointers
+        var arrayPtr = Marshal.AllocHGlobal(filters.Length * IntPtr.Size);
+
+        for (int i = 0; i < filters.Length; i++)
         {
-            var allFilter = new FileFilter { Name = "All Files" };
-            allFilter.AddPattern("*");
-            dialog.AddFilter(allFilter);
-            return;
+            var filter = filters[i];
+            // Format: "Name|ext1;ext2;ext3"
+            var filterStr = $"{filter.Name}|{string.Join(";", filter.Extensions)}";
+            var strPtr = Marshal.StringToHGlobalAnsi(filterStr);
+            Marshal.WriteIntPtr(arrayPtr, i * IntPtr.Size, strPtr);
         }
 
-        foreach (var filter in filters)
-        {
-            var gtkFilter = new FileFilter { Name = filter.Name };
-
-            foreach (var ext in filter.Extensions)
-            {
-                gtkFilter.AddPattern($"*.{ext}");
-            }
-
-            dialog.AddFilter(gtkFilter);
-        }
-
-        // Also add an "All Files" option
-        var allFilesFilter = new FileFilter { Name = "All Files" };
-        allFilesFilter.AddPattern("*");
-        dialog.AddFilter(allFilesFilter);
+        return (arrayPtr, filters.Length);
     }
+
+    /// <summary>
+    /// Frees the native filter array.
+    /// </summary>
+    private static void FreeFilters(IntPtr arrayPtr, int count)
+    {
+        if (arrayPtr == IntPtr.Zero)
+            return;
+
+        for (int i = 0; i < count; i++)
+        {
+            var strPtr = Marshal.ReadIntPtr(arrayPtr, i * IntPtr.Size);
+            Marshal.FreeHGlobal(strPtr);
+        }
+
+        Marshal.FreeHGlobal(arrayPtr);
+    }
+
+    #endregion
 }
