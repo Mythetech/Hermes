@@ -122,27 +122,27 @@ internal sealed class WindowsCustomTitlebar
         {
             // Top-left corner
             if (relX < resizeBorder && relY < resizeBorder)
-                return new LRESULT(PInvoke.HTTOPLEFT);
+                return new LRESULT((nint)PInvoke.HTTOPLEFT);
 
             // Top-right corner
             if (relX >= width - resizeBorder && relY < resizeBorder)
-                return new LRESULT(PInvoke.HTTOPRIGHT);
+                return new LRESULT((nint)PInvoke.HTTOPRIGHT);
 
             // Bottom-left corner
             if (relX < resizeBorder && relY >= height - resizeBorder)
-                return new LRESULT(PInvoke.HTBOTTOMLEFT);
+                return new LRESULT((nint)PInvoke.HTBOTTOMLEFT);
 
             // Bottom-right corner
             if (relX >= width - resizeBorder && relY >= height - resizeBorder)
-                return new LRESULT(PInvoke.HTBOTTOMRIGHT);
+                return new LRESULT((nint)PInvoke.HTBOTTOMRIGHT);
 
             // Left edge
             if (relX < resizeBorder)
-                return new LRESULT(PInvoke.HTLEFT);
+                return new LRESULT((nint)PInvoke.HTLEFT);
 
             // Right edge
             if (relX >= width - resizeBorder)
-                return new LRESULT(PInvoke.HTRIGHT);
+                return new LRESULT((nint)PInvoke.HTRIGHT);
 
             // Top edge (but not in titlebar caption button area)
             if (relY < resizeBorder)
@@ -150,12 +150,12 @@ internal sealed class WindowsCustomTitlebar
                 // Allow resize at very top except over caption buttons
                 int captionButtonsWidth = ScaleForDpi(CaptionButtonWidth * 3); // Close + Max + Min
                 if (relX < width - captionButtonsWidth)
-                    return new LRESULT(PInvoke.HTTOP);
+                    return new LRESULT((nint)PInvoke.HTTOP);
             }
 
             // Bottom edge
             if (relY >= height - resizeBorder)
-                return new LRESULT(PInvoke.HTBOTTOM);
+                return new LRESULT((nint)PInvoke.HTBOTTOM);
         }
 
         // Check if in titlebar area
@@ -171,7 +171,7 @@ internal sealed class WindowsCustomTitlebar
             int iconWidth = ScaleForDpi(46);
             if (relX < iconWidth)
             {
-                return new LRESULT(PInvoke.HTSYSMENU);
+                return new LRESULT((nint)PInvoke.HTSYSMENU);
             }
 
             // Caption buttons area (far right)
@@ -183,19 +183,19 @@ internal sealed class WindowsCustomTitlebar
 
                 return buttonIndex switch
                 {
-                    0 => new LRESULT(PInvoke.HTMINBUTTON), // Minimize
-                    1 => new LRESULT(PInvoke.HTMAXBUTTON), // Maximize/Restore
-                    _ => new LRESULT(PInvoke.HTCLOSE),     // Close
+                    0 => new LRESULT((nint)PInvoke.HTMINBUTTON), // Minimize
+                    1 => new LRESULT((nint)PInvoke.HTMAXBUTTON), // Maximize/Restore
+                    _ => new LRESULT((nint)PInvoke.HTCLOSE),     // Close
                 };
             }
 
             // Draggable titlebar area
-            return new LRESULT(PInvoke.HTCAPTION);
+            return new LRESULT((nint)PInvoke.HTCAPTION);
         }
 
         // Client area
         handled = false;
-        return new LRESULT(PInvoke.HTCLIENT);
+        return new LRESULT((nint)PInvoke.HTCLIENT);
     }
 
     private int ScaleForDpi(int value)

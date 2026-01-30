@@ -43,6 +43,8 @@ DPI_AWARENESS_CONTEXT
 GetSystemMetrics
 MonitorFromWindow
 GetMonitorInfoW
+MONITORINFO
+MONITOR_FROM_FLAGS
 
 // Menu APIs
 CreateMenu
