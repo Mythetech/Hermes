@@ -21,10 +21,6 @@
 
     <ItemGroup>
       <_HermesContentAssetsToCopy>
-        <DestinationPath>$([MSBuild]::NormalizePath($(_HermesWwwrootPath), %(BasePath), %(RelativePath)))</DestinationPath>
-      </_HermesContentAssetsToCopy>
-
-      <_HermesContentAssetsToCopy Condition="'%(RelativePath)' == ''">
         <DestinationPath>$([MSBuild]::NormalizePath($(_HermesWwwrootPath), %(BasePath), %(Filename)%(Extension)))</DestinationPath>
       </_HermesContentAssetsToCopy>
     </ItemGroup>
@@ -51,10 +47,6 @@
 
     <ItemGroup>
       <_HermesContentAssetsToCopy>
-        <DestinationPath>$([MSBuild]::NormalizePath($(_HermesWwwrootPath), %(BasePath), %(RelativePath)))</DestinationPath>
-      </_HermesContentAssetsToCopy>
-
-      <_HermesContentAssetsToCopy Condition="'%(RelativePath)' == ''">
         <DestinationPath>$([MSBuild]::NormalizePath($(_HermesWwwrootPath), %(BasePath), %(Filename)%(Extension)))</DestinationPath>
       </_HermesContentAssetsToCopy>
     </ItemGroup>
