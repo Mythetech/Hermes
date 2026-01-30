@@ -1,0 +1,14 @@
+{
+  "name": "tauri-test-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build:blazor": "dotnet publish BlazorApp -c Release -o dist",
+    "build:tauri": "cargo tauri build",
+    "build": "npm run build:blazor && npm run build:tauri",
+    "dev": "cargo tauri dev"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.6"
+  }
+}

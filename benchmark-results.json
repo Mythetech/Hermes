@@ -1,0 +1,72 @@
+{
+  "Timestamp": "2026-01-30T06:33:35.575275Z",
+  "Environment": {
+    "OS": "Unix 15.7.4",
+    "Runtime": ".NET 10.0.1",
+    "ProcessorCount": 10,
+    "MachineName": "Toms-MacBook-Pro"
+  },
+  "Hermes": {
+    "Name": "Hermes",
+    "StartupTimeMs": {
+      "Mean": 530.6773333333333,
+      "Median": 540.83,
+      "Min": 460.67,
+      "Max": 599.87,
+      "StdDev": 36.269727182390795,
+      "P95": 595.53,
+      "SampleCount": 30
+    },
+    "PeakMemoryMB": {
+      "Mean": 75.6828125,
+      "Median": 73.21875,
+      "Min": 71.28125,
+      "Max": 98.515625,
+      "StdDev": 7.4107262566951055,
+      "P95": 98.0625,
+      "SampleCount": 30
+    }
+  },
+  "Photino": {
+    "Name": "Photino",
+    "StartupTimeMs": {
+      "Mean": 522.0879999999999,
+      "Median": 511.01,
+      "Min": 475.45,
+      "Max": 618.81,
+      "StdDev": 36.95659713399135,
+      "P95": 578.57,
+      "SampleCount": 30
+    },
+    "PeakMemoryMB": {
+      "Mean": 86.66041666666666,
+      "Median": 82.4375,
+      "Min": 76.34375,
+      "Max": 109.140625,
+      "StdDev": 9.752073729973638,
+      "P95": 107.84375,
+      "SampleCount": 30
+    }
+  },
+  "Tauri": {
+    "Name": "Tauri",
+    "StartupTimeMs": {
+      "Mean": 418.73333333333335,
+      "Median": 417,
+      "Min": 405,
+      "Max": 442,
+      "StdDev": 9.001660127858154,
+      "P95": 438,
+      "SampleCount": 30
+    },
+    "PeakMemoryMB": {
+      "Mean": 53.96666666666667,
+      "Median": 52.515625,
+      "Min": 52.296875,
+      "Max": 64.28125,
+      "StdDev": 3.091906488068914,
+      "P95": 63.140625,
+      "SampleCount": 30
+    }
+  }
+}

@@ -419,3 +419,4 @@ FodyWeavers.xsd
 
 # macOS native library build output
 src/Hermes.Native.macOS/lib/
+**/dist/**

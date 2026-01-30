@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "TauriTestApp",
+  "version": "0.1.0",
+  "identifier": "com.hermes.benchmark.tauri",
+  "build": {
+    "frontendDist": "../dist/wwwroot"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Tauri Benchmark App",
+        "width": 800,
+        "height": 600
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false
+  }
+}

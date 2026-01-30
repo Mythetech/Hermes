@@ -144,3 +144,37 @@ WNDCLASS_STYLES
 
 // Color References (enum)
 SYS_COLOR_INDEX
+
+// DWM APIs (Desktop Window Manager)
+DwmExtendFrameIntoClientArea
+DwmSetWindowAttribute
+DwmGetColorizationColor
+MARGINS
+DWMWINDOWATTRIBUTE
+
+// Non-client area messages and structures
+WM_NCCALCSIZE
+WM_NCHITTEST
+NCCALCSIZE_PARAMS
+
+// Hit-test return values
+HTCLIENT
+HTCAPTION
+HTSYSMENU
+HTMINBUTTON
+HTMAXBUTTON
+HTCLOSE
+HTLEFT
+HTRIGHT
+HTTOP
+HTTOPLEFT
+HTTOPRIGHT
+HTBOTTOM
+HTBOTTOMLEFT
+HTBOTTOMRIGHT
+HTNOWHERE
+HTTRANSPARENT
+
+// Additional window messages
+WM_NCACTIVATE
+WM_NCPAINT

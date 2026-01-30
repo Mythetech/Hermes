@@ -26,6 +26,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
     private readonly List<ACCEL> _accelerators = new();
     private HACCEL _hAccelTable;
     private bool _accelTableDirty;
+    private readonly bool _useNativeMenu;
 
     public event Action<string>? MenuItemClicked;
 
@@ -42,15 +43,21 @@ internal sealed class WindowsMenuBackend : IMenuBackend
         }
     }
 
-    internal WindowsMenuBackend(HWND hwnd)
+    internal WindowsMenuBackend(HWND hwnd, bool useNativeMenu = true)
     {
         _hwnd = hwnd;
+        _useNativeMenu = useNativeMenu;
         _hMenuBar = PInvoke.CreateMenu();
 
         if (_hMenuBar.IsNull)
             throw new InvalidOperationException("Failed to create menu bar");
 
-        PInvoke.SetMenu(_hwnd, _hMenuBar);
+        // Only set the native menu bar when not using custom titlebar
+        // With custom titlebar, menus are rendered in the WebView
+        if (_useNativeMenu)
+        {
+            PInvoke.SetMenu(_hwnd, _hMenuBar);
+        }
     }
 
     public void AddMenu(string label, int insertIndex = -1)
@@ -76,7 +83,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
             }
         }
 
-        PInvoke.DrawMenuBar(_hwnd);
+        if (_useNativeMenu) PInvoke.DrawMenuBar(_hwnd);
     }
 
     public void RemoveMenu(string label)
@@ -97,7 +104,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
 
         _menusByLabel.Remove(label);
         PInvoke.DestroyMenu(hMenu);
-        PInvoke.DrawMenuBar(_hwnd);
+        if (_useNativeMenu) PInvoke.DrawMenuBar(_hwnd);
     }
 
     public void AddItem(string menuLabel, string itemId, string itemLabel, string? accelerator = null)
@@ -116,7 +123,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
         if (!string.IsNullOrEmpty(accelerator))
             RegisterAccelerator(id, accelerator);
 
-        PInvoke.DrawMenuBar(_hwnd);
+        if (_useNativeMenu) PInvoke.DrawMenuBar(_hwnd);
     }
 
     public void InsertItem(string menuLabel, string afterItemId, string itemId, string itemLabel, string? accelerator = null)
@@ -142,7 +149,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
         if (!string.IsNullOrEmpty(accelerator))
             RegisterAccelerator(id, accelerator);
 
-        PInvoke.DrawMenuBar(_hwnd);
+        if (_useNativeMenu) PInvoke.DrawMenuBar(_hwnd);
     }
 
     public void RemoveItem(string menuLabel, string itemId)
@@ -157,7 +164,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
         _itemIdByCommandId.Remove(itemId);
         _commandIdByItemId.Remove(id);
 
-        PInvoke.DrawMenuBar(_hwnd);
+        if (_useNativeMenu) PInvoke.DrawMenuBar(_hwnd);
     }
 
     public void AddSeparator(string menuLabel)
@@ -166,7 +173,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
             throw new ArgumentException($"Menu '{menuLabel}' not found", nameof(menuLabel));
 
         PInvoke.AppendMenu(hMenu, MENU_ITEM_FLAGS.MF_SEPARATOR, 0, (string?)null);
-        PInvoke.DrawMenuBar(_hwnd);
+        if (_useNativeMenu) PInvoke.DrawMenuBar(_hwnd);
     }
 
     public void SetItemEnabled(string menuLabel, string itemId, bool enabled)
@@ -200,7 +207,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
 
         PInvoke.ModifyMenu(hMenu, id, MENU_ITEM_FLAGS.MF_BYCOMMAND | MENU_ITEM_FLAGS.MF_STRING,
             id, label);
-        PInvoke.DrawMenuBar(_hwnd);
+        if (_useNativeMenu) PInvoke.DrawMenuBar(_hwnd);
     }
 
     public void SetItemAccelerator(string menuLabel, string itemId, string accelerator)
@@ -218,7 +225,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
 
         PInvoke.ModifyMenu(hMenu, id, MENU_ITEM_FLAGS.MF_BYCOMMAND | MENU_ITEM_FLAGS.MF_STRING,
             id, newLabel);
-        PInvoke.DrawMenuBar(_hwnd);
+        if (_useNativeMenu) PInvoke.DrawMenuBar(_hwnd);
     }
 
     #region Submenu Operations
@@ -241,7 +248,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
         var fullPath = $"{menuPath}/{submenuLabel}";
         _submenusByPath[fullPath] = hSubmenu;
 
-        PInvoke.DrawMenuBar(_hwnd);
+        if (_useNativeMenu) PInvoke.DrawMenuBar(_hwnd);
     }
 
     public void AddSubmenuItem(string menuPath, string itemId, string itemLabel, string? accelerator = null)
@@ -261,7 +268,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
         if (!string.IsNullOrEmpty(accelerator))
             RegisterAccelerator(id, accelerator);
 
-        PInvoke.DrawMenuBar(_hwnd);
+        if (_useNativeMenu) PInvoke.DrawMenuBar(_hwnd);
     }
 
     public void AddSubmenuSeparator(string menuPath)
@@ -271,7 +278,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
             throw new ArgumentException($"Menu '{menuPath}' not found", nameof(menuPath));
 
         PInvoke.AppendMenu(menu.Value, MENU_ITEM_FLAGS.MF_SEPARATOR, 0, (string?)null);
-        PInvoke.DrawMenuBar(_hwnd);
+        if (_useNativeMenu) PInvoke.DrawMenuBar(_hwnd);
     }
 
     #endregion
@@ -298,7 +305,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
         }
 
         _appMenu = hPopup;
-        PInvoke.DrawMenuBar(_hwnd);
+        if (_useNativeMenu) PInvoke.DrawMenuBar(_hwnd);
 
         return hPopup;
     }
@@ -320,14 +327,14 @@ internal sealed class WindowsMenuBackend : IMenuBackend
         if (!string.IsNullOrEmpty(accelerator))
             RegisterAccelerator(id, accelerator);
 
-        PInvoke.DrawMenuBar(_hwnd);
+        if (_useNativeMenu) PInvoke.DrawMenuBar(_hwnd);
     }
 
     public void AddAppMenuSeparator(string? position = null)
     {
         var appMenu = EnsureAppMenu();
         PInvoke.AppendMenu(appMenu, MENU_ITEM_FLAGS.MF_SEPARATOR, 0, (string?)null);
-        PInvoke.DrawMenuBar(_hwnd);
+        if (_useNativeMenu) PInvoke.DrawMenuBar(_hwnd);
     }
 
     public void RemoveAppMenuItem(string itemId)
@@ -339,7 +346,7 @@ internal sealed class WindowsMenuBackend : IMenuBackend
         _itemIdByCommandId.Remove(itemId);
         _commandIdByItemId.Remove(id);
 
-        PInvoke.DrawMenuBar(_hwnd);
+        if (_useNativeMenu) PInvoke.DrawMenuBar(_hwnd);
     }
 
     #endregion

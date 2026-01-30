@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tauri Benchmark App</title>
+    <base href="/" />
+    <style>
+        body { font-family: sans-serif; margin: 40px; }
+        .ready { text-align: center; }
+        .ready h1 { color: #512BD4; }
+    </style>
+</head>
+<body>
+    <div id="app">Loading...</div>
+
+    <script>
+        // Record start time immediately
+        const startTime = performance.now();
+
+        // Function to get elapsed time since page started loading
+        window.getElapsedTime = function() {
+            return performance.now() - startTime;
+        };
+
+        // Function to invoke Tauri command
+        window.invokeTauri = async function(time) {
+            if (window.__TAURI__) {
+                await window.__TAURI__.core.invoke('benchmark_ready', { time: time });
+            } else {
+                console.log('BENCHMARK_READY:' + time.toFixed(2));
+            }
+        };
+    </script>
+    <script src="_framework/blazor.webassembly.js"></script>
+</body>
+</html>

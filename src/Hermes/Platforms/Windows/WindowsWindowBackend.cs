@@ -41,6 +41,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     private readonly Dictionary<string, Func<string, (Stream? Content, string? ContentType)>> _customSchemeHandlers = new();
 
     private WindowsMenuBackend? _menuBackend;
+    private WindowsCustomTitlebar? _customTitlebar;
 
     public event Action? Closing;
     public event Action<int, int>? Resized;
@@ -67,11 +68,8 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         _options = options;
         _uiThreadId = Environment.CurrentManagedThreadId;
 
-        // CustomTitleBar on Windows enables chromeless mode for custom window chrome
-        if (_options.CustomTitleBar)
-        {
-            _options.Chromeless = true;
-        }
+        // CustomTitleBar on Windows uses DWM frame extension, NOT chromeless mode
+        // This preserves native caption buttons while allowing custom titlebar content
 
         EnsureWindowClassRegistered();
 
@@ -110,6 +108,13 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to create window");
 
         s_hwndToInstance[_hwnd] = this;
+
+        // Initialize custom titlebar if enabled (after window created, before showing)
+        if (options.CustomTitleBar)
+        {
+            _customTitlebar = new WindowsCustomTitlebar(_hwnd);
+            _customTitlebar.Initialize();
+        }
 
         if (!string.IsNullOrEmpty(options.IconPath))
             SetIcon(options.IconPath);
@@ -376,7 +381,10 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     internal WindowsMenuBackend CreateMenuBackend()
     {
         ThrowIfNotInitialized();
-        _menuBackend ??= new WindowsMenuBackend(_hwnd);
+        // When custom titlebar is enabled, don't use native menu bar
+        // Menus should be rendered in the WebView instead
+        bool useNativeMenu = _customTitlebar is null;
+        _menuBackend ??= new WindowsMenuBackend(_hwnd, useNativeMenu);
         return _menuBackend;
     }
 
@@ -436,6 +444,30 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     {
         if (!s_hwndToInstance.TryGetValue(hwnd, out var instance))
             return PInvoke.DefWindowProc(hwnd, uMsg, wParam, lParam);
+
+        // Handle custom titlebar messages first if enabled
+        if (instance._customTitlebar is not null)
+        {
+            switch (uMsg)
+            {
+                case PInvoke.WM_NCCALCSIZE:
+                    return instance._customTitlebar.HandleNcCalcSize(wParam, lParam);
+
+                case PInvoke.WM_NCHITTEST:
+                    var result = instance._customTitlebar.HandleNcHitTest(lParam, out var handled);
+                    if (handled)
+                        return result;
+                    break;
+
+                case PInvoke.WM_NCACTIVATE:
+                    // Always return TRUE to prevent visual changes, let DWM handle rendering
+                    return new LRESULT(1);
+
+                case PInvoke.WM_DPICHANGED:
+                    instance.HandleDpiChanged(wParam, lParam);
+                    break;
+            }
+        }
 
         return uMsg switch
         {
@@ -544,6 +576,23 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
             }
         }
         return new LRESULT(0);
+    }
+
+    private void HandleDpiChanged(WPARAM wParam, LPARAM lParam)
+    {
+        int newDpi = (int)(wParam.Value & 0xFFFF);
+        _customTitlebar?.UpdateDpi(newDpi);
+
+        // lParam contains a pointer to the suggested new window rect
+        unsafe
+        {
+            var pRect = (RECT*)lParam.Value;
+            PInvoke.SetWindowPos(_hwnd, HWND.Null,
+                pRect->left, pRect->top,
+                pRect->right - pRect->left,
+                pRect->bottom - pRect->top,
+                SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE);
+        }
     }
 
     private async Task InitializeWebViewAsync()
@@ -714,8 +763,20 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         if (_webViewController is null || _hwnd.IsNull) return;
 
         PInvoke.GetClientRect(_hwnd, out var rect);
+
+        int top = 0;
+        int height = rect.bottom - rect.top;
+
+        // Offset for custom titlebar if enabled
+        if (_customTitlebar is not null)
+        {
+            top = _customTitlebar.TitlebarHeight;
+            height -= top;
+            if (height < 0) height = 0;
+        }
+
         _webViewController.Bounds = new System.Drawing.Rectangle(
-            0, 0, rect.right - rect.left, rect.bottom - rect.top);
+            0, top, rect.right - rect.left, height);
     }
 
     private void RunMessageLoop()

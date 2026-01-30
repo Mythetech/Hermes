@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schemas.tauri.app/capability",
+  "identifier": "default",
+  "description": "Default capabilities for the benchmark app",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}
