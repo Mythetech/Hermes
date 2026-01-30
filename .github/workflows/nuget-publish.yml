@@ -171,10 +171,16 @@ jobs:
           name: dll-osx
           path: artifacts/dll-osx
 
-      - name: Download Native Binary
+      - name: Download Native Binary (macOS)
         uses: actions/download-artifact@v4
         with:
           name: native-osx
+          path: artifacts/native
+
+      - name: Download Native Binary (Linux)
+        uses: actions/download-artifact@v4
+        with:
+          name: native-linux
           path: artifacts/native
 
       - name: Restore
