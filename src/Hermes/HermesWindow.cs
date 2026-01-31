@@ -19,6 +19,12 @@ public sealed class HermesWindow : IDisposable
     private bool _initialized;
     private bool _disposed;
 
+    // Track last known normal (non-maximized) window state for persistence
+    private int _lastNormalX;
+    private int _lastNormalY;
+    private int _lastNormalWidth;
+    private int _lastNormalHeight;
+
     /// <summary>
     /// Pre-warm platform resources for faster first-window creation.
     /// Call this early in application startup (e.g., at the start of Main()).
@@ -627,10 +633,15 @@ public sealed class HermesWindow : IDisposable
 
         _backend.Initialize(_options);
 
-        // Subscribe to closing event for state persistence
+        // Subscribe to events for state persistence
         if (_windowStateKey is not null)
         {
             _backend.Closing += SaveWindowState;
+            _backend.Resized += OnResizedForPersistence;
+            _backend.Moved += OnMovedForPersistence;
+            _backend.Maximized += OnMaximizedForPersistence;
+            _backend.Restored += OnRestoredForPersistence;
+            CaptureNormalState();
         }
 
         _initialized = true;
@@ -677,6 +688,75 @@ public sealed class HermesWindow : IDisposable
         {
             HermesLogger.Error($"Failed to save window state for '{_windowStateKey}': {ex.Message}");
         }
+    }
+
+    private void SaveWindowStateWithDimensions(int x, int y, int width, int height, bool isMaximized)
+    {
+        if (_windowStateKey is null || !_initialized)
+            return;
+
+        try
+        {
+            var state = new WindowState
+            {
+                X = x,
+                Y = y,
+                Width = width,
+                Height = height,
+                IsMaximized = isMaximized
+            };
+
+            WindowStateStore.Instance.SaveState(_windowStateKey, state);
+            HermesLogger.Info($"Saved window state for '{_windowStateKey}'");
+        }
+        catch (Exception ex)
+        {
+            HermesLogger.Error($"Failed to save window state for '{_windowStateKey}': {ex.Message}");
+        }
+    }
+
+    private void CaptureNormalState()
+    {
+        if (!_backend.IsMaximized)
+        {
+            var pos = _backend.Position;
+            var size = _backend.Size;
+            _lastNormalX = pos.X;
+            _lastNormalY = pos.Y;
+            _lastNormalWidth = size.Width;
+            _lastNormalHeight = size.Height;
+        }
+    }
+
+    private void OnResizedForPersistence(int width, int height)
+    {
+        if (!_backend.IsMaximized)
+        {
+            _lastNormalWidth = width;
+            _lastNormalHeight = height;
+        }
+    }
+
+    private void OnMovedForPersistence(int x, int y)
+    {
+        if (!_backend.IsMaximized)
+        {
+            _lastNormalX = x;
+            _lastNormalY = y;
+        }
+    }
+
+    private void OnMaximizedForPersistence()
+    {
+        // Save the cached normal state (captured before maximize)
+        SaveWindowStateWithDimensions(_lastNormalX, _lastNormalY,
+            _lastNormalWidth, _lastNormalHeight, isMaximized: true);
+    }
+
+    private void OnRestoredForPersistence()
+    {
+        // After restore, save current (now normal) state
+        SaveWindowState();
     }
 
     private void ThrowIfInitialized()
