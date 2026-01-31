@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Hermes.Blazor.Threading;
+using Hermes.Diagnostics;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.Configuration;
@@ -123,19 +124,42 @@ public sealed class HermesBlazorApp : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            // Navigate to error page if initialization fails
-            var errorHtml = $@"<!DOCTYPE html>
+            HermesLogger.Error($"Blazor initialization failed: {ex}");
+            _window.LoadHtml(CreateErrorHtml(ex));
+        }
+    }
+
+    private static string CreateErrorHtml(Exception ex)
+    {
+        var errorId = Guid.NewGuid().ToString("N")[..8];
+        var details = System.Net.WebUtility.HtmlEncode(ex.ToString());
+#if DEBUG
+        var detailsOpen = "open";
+        var buildNote = " (Debug Build)";
+#else
+        var detailsOpen = "";
+        var buildNote = "";
+#endif
+
+        return $@"<!DOCTYPE html>
 <html>
 <head><style>
-    body {{ font-family: sans-serif; padding: 20px; color: #c00; }}
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; color: #333; }}
+    h1 {{ color: #c00; font-size: 1.5em; }}
+    .error-id {{ font-size: 0.85em; color: #666; }}
+    summary {{ cursor: pointer; color: #0066cc; }}
+    pre {{ background: #f5f5f5; padding: 1em; overflow: auto; font-size: 0.85em; border-radius: 4px; }}
 </style></head>
 <body>
     <h1>Startup Error</h1>
-    <pre>{System.Net.WebUtility.HtmlEncode(ex.ToString())}</pre>
+    <p>The application encountered an error during startup.</p>
+    <p class=""error-id"">Error ID: {errorId}</p>
+    <details {detailsOpen}>
+        <summary>Technical Details{buildNote}</summary>
+        <pre>{details}</pre>
+    </details>
 </body>
 </html>";
-            _window.LoadHtml(errorHtml);
-        }
     }
 
     public async ValueTask DisposeAsync()

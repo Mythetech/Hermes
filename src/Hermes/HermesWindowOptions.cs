@@ -80,6 +80,12 @@ public sealed class HermesWindowOptions
     /// <summary>
     /// Enable the right-click context menu in the WebView.
     /// </summary>
+    /// <remarks>
+    /// <para>Default: <c>true</c></para>
+    /// <para><b>Security Note:</b> For kiosk-mode or production applications,
+    /// consider setting this to <c>false</c> to prevent access to "Inspect Element"
+    /// or other browser menu items. See also <see cref="HermesBlazorAppBuilder.UseProductionDefaults"/>.</para>
+    /// </remarks>
     public bool ContextMenuEnabled { get; set; } = true;
 
     /// <summary>

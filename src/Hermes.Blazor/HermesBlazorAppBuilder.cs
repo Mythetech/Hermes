@@ -153,6 +153,26 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
     }
 
     /// <summary>
+    /// Configures security-hardened defaults for production deployment.
+    /// Disables DevTools and context menu.
+    /// </summary>
+    /// <remarks>
+    /// This method should be called for production builds to prevent end users from
+    /// accessing browser developer tools or context menu items like "Inspect Element".
+    /// </remarks>
+    public HermesBlazorAppBuilder UseProductionDefaults()
+    {
+        var existing = _windowConfiguration;
+        _windowConfiguration = opts =>
+        {
+            existing?.Invoke(opts);
+            opts.DevToolsEnabled = false;
+            opts.ContextMenuEnabled = false;
+        };
+        return this;
+    }
+
+    /// <summary>
     /// Builds the application.
     /// </summary>
     [RequiresDynamicCode("Blazor WebView requires dynamic code for component rendering")]
@@ -186,6 +206,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         _hostBuilder.Services.AddSingleton(syncContext);
         _hostBuilder.Services.AddSingleton(dispatcher);
         _hostBuilder.Services.AddSingleton<IConfiguration>(_hostBuilder.Configuration);
+        _hostBuilder.Services.AddSingleton<IHermesPlatformService>(new HermesPlatformService(window));
 
         var serviceProvider = _hostBuilder.Services.BuildServiceProvider();
         var jsComponents = new JSComponentConfigurationStore();

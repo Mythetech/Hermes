@@ -1,53 +1,21 @@
 @inject HermesWindow Window
-@inject IHermesWindowBackend Backend
 
-<div class="title-bar @PlatformClass">
+<HermesTitleBar Height="38">
     <div class="title-bar-content">
         <span class="title-bar-brand">Hermes</span>
         <span class="title-bar-title">@Window.Title</span>
     </div>
+
+    <div class="title-bar-spacer"></div>
 
     <div class="title-bar-actions">
         <button class="action-btn" @onclick="HandleTestClick" title="Test Button">
             Test (@_clickCount)
         </button>
     </div>
-
-    @if (PlatformClass != "macos")
-    {
-        <div class="window-controls">
-            <button class="window-btn" @onclick="Minimize" title="Minimize">
-                <svg width="10" height="1" viewBox="0 0 10 1">
-                    <rect width="10" height="1" fill="currentColor"/>
-                </svg>
-            </button>
-            <button class="window-btn" @onclick="ToggleMaximize" title="@(IsMaximized ? "Restore" : "Maximize")">
-                @if (IsMaximized)
-                {
-                    <svg width="10" height="10" viewBox="0 0 10 10">
-                        <path d="M2,0 L10,0 L10,8 L8,8 L8,2 L2,2 Z M0,2 L8,2 L8,10 L0,10 Z"
-                              fill="none" stroke="currentColor" stroke-width="1"/>
-                    </svg>
-                }
-                else
-                {
-                    <svg width="10" height="10" viewBox="0 0 10 10">
-                        <rect x="0" y="0" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1"/>
-                    </svg>
-                }
-            </button>
-            <button class="window-btn window-btn-close" @onclick="Close" title="Close">
-                <svg width="10" height="10" viewBox="0 0 10 10">
-                    <path d="M0,0 L10,10 M10,0 L0,10" stroke="currentColor" stroke-width="1.5"/>
-                </svg>
-            </button>
-        </div>
-    }
-</div>
+</HermesTitleBar>
 
 @code {
-    private string PlatformClass => Backend.Platform.ToString().ToLowerInvariant();
-    private bool IsMaximized { get; set; }
     private int _clickCount;
 
     private void HandleTestClick()
@@ -55,25 +23,4 @@
         _clickCount++;
         Console.WriteLine($"Title bar button clicked! Count: {_clickCount}");
     }
-
-    protected override void OnInitialized()
-    {
-        IsMaximized = Window.IsMaximized;
-
-        Window.OnMaximized(() =>
-        {
-            IsMaximized = true;
-            InvokeAsync(StateHasChanged);
-        });
-
-        Window.OnRestored(() =>
-        {
-            IsMaximized = false;
-            InvokeAsync(StateHasChanged);
-        });
-    }
-
-    private void Minimize() => Window.MinimizeWindow();
-    private void ToggleMaximize() => Window.ToggleMaximize();
-    private void Close() => Window.Close();
 }

@@ -1,0 +1,185 @@
+@using Hermes
+@using Hermes.Abstractions
+@implements IDisposable
+@inject HermesWindow Window
+
+<style>
+    .hermes-title-bar {
+        display: flex;
+        align-items: center;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        background: inherit;
+        box-sizing: border-box;
+    }
+
+    .hermes-title-bar-left {
+        flex-shrink: 0;
+    }
+
+    .hermes-title-bar-content {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        height: 100%;
+    }
+
+    .hermes-title-bar-right {
+        flex-shrink: 0;
+        height: 100%;
+    }
+
+    /* macOS traffic light spacer */
+    .hermes-traffic-light-spacer {
+        width: 78px;
+    }
+
+    /* Windows/Linux window controls */
+    .hermes-window-controls {
+        display: flex;
+        height: 100%;
+        -webkit-app-region: no-drag;
+    }
+
+    .hermes-window-btn {
+        width: 46px;
+        height: 100%;
+        border: none;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        transition: background-color 0.1s ease;
+    }
+
+    .hermes-window-btn svg {
+        width: 10px;
+        height: 10px;
+        fill: currentColor;
+    }
+
+    .hermes-window-btn:hover {
+        background: rgba(128, 128, 128, 0.2);
+    }
+
+    .hermes-window-btn:active {
+        background: rgba(128, 128, 128, 0.3);
+    }
+
+    .hermes-window-btn-close:hover {
+        background: #e81123;
+        color: white;
+    }
+
+    .hermes-window-btn-close:active {
+        background: #c50f1f;
+        color: white;
+    }
+</style>
+
+<div class="hermes-title-bar @PlatformClass" style="height: @(Height)px;">
+    @* Left region - padding for macOS traffic lights *@
+    <div class="hermes-title-bar-left">
+        @if (IsMacOS)
+        {
+            <div class="hermes-traffic-light-spacer"></div>
+        }
+    </div>
+
+    @* Center region - app's content *@
+    <div class="hermes-title-bar-content">
+        @ChildContent
+    </div>
+
+    @* Right region - window controls on Windows/Linux *@
+    <div class="hermes-title-bar-right">
+        @if (!IsMacOS)
+        {
+            <div class="hermes-window-controls">
+                <button class="hermes-window-btn" @onclick="Minimize" title="Minimize">
+                    <svg viewBox="0 0 10 1"><rect width="10" height="1"/></svg>
+                </button>
+                <button class="hermes-window-btn" @onclick="ToggleMaximize"
+                        title="@(IsMaximized ? "Restore" : "Maximize")">
+                    @if (IsMaximized)
+                    {
+                        <svg viewBox="0 0 10 10">
+                            <path d="M2,0v2H0v8h8V8h2V0H2z M7,9H1V3h6V9z M9,7H8V2H3V1h6V7z"/>
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 10 10">
+                            <rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1"/>
+                        </svg>
+                    }
+                </button>
+                <button class="hermes-window-btn hermes-window-btn-close" @onclick="CloseWindow" title="Close">
+                    <svg viewBox="0 0 10 10">
+                        <path d="M1,0L0,1l4,4L0,9l1,1l4-4l4,4l1-1L6,5l4-4L9,0L5,4L1,0z"/>
+                    </svg>
+                </button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>
+    /// The content to render in the titlebar (menus, search box, etc.).
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// The height of the titlebar in pixels. Default is 32.
+    /// </summary>
+    [Parameter]
+    public int Height { get; set; } = 32;
+
+    private bool IsMaximized { get; set; }
+    private bool IsMacOS => Window.Platform == HermesPlatform.macOS;
+    private string PlatformClass => IsMacOS ? "macos" : "windows";
+
+    private Action? _onMaximized;
+    private Action? _onRestored;
+
+    protected override void OnInitialized()
+    {
+        IsMaximized = Window.IsMaximized;
+
+        _onMaximized = () =>
+        {
+            IsMaximized = true;
+            InvokeAsync(StateHasChanged);
+        };
+
+        _onRestored = () =>
+        {
+            IsMaximized = false;
+            InvokeAsync(StateHasChanged);
+        };
+
+        Window.OnMaximized(_onMaximized);
+        Window.OnRestored(_onRestored);
+    }
+
+    private void Minimize() => Window.MinimizeWindow();
+    private void ToggleMaximize() => Window.ToggleMaximize();
+    private void CloseWindow() => Window.Close();
+
+    public void Dispose()
+    {
+        // Note: HermesWindow event subscriptions are cleaned up when the window closes
+        // so explicit unsubscription isn't strictly necessary, but we clear refs for GC
+        _onMaximized = null;
+        _onRestored = null;
+    }
+}
