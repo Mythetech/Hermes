@@ -66,17 +66,15 @@ internal sealed class StaticWebAssetsFileProvider : IFileProvider
         {
             // Try 1: Absolute path from manifest (works in dev)
             var contentRoot = _contentRoots[asset.ContentRootIndex];
-            var fullPath = Path.Combine(contentRoot, asset.SubPath);
-
-            if (File.Exists(fullPath))
+            if (TryGetSafePath(contentRoot, asset.SubPath, out var fullPath) && File.Exists(fullPath))
             {
                 return new PhysicalFileInfo(new FileInfo(fullPath));
             }
 
             // Try 2: Relative path under wwwroot (works in published builds)
             // The asset path in manifest looks like "_content/PackageName/file.js"
-            var relativePath = Path.Combine(_baseDirectory, "wwwroot", normalizedPath);
-            if (File.Exists(relativePath))
+            var wwwrootBase = Path.Combine(_baseDirectory, "wwwroot");
+            if (TryGetSafePath(wwwrootBase, normalizedPath, out var relativePath) && File.Exists(relativePath))
             {
                 return new PhysicalFileInfo(new FileInfo(relativePath));
             }
@@ -90,6 +88,39 @@ internal sealed class StaticWebAssetsFileProvider : IFileProvider
 
     public IChangeToken Watch(string filter) =>
         NullChangeToken.Singleton;
+
+    /// <summary>
+    /// Validates that the combined path stays within the base directory (defense-in-depth).
+    /// </summary>
+    private static bool TryGetSafePath(string basePath, string subPath, out string safePath)
+    {
+        safePath = string.Empty;
+        try
+        {
+            var canonicalBase = Path.GetFullPath(basePath);
+            var canonicalFull = Path.GetFullPath(Path.Combine(basePath, subPath));
+
+            // Use case-insensitive comparison on Windows/macOS where filesystems are case-insensitive
+            var comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+
+            // Ensure the resolved path is within the base directory
+            if (!canonicalFull.StartsWith(canonicalBase + Path.DirectorySeparatorChar, comparison)
+                && !canonicalFull.Equals(canonicalBase, comparison))
+            {
+                return false;
+            }
+
+            safePath = canonicalFull;
+            return true;
+        }
+        catch
+        {
+            // Path.GetFullPath can throw on malformed paths
+            return false;
+        }
+    }
 
     private static (string[] ContentRoots, Dictionary<string, AssetInfo> Assets) ParseManifest(string manifestPath)
     {

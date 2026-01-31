@@ -31,10 +31,11 @@ internal sealed class WindowsCustomTitlebar
 
     public void Initialize()
     {
-        // Extend the frame into the client area
+        // No DWM frame extension - WebView fills entire client area
+        // The app renders its own titlebar via HTML/Blazor
         var margins = new MARGINS
         {
-            cyTopHeight = _titlebarHeight
+            cyTopHeight = 0
         };
 
         unsafe
@@ -122,7 +123,7 @@ internal sealed class WindowsCustomTitlebar
         bool isMaximized = PInvoke.IsZoomed(_hwnd);
         int resizeBorder = isMaximized ? 0 : ScaleForDpi(ResizeBorderWidth);
 
-        // Check resize borders first (only when not maximized)
+        // Check resize borders (only when not maximized)
         if (!isMaximized)
         {
             // Top-left corner
@@ -149,56 +150,18 @@ internal sealed class WindowsCustomTitlebar
             if (relX >= width - resizeBorder)
                 return new LRESULT((nint)PInvoke.HTRIGHT);
 
-            // Top edge (but not in titlebar caption button area)
+            // Top edge
             if (relY < resizeBorder)
-            {
-                // Allow resize at very top except over caption buttons
-                int captionButtonsWidth = ScaleForDpi(CaptionButtonWidth * 3); // Close + Max + Min
-                if (relX < width - captionButtonsWidth)
-                    return new LRESULT((nint)PInvoke.HTTOP);
-            }
+                return new LRESULT((nint)PInvoke.HTTOP);
 
             // Bottom edge
             if (relY >= height - resizeBorder)
                 return new LRESULT((nint)PInvoke.HTBOTTOM);
         }
 
-        // Check if in titlebar area
-        if (relY < _titlebarHeight)
-        {
-            // Caption buttons are handled by DWM - we return HTCAPTION or specific button hits
-            // The DWM will paint and handle the actual buttons, we just need to define regions
-
-            int captionButtonsWidth = ScaleForDpi(CaptionButtonWidth * 3);
-            int captionButtonsStart = width - captionButtonsWidth;
-
-            // System menu icon area (far left)
-            int iconWidth = ScaleForDpi(46);
-            if (relX < iconWidth)
-            {
-                return new LRESULT((nint)PInvoke.HTSYSMENU);
-            }
-
-            // Caption buttons area (far right)
-            if (relX >= captionButtonsStart)
-            {
-                // Let DWM handle caption button clicks
-                // We need to return specific hit test values for the buttons
-                int buttonIndex = (relX - captionButtonsStart) / ScaleForDpi(CaptionButtonWidth);
-
-                return buttonIndex switch
-                {
-                    0 => new LRESULT((nint)PInvoke.HTMINBUTTON), // Minimize
-                    1 => new LRESULT((nint)PInvoke.HTMAXBUTTON), // Maximize/Restore
-                    _ => new LRESULT((nint)PInvoke.HTCLOSE),     // Close
-                };
-            }
-
-            // Draggable titlebar area
-            return new LRESULT((nint)PInvoke.HTCAPTION);
-        }
-
-        // Client area
+        // Everything else goes to WebView (client area)
+        // The app uses -webkit-app-region: drag for draggable titlebar regions
+        // and renders its own window controls
         handled = false;
         return new LRESULT((nint)PInvoke.HTCLIENT);
     }

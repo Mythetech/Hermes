@@ -764,19 +764,10 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
         PInvoke.GetClientRect(_hwnd, out var rect);
 
-        int top = 0;
-        int height = rect.bottom - rect.top;
-
-        // Offset for custom titlebar if enabled
-        if (_customTitlebar is not null)
-        {
-            top = _customTitlebar.TitlebarHeight;
-            height -= top;
-            if (height < 0) height = 0;
-        }
-
+        // WebView fills entire client area
+        // App is responsible for rendering titlebar in HTML when CustomTitleBar is enabled
         _webViewController.Bounds = new System.Drawing.Rectangle(
-            0, top, rect.right - rect.left, height);
+            0, 0, rect.right - rect.left, rect.bottom - rect.top);
     }
 
     private void RunMessageLoop()
