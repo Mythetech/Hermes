@@ -41,9 +41,15 @@ public sealed class ScenarioRunner : IDisposable
         // Custom titlebar tests (will be validated by component)
         TestReporter.Start("custom-titlebar-rendered");
 
-        // Wait for Blazor components to finish their tests
-        // The FluentComponentsPage will report its own results
-        await Task.Delay(2000);
+        // Platform visibility tests - these verify real backend behavior
+        // Run resize/move/focus FIRST - they don't need WebView to be ready
+        await RunResizeEventTestAsync();
+        await RunMoveEventTestAsync();
+        await RunFocusEventTestAsync();
+
+        // Web message test runs LAST - gives WebView2 maximum time to initialize
+        // On Windows, WebView2 init is async and can take several seconds in CI
+        await RunWebMessageRoundTripTestAsync();
 
         // Print summary
         TestReporter.PrintSummary();
@@ -155,6 +161,187 @@ public sealed class ScenarioRunner : IDisposable
         catch (Exception ex)
         {
             TestReporter.Fail("menu-accelerator", ex.Message);
+        }
+    }
+
+    private async Task RunWebMessageRoundTripTestAsync()
+    {
+        TestReporter.Start("web-message-roundtrip");
+        try
+        {
+            var readyTcs = new TaskCompletionSource<bool>();
+            var pongTcs = new TaskCompletionSource<string>();
+
+            // Listen for messages from JS
+            void handler(string msg)
+            {
+                Console.WriteLine($"WEB_MESSAGE_RECEIVED: {msg}");
+
+                // JS sends "js-ready" when the message handler is registered
+                if (msg.Contains("js-ready"))
+                    readyTcs.TrySetResult(true);
+
+                if (msg.Contains("pong"))
+                    pongTcs.TrySetResult(msg);
+            }
+
+            _app.MainWindow.OnWebMessage(handler);
+
+            // Wait for JS to be ready first (important for Windows where WebView2 init is async)
+            // Use a longer timeout since WebView2 can take 30+ seconds in CI environments
+            Console.WriteLine("WEB_MESSAGE_TEST: Waiting for js-ready signal...");
+            using var readyCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await readyTcs.Task.WaitAsync(readyCts.Token);
+            Console.WriteLine("WEB_MESSAGE_TEST: js-ready received, sending ping...");
+
+            // Now send ping - JS is ready to receive it
+            // Must use Invoke because WebView2 requires UI thread access
+            _app.MainWindow.Invoke(() => _app.MainWindow.SendMessage("ping"));
+
+            // Wait for pong response
+            using var pongCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var result = await pongTcs.Task.WaitAsync(pongCts.Token);
+
+            TestReporter.Assert("web-message-roundtrip",
+                result.Contains("pong"),
+                $"Expected pong, got: {result}");
+        }
+        catch (OperationCanceledException)
+        {
+            TestReporter.Fail("web-message-roundtrip", "Timeout waiting for JS response (WebView2 may not have initialized)");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail("web-message-roundtrip", ex.Message);
+        }
+    }
+
+    private async Task RunResizeEventTestAsync()
+    {
+        TestReporter.Start("resize-event");
+        try
+        {
+            var tcs = new TaskCompletionSource<(int, int)>();
+
+            // Use the fluent API to register the handler
+            _app.MainWindow.OnResized((w, h) =>
+            {
+                // Only capture if we get reasonable dimensions
+                if (w > 0 && h > 0)
+                    tcs.TrySetResult((w, h));
+            });
+
+            // Get current size
+            var (currentWidth, currentHeight) = _app.MainWindow.Size;
+
+            // Resize to a different size
+            var newWidth = currentWidth == 800 ? 900 : 800;
+            var newHeight = currentHeight == 600 ? 700 : 600;
+
+            _app.MainWindow.Invoke(() => _app.MainWindow.Size = (newWidth, newHeight));
+
+            // Wait for resize event with timeout
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            var (width, height) = await tcs.Task.WaitAsync(cts.Token);
+
+            TestReporter.Assert("resize-event",
+                width > 0 && height > 0,
+                $"Resize event received with size ({width}, {height})");
+        }
+        catch (OperationCanceledException)
+        {
+            TestReporter.Fail("resize-event", "Timeout waiting for resize event");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail("resize-event", ex.Message);
+        }
+    }
+
+    private async Task RunMoveEventTestAsync()
+    {
+        TestReporter.Start("move-event");
+        try
+        {
+            var tcs = new TaskCompletionSource<(int, int)>();
+
+            // Use the fluent API to register the handler
+            _app.MainWindow.OnMoved((x, y) =>
+            {
+                tcs.TrySetResult((x, y));
+            });
+
+            // Get current position
+            var (currentX, currentY) = _app.MainWindow.Position;
+
+            // Move to a different position
+            var newX = currentX + 50;
+            var newY = currentY + 50;
+
+            _app.MainWindow.Invoke(() => _app.MainWindow.Position = (newX, newY));
+
+            // Wait for move event with timeout
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            var (x, y) = await tcs.Task.WaitAsync(cts.Token);
+
+            TestReporter.Assert("move-event",
+                true, // If we got here, the event fired
+                $"Move event received at position ({x}, {y})");
+        }
+        catch (OperationCanceledException)
+        {
+            TestReporter.Fail("move-event", "Timeout waiting for move event");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail("move-event", ex.Message);
+        }
+    }
+
+    private async Task RunFocusEventTestAsync()
+    {
+        TestReporter.Start("focus-event");
+        try
+        {
+            var focusOutReceived = new TaskCompletionSource<bool>();
+            var focusInReceived = new TaskCompletionSource<bool>();
+
+            // Use the fluent API to register handlers
+            _app.MainWindow
+                .OnFocusIn(() => focusInReceived.TrySetResult(true))
+                .OnFocusOut(() => focusOutReceived.TrySetResult(true));
+
+            // Minimize to trigger focus out, then restore to trigger focus in
+            _app.MainWindow.Invoke(() => _app.MainWindow.MinimizeWindow());
+
+            // Wait a bit for the minimize to take effect
+            await Task.Delay(500);
+
+            _app.MainWindow.Invoke(() => _app.MainWindow.RestoreWindow());
+
+            // Wait for focus in with timeout
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+
+            // We just need to verify one of them works - focus events are platform-specific
+            // Some platforms may not fire both events on minimize/restore
+            try
+            {
+                await Task.WhenAny(
+                    focusInReceived.Task,
+                    focusOutReceived.Task
+                ).WaitAsync(cts.Token);
+
+                TestReporter.Pass("focus-event");
+            }
+            catch (OperationCanceledException)
+            {
+                // If neither fired, that's a failure
+                TestReporter.Fail("focus-event", "No focus events received after minimize/restore");
+            }
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail("focus-event", ex.Message);
         }
     }
 

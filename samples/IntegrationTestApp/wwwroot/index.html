@@ -64,6 +64,35 @@
         </div>
     </div>
 
-    <script src="_framework/blazor.webview.js" autostart="false"></script>
+    <script src="_framework/blazor.webview.js" autostart="true"></script>
+    <script>
+        // Integration test message handler
+        // Listen for messages from C# and respond for round-trip testing
+        (function() {
+            if (window.external && window.external.receiveMessage) {
+                window.external.receiveMessage(function(message) {
+                    // Parse JSON message if it's a string
+                    var msg = message;
+                    if (typeof message === 'string') {
+                        try {
+                            // Message might be JSON-encoded string
+                            msg = JSON.parse(message);
+                        } catch (e) {
+                            msg = message;
+                        }
+                    }
+
+                    // If we receive "ping", respond with "pong"
+                    if (msg === 'ping' || msg.type === 'ping') {
+                        window.external.sendMessage(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+                    }
+                });
+
+                // Signal that JS message handler is ready
+                // This is important for Windows where WebView2 init is async
+                window.external.sendMessage(JSON.stringify({ type: 'js-ready', timestamp: Date.now() }));
+            }
+        })();
+    </script>
 </body>
 </html>
