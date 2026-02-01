@@ -1,0 +1,204 @@
+@using Hermes.Blazor
+@implements IDisposable
+@inject IHermesMenuProvider MenuProvider
+
+<style>
+    .hermes-menu-bar {
+        display: flex;
+        align-items: center;
+        height: 100%;
+        -webkit-app-region: no-drag;
+        app-region: no-drag;
+    }
+
+    .hermes-menu-trigger {
+        padding: 4px 10px;
+        background: transparent;
+        border: none;
+        color: inherit;
+        font-size: 13px;
+        cursor: pointer;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        border-radius: 4px;
+    }
+
+    .hermes-menu-trigger:hover,
+    .hermes-menu-trigger.active {
+        background: rgba(128, 128, 128, 0.2);
+    }
+
+    .hermes-menu-dropdown {
+        position: fixed;
+        background: var(--hermes-menu-bg, #2d2d2d);
+        border: 1px solid var(--hermes-menu-border, #404040);
+        border-radius: 6px;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+        min-width: 180px;
+        padding: 4px 0;
+        z-index: 10000;
+    }
+
+    .hermes-menu-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 12px;
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--hermes-menu-text, #e0e0e0);
+        background: transparent;
+        border: none;
+        width: 100%;
+        text-align: left;
+    }
+
+    .hermes-menu-item:hover:not(.disabled) {
+        background: var(--hermes-menu-hover, #0078d4);
+        color: white;
+    }
+
+    .hermes-menu-item.disabled {
+        opacity: 0.5;
+        cursor: default;
+    }
+
+    .hermes-menu-item-label {
+        flex: 1;
+    }
+
+    .hermes-menu-item-accel {
+        margin-left: 24px;
+        opacity: 0.7;
+        font-size: 12px;
+    }
+
+    .hermes-menu-item-check {
+        width: 16px;
+        margin-right: 4px;
+    }
+
+    .hermes-menu-separator {
+        height: 1px;
+        background: var(--hermes-menu-border, #404040);
+        margin: 4px 8px;
+    }
+</style>
+
+<div class="hermes-menu-bar">
+    @foreach (var menu in MenuProvider.Menus)
+    {
+        <div style="position: relative;">
+            <button class="hermes-menu-trigger @(IsMenuOpen(menu.Label) ? "active" : "")"
+                    @onclick="() => ToggleMenu(menu.Label)"
+                    @onmouseenter="() => OnMenuHover(menu.Label)">
+                @menu.Label
+            </button>
+
+            @if (IsMenuOpen(menu.Label))
+            {
+                <div class="hermes-menu-dropdown" style="@GetDropdownPosition(menu.Label)">
+                    @foreach (var item in menu.Items)
+                    {
+                        @if (item.IsSeparator)
+                        {
+                            <div class="hermes-menu-separator"></div>
+                        }
+                        else
+                        {
+                            <button class="hermes-menu-item @(item.IsEnabled ? "" : "disabled")"
+                                    @onclick="() => OnItemClick(item)"
+                                    disabled="@(!item.IsEnabled)">
+                                <span class="hermes-menu-item-check">
+                                    @if (item.IsChecked)
+                                    {
+                                        <text>&#x2713;</text>
+                                    }
+                                </span>
+                                <span class="hermes-menu-item-label">@item.Label</span>
+                                @if (!string.IsNullOrEmpty(item.AcceleratorText))
+                                {
+                                    <span class="hermes-menu-item-accel">@item.AcceleratorText</span>
+                                }
+                            </button>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (_openMenu is not null)
+{
+    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999;"
+         @onclick="CloseMenu" @onclick:stopPropagation="true"></div>
+}
+
+@code {
+    private string? _openMenu;
+    private bool _menuBarActive;
+
+    protected override void OnInitialized()
+    {
+        MenuProvider.MenusChanged += OnMenusChanged;
+    }
+
+    private bool IsMenuOpen(string label) => _openMenu == label;
+
+    private void ToggleMenu(string label)
+    {
+        if (_openMenu == label)
+        {
+            CloseMenu();
+        }
+        else
+        {
+            _openMenu = label;
+            _menuBarActive = true;
+        }
+    }
+
+    private void OnMenuHover(string label)
+    {
+        // When hovering over another menu while one is open, switch to it
+        if (_menuBarActive && _openMenu is not null && _openMenu != label)
+        {
+            _openMenu = label;
+        }
+    }
+
+    private void OnItemClick(MenuItemData item)
+    {
+        if (!item.IsEnabled)
+            return;
+
+        CloseMenu();
+        MenuProvider.InvokeItemClick(item.Id);
+    }
+
+    private void CloseMenu()
+    {
+        _openMenu = null;
+        _menuBarActive = false;
+    }
+
+    private string GetDropdownPosition(string label)
+    {
+        // Position dropdown below the menu trigger
+        // The exact positioning would be calculated based on the trigger's position
+        // For now, use simple top positioning
+        return "top: 100%; left: 0;";
+    }
+
+    private void OnMenusChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        MenuProvider.MenusChanged -= OnMenusChanged;
+    }
+}

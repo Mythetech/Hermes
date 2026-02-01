@@ -1,7 +1,9 @@
 @using Hermes
 @using Hermes.Abstractions
+@using Hermes.Blazor
 @implements IDisposable
 @inject HermesWindow Window
+@inject IHermesMenuProvider MenuProvider
 
 <style>
     .hermes-title-bar {
@@ -87,11 +89,15 @@
 </style>
 
 <div class="hermes-title-bar @PlatformClass" style="height: @(Height)px;">
-    @* Left region - padding for macOS traffic lights *@
+    @* Left region - traffic lights on macOS, menus on Windows/Linux *@
     <div class="hermes-title-bar-left">
         @if (IsMacOS)
         {
             <div class="hermes-traffic-light-spacer"></div>
+        }
+        else if (ShowMenus && HasMenus)
+        {
+            <HermesMenuBar />
         }
     </div>
 
@@ -146,7 +152,16 @@
     [Parameter]
     public int Height { get; set; } = 32;
 
+    /// <summary>
+    /// Whether to automatically show menus from NativeMenuBar in the titlebar.
+    /// Only applies to Windows/Linux (macOS uses system menu bar).
+    /// Default is true.
+    /// </summary>
+    [Parameter]
+    public bool ShowMenus { get; set; } = true;
+
     private bool IsMaximized { get; set; }
+    private bool HasMenus => MenuProvider.Menus.Count > 0;
     private bool IsMacOS => Window.Platform == HermesPlatform.macOS;
     private string PlatformClass => IsMacOS ? "macos" : "windows";
 

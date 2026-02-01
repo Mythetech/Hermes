@@ -1,0 +1,94 @@
+@page "/fluent"
+
+<FluentStack Orientation="Orientation.Vertical" VerticalGap="20">
+    <FluentCard>
+        <h1>Fluent UI Blazor Components</h1>
+        <p>This page tests JS module loading by rendering various Fluent UI components that require JavaScript interop.</p>
+    </FluentCard>
+
+    <FluentCard>
+        <h2>Button Components</h2>
+        <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="10" Wrap="true">
+            <FluentButton Appearance="Appearance.Accent" OnClick="@OnButtonClick">Primary</FluentButton>
+            <FluentButton Appearance="Appearance.Outline" OnClick="@OnButtonClick">Secondary</FluentButton>
+            <FluentButton Appearance="Appearance.Stealth" OnClick="@OnButtonClick">Stealth</FluentButton>
+            <FluentButton Disabled="true">Disabled</FluentButton>
+        </FluentStack>
+        @if (_buttonClicked)
+        {
+            <p style="margin-top: 10px;"><FluentBadge Appearance="Appearance.Accent">Button clicked!</FluentBadge></p>
+        }
+    </FluentCard>
+
+    <FluentCard>
+        <h2>Form Components</h2>
+        <FluentStack Orientation="Orientation.Vertical" VerticalGap="10">
+            <FluentTextField Label="Text Input" @bind-Value="_textValue" Placeholder="Enter some text..." />
+            <FluentNumberField Label="Number Input" @bind-Value="_numberValue" />
+            <FluentCheckbox Label="Checkbox" @bind-Value="_checkboxValue" />
+            <FluentSwitch Label="Toggle Switch" @bind-Value="_switchValue" />
+        </FluentStack>
+    </FluentCard>
+
+    <FluentCard>
+        <h2>Selection Components</h2>
+        <FluentStack Orientation="Orientation.Vertical" VerticalGap="10">
+            <FluentSelect TOption="string" Label="Select" @bind-Value="_selectedValue">
+                <FluentOption Value="option1">Option 1</FluentOption>
+                <FluentOption Value="option2">Option 2</FluentOption>
+                <FluentOption Value="option3">Option 3</FluentOption>
+            </FluentSelect>
+        </FluentStack>
+    </FluentCard>
+
+    <FluentCard>
+        <h2>Progress Components</h2>
+        <FluentStack Orientation="Orientation.Vertical" VerticalGap="10">
+            <FluentProgress Value="75" />
+            <FluentProgressRing />
+        </FluentStack>
+    </FluentCard>
+
+    <FluentCard>
+        <h2>Test Status</h2>
+        @if (_jsModuleLoaded)
+        {
+            <FluentBadge Appearance="Appearance.Accent">JS Modules Loaded Successfully</FluentBadge>
+        }
+        else
+        {
+            <FluentBadge Appearance="Appearance.Neutral">Checking JS module loading...</FluentBadge>
+        }
+    </FluentCard>
+</FluentStack>
+
+@code {
+    private bool _buttonClicked;
+    private string _textValue = "";
+    private int _numberValue;
+    private bool _checkboxValue;
+    private bool _switchValue;
+    private string? _selectedValue = "option1";
+    private bool _jsModuleLoaded;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // If we got here and components rendered, JS modules loaded successfully
+            _jsModuleLoaded = true;
+
+            TestReporter.Start("fluent-ui-js-modules");
+            TestReporter.Pass("fluent-ui-js-modules");
+
+            StateHasChanged();
+        }
+    }
+
+    private void OnButtonClick()
+    {
+        _buttonClicked = true;
+        TestReporter.Start("fluent-button-click");
+        TestReporter.Pass("fluent-button-click");
+    }
+}

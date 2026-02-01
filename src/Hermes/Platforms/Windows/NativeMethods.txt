@@ -32,6 +32,7 @@ PostMessageW
 SendMessageW
 PostQuitMessage
 PeekMessageW
+ReleaseCapture
 
 // DPI Awareness
 SetThreadDpiAwarenessContext
@@ -180,3 +181,4 @@ HTTRANSPARENT
 // Additional window messages
 WM_NCACTIVATE
 WM_NCPAINT
+WM_NCLBUTTONDOWN

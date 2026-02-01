@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- NuGet Package Metadata -->
+  <PropertyGroup>
+    <PackageId>Mythetech.Hermes.Testing</PackageId>
+    <Authors>Mythetech</Authors>
+    <Description>Test infrastructure for Hermes desktop applications. Provides mock backends, recording capabilities, and assertions for testing native/web boundary interactions.</Description>
+    <PackageTags>desktop;native;webview;blazor;testing;xunit;nunit</PackageTags>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <!-- SourceLink for debugging -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.*" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Hermes\Hermes.csproj" />
+  </ItemGroup>
+</Project>

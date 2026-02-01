@@ -1,0 +1,357 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'Platforms to test'
+        type: choice
+        options:
+          - all
+          - windows
+          - macos
+          - linux
+        default: 'all'
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build tests/Hermes.Tests -c Release --no-restore
+
+      - name: Run Unit Tests
+        run: dotnet test tests/Hermes.Tests -c Release --no-build --verbosity normal
+
+  integration-test:
+    name: Integration Tests (${{ matrix.platform }})
+    needs: unit-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            platform: windows
+          - os: ubuntu-latest
+            rid: linux-x64
+            platform: linux
+          - os: macos-latest
+            rid: osx-x64
+            platform: macos
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check if platform should run
+        id: check
+        shell: bash
+        run: |
+          if [[ "${{ github.event.inputs.platforms }}" != "" && "${{ github.event.inputs.platforms }}" != "all" && "${{ github.event.inputs.platforms }}" != "${{ matrix.platform }}" ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.skip != 'true'
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.check.outputs.skip != 'true'
+        with:
+          dotnet-version: '10.0.x'
+
+      # macOS: Build native library
+      - name: Build Native Library (macOS)
+        if: steps.check.outputs.skip != 'true' && matrix.os == 'macos-latest'
+        run: make universal
+        working-directory: src/Hermes.Native.macOS
+
+      # Linux: Install dependencies and build native library
+      - name: Install Linux Dependencies
+        if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev cmake xvfb
+
+      - name: Build Native Library (Linux)
+        if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
+        run: ./build.sh
+        working-directory: src/Hermes.Native.Linux
+
+      - name: Restore
+        if: steps.check.outputs.skip != 'true'
+        run: dotnet restore
+
+      - name: Build Integration Test App
+        if: steps.check.outputs.skip != 'true'
+        run: dotnet build samples/IntegrationTestApp -c Release --no-restore
+
+      - name: Run Integration Tests (Windows)
+        if: steps.check.outputs.skip != 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:HERMES_INTEGRATION_TEST = "1"
+          $env:HERMES_INTEGRATION_TEST_EXIT = "1"
+          $env:HERMES_SMOKE_TEST = "1"
+          $env:HERMES_SMOKE_TEST_EXIT = "1"
+
+          $appPath = "samples/IntegrationTestApp/bin/Release/net10.0/IntegrationTestApp.exe"
+          $timeout = 120
+
+          Write-Output "Starting integration tests: $appPath"
+
+          $psi = New-Object System.Diagnostics.ProcessStartInfo
+          $psi.FileName = $appPath
+          $psi.UseShellExecute = $false
+          $psi.RedirectStandardOutput = $true
+          $psi.RedirectStandardError = $true
+          $psi.CreateNoWindow = $false
+          $psi.Environment["HERMES_INTEGRATION_TEST"] = "1"
+          $psi.Environment["HERMES_INTEGRATION_TEST_EXIT"] = "1"
+          $psi.Environment["HERMES_SMOKE_TEST"] = "1"
+          $psi.Environment["HERMES_SMOKE_TEST_EXIT"] = "1"
+
+          $process = [System.Diagnostics.Process]::Start($psi)
+          $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+          $stderrTask = $process.StandardError.ReadToEndAsync()
+
+          $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+          $timedOut = $false
+
+          while (-not $process.HasExited) {
+            if ($stopwatch.Elapsed.TotalSeconds -ge $timeout) {
+              $timedOut = $true
+              try { $process.Kill() } catch { }
+              break
+            }
+            Start-Sleep -Milliseconds 500
+          }
+
+          $stdout = $stdoutTask.Result
+          $stderr = $stderrTask.Result
+
+          Write-Output ""
+          Write-Output "=== Application Output ==="
+          Write-Output $stdout
+
+          if ($stderr) {
+            Write-Output ""
+            Write-Output "=== Errors ==="
+            Write-Output $stderr
+          }
+
+          if ($timedOut) {
+            Write-Error "TIMEOUT: Process did not exit within ${timeout}s"
+            exit 1
+          }
+
+          # Check for HERMES_READY (smoke test marker)
+          if ($stdout -notmatch "HERMES_READY:") {
+            Write-Error "FAIL: Never received HERMES_READY marker"
+            exit 1
+          }
+
+          # Check for test failures
+          if ($stdout -match "HERMES_TEST_FAIL:") {
+            Write-Error "FAIL: One or more integration tests failed"
+            exit 1
+          }
+
+          if ($process.ExitCode -ne 0) {
+            Write-Error "FAIL: Process exited with code $($process.ExitCode)"
+            exit 1
+          }
+
+          Write-Output ""
+          Write-Output "PASS: Integration tests completed successfully"
+
+      - name: Run Integration Tests (macOS)
+        if: steps.check.outputs.skip != 'true' && runner.os == 'macOS'
+        shell: bash
+        run: |
+          export HERMES_INTEGRATION_TEST=1
+          export HERMES_INTEGRATION_TEST_EXIT=1
+          export HERMES_SMOKE_TEST=1
+          export HERMES_SMOKE_TEST_EXIT=1
+
+          APP_PATH="samples/IntegrationTestApp/bin/Release/net10.0/IntegrationTestApp"
+          APP_DIR=$(dirname "$APP_PATH")
+          TIMEOUT=120
+
+          echo "Starting integration tests: $APP_PATH"
+          echo "Timeout: ${TIMEOUT}s"
+          echo ""
+
+          # Debug: Show app directory contents
+          echo "=== App Directory Contents ==="
+          ls -la "$APP_DIR"
+          echo ""
+
+          # Check if native library exists
+          if [ -f "$APP_DIR/libHermes.Native.macOS.dylib" ]; then
+            echo "Native library found: $APP_DIR/libHermes.Native.macOS.dylib"
+            echo "Architecture info:"
+            file "$APP_DIR/libHermes.Native.macOS.dylib"
+            echo ""
+          else
+            echo "WARNING: Native library NOT found in $APP_DIR"
+            echo "Checking if it exists in source location..."
+            ls -la src/Hermes.Native.macOS/lib/ 2>/dev/null || echo "Source lib directory not found"
+            echo ""
+          fi
+
+          # Ensure executable
+          chmod +x "$APP_PATH"
+
+          # Run app in background
+          "$APP_PATH" > stdout.txt 2>&1 &
+          PID=$!
+
+          SECONDS=0
+          EXIT_CODE=""
+          while kill -0 "$PID" 2>/dev/null; do
+            if [[ $SECONDS -ge $TIMEOUT ]]; then
+              kill "$PID" 2>/dev/null || true
+              wait "$PID" 2>/dev/null || true
+              EXIT_CODE=124
+              break
+            fi
+            sleep 1
+          done
+
+          if [[ -z "$EXIT_CODE" ]]; then
+            wait "$PID"
+            EXIT_CODE=$?
+          fi
+
+          echo ""
+          echo "=== Application Output ==="
+          cat stdout.txt || echo "(no output captured)"
+
+          if [[ $EXIT_CODE -eq 124 ]]; then
+            echo "TIMEOUT: Process did not exit within ${TIMEOUT}s"
+            exit 1
+          fi
+
+          # Check for crash (SIGABRT = 134, SIGSEGV = 139)
+          if [[ $EXIT_CODE -eq 134 ]]; then
+            echo "FAIL: Process crashed with SIGABRT (exit code 134)"
+            exit 1
+          fi
+
+          if [[ $EXIT_CODE -eq 139 ]]; then
+            echo "FAIL: Process crashed with SIGSEGV (exit code 139)"
+            exit 1
+          fi
+
+          if ! grep -q "HERMES_READY:" stdout.txt; then
+            echo "FAIL: Never received HERMES_READY marker"
+            exit 1
+          fi
+
+          if grep -q "HERMES_TEST_FAIL:" stdout.txt; then
+            echo "FAIL: One or more integration tests failed"
+            exit 1
+          fi
+
+          if [[ $EXIT_CODE -ne 0 ]]; then
+            echo "FAIL: Process exited with code $EXIT_CODE"
+            exit 1
+          fi
+
+          echo ""
+          echo "PASS: Integration tests completed successfully"
+
+      - name: Run Integration Tests (Linux)
+        if: steps.check.outputs.skip != 'true' && runner.os == 'Linux'
+        shell: bash
+        run: |
+          export HERMES_INTEGRATION_TEST=1
+          export HERMES_INTEGRATION_TEST_EXIT=1
+          export HERMES_SMOKE_TEST=1
+          export HERMES_SMOKE_TEST_EXIT=1
+          export DISPLAY=:99
+          export GDK_BACKEND=x11
+
+          APP_PATH="samples/IntegrationTestApp/bin/Release/net10.0/IntegrationTestApp"
+          APP_DIR=$(dirname "$APP_PATH")
+          TIMEOUT=120
+
+          echo "Starting integration tests: $APP_PATH"
+          echo "Timeout: ${TIMEOUT}s"
+          echo ""
+
+          # Debug: Show app directory contents
+          echo "=== App Directory Contents ==="
+          ls -la "$APP_DIR"
+          echo ""
+
+          # Check if native library exists and show dependencies
+          if [ -f "$APP_DIR/libHermes.Native.Linux.so" ]; then
+            echo "Native library found: $APP_DIR/libHermes.Native.Linux.so"
+            echo "Dependencies:"
+            ldd "$APP_DIR/libHermes.Native.Linux.so" 2>&1 || echo "ldd failed"
+          else
+            echo "WARNING: Native library NOT found in $APP_DIR"
+          fi
+          echo ""
+
+          # Start virtual display
+          Xvfb :99 -screen 0 1920x1080x24 &
+          XVFB_PID=$!
+          sleep 3
+
+          chmod +x "$APP_PATH"
+
+          set +e
+          timeout "${TIMEOUT}s" "$APP_PATH" > stdout.txt 2>&1
+          EXIT_CODE=$?
+          set -e
+
+          kill $XVFB_PID 2>/dev/null || true
+
+          echo ""
+          echo "=== Application Output ==="
+          cat stdout.txt
+
+          if [[ $EXIT_CODE -eq 124 ]]; then
+            echo "TIMEOUT: Process did not exit within ${TIMEOUT}s"
+            exit 1
+          fi
+
+          if ! grep -q "HERMES_READY:" stdout.txt; then
+            echo "FAIL: Never received HERMES_READY marker"
+            exit 1
+          fi
+
+          if grep -q "HERMES_TEST_FAIL:" stdout.txt; then
+            echo "FAIL: One or more integration tests failed"
+            exit 1
+          fi
+
+          if [[ $EXIT_CODE -ne 0 ]]; then
+            echo "FAIL: Process exited with code $EXIT_CODE"
+            exit 1
+          fi
+
+          echo ""
+          echo "PASS: Integration tests completed successfully"
+
+      - name: Skipped
+        if: steps.check.outputs.skip == 'true'
+        run: echo "Skipping ${{ matrix.platform }} - not selected"

@@ -200,6 +200,14 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         var syncContext = new HermesSynchronizationContext(backend);
         var dispatcher = new HermesDispatcher(syncContext);
 
+        // Pre-register the app scheme before any code that might trigger backend initialization
+        // (e.g., accessing window.MenuBar). HermesWebViewManager will provide the real handler.
+        // On macOS, custom schemes must be registered before Initialize() is called.
+        if (!OperatingSystem.IsWindows())
+        {
+            backend.RegisterCustomScheme("app", _ => (null, null));
+        }
+
         _hostBuilder.Services.AddBlazorWebView();
         _hostBuilder.Services.AddSingleton(window);
         _hostBuilder.Services.AddSingleton(backend);
@@ -207,6 +215,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         _hostBuilder.Services.AddSingleton(dispatcher);
         _hostBuilder.Services.AddSingleton<IConfiguration>(_hostBuilder.Configuration);
         _hostBuilder.Services.AddSingleton<IHermesPlatformService>(new HermesPlatformService(window));
+        _hostBuilder.Services.AddSingleton<IHermesMenuProvider>(new HermesMenuProvider(window.MenuBar));
 
         var serviceProvider = _hostBuilder.Services.BuildServiceProvider();
         var jsComponents = new JSComponentConfigurationStore();

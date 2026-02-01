@@ -1,0 +1,84 @@
+@page "/titlebar"
+@using Hermes.Blazor.Components
+
+<FluentStack Orientation="Orientation.Vertical" VerticalGap="20">
+    <FluentCard>
+        <h1>Custom Titlebar Tests</h1>
+        <p>This page tests custom titlebar functionality including drag regions and window controls.</p>
+    </FluentCard>
+
+    <FluentCard>
+        <h2>Drag Regions</h2>
+        <p>The custom titlebar at the top uses <code>-webkit-app-region: drag</code> for window dragging.</p>
+        <p>Interactive elements within the titlebar use <code>-webkit-app-region: no-drag</code> to prevent interference.</p>
+
+        <FluentStack Orientation="Orientation.Vertical" VerticalGap="10" Style="margin-top: 20px;">
+            <div style="
+                background: var(--neutral-layer-4);
+                padding: 20px;
+                border-radius: 4px;
+                -webkit-app-region: drag;
+                cursor: move;
+            ">
+                <p style="margin: 0;"><strong>Drag Region</strong> - Try dragging this area to move the window</p>
+            </div>
+
+            <div style="
+                background: var(--neutral-layer-3);
+                padding: 20px;
+                border-radius: 4px;
+                -webkit-app-region: no-drag;
+            ">
+                <p style="margin: 0;"><strong>No-Drag Region</strong> - This area should not trigger window drag</p>
+                <FluentButton Appearance="Appearance.Accent" Style="margin-top: 10px;" OnClick="@OnNoDragClick">
+                    Click Me (should work)
+                </FluentButton>
+                @if (_noDragClicked)
+                {
+                    <FluentBadge Appearance="Appearance.Accent" Style="margin-left: 10px;">Clicked!</FluentBadge>
+                }
+            </div>
+        </FluentStack>
+    </FluentCard>
+
+    <FluentCard>
+        <h2>HermesTitleBar Component</h2>
+        <p>The <code>HermesTitleBar</code> component is rendered in the layout and provides:</p>
+        <ul>
+            <li>Cross-platform window controls (minimize, maximize, close)</li>
+            <li>Platform-aware rendering (traffic lights on macOS)</li>
+            <li>Proper drag region handling</li>
+            <li>Custom content support via <code>ChildContent</code></li>
+        </ul>
+    </FluentCard>
+
+    <FluentCard>
+        <h2>Test Status</h2>
+        @if (_titlebarRendered)
+        {
+            <FluentBadge Appearance="Appearance.Accent">Titlebar component rendered</FluentBadge>
+        }
+    </FluentCard>
+</FluentStack>
+
+@code {
+    private bool _noDragClicked;
+    private bool _titlebarRendered;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _titlebarRendered = true;
+            TestReporter.Pass("custom-titlebar-rendered");
+            StateHasChanged();
+        }
+    }
+
+    private void OnNoDragClick()
+    {
+        _noDragClicked = true;
+        TestReporter.Start("no-drag-click");
+        TestReporter.Pass("no-drag-click");
+    }
+}

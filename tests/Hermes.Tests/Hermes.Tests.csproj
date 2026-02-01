@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Hermes\Hermes.csproj" />
+    <ProjectReference Include="..\..\src\Hermes.Testing\Hermes.Testing.csproj" />
   </ItemGroup>
 
 </Project>
