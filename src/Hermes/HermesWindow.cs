@@ -672,13 +672,16 @@ public sealed class HermesWindow : IDisposable
 
         try
         {
+            // When maximized, save the cached normal dimensions (captured before maximize)
+            // Otherwise, save the current backend dimensions
+            var isMaximized = _backend.IsMaximized;
             var state = new WindowState
             {
-                X = _backend.Position.X,
-                Y = _backend.Position.Y,
-                Width = _backend.Size.Width,
-                Height = _backend.Size.Height,
-                IsMaximized = _backend.IsMaximized
+                X = isMaximized ? _lastNormalX : _backend.Position.X,
+                Y = isMaximized ? _lastNormalY : _backend.Position.Y,
+                Width = isMaximized ? _lastNormalWidth : _backend.Size.Width,
+                Height = isMaximized ? _lastNormalHeight : _backend.Size.Height,
+                IsMaximized = isMaximized
             };
 
             WindowStateStore.Instance.SaveState(_windowStateKey, state);

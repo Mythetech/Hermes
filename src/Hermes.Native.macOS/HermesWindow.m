@@ -162,13 +162,19 @@
         "        window.__receiveMessageCallbacks.push(callback);"
         "    }"
         "};"
-        // Helper to check if element is in a no-drag region
-        "function __hermesIsNoDragRegion(el) {"
+        // Helper to check if element is in an explicit drag region
+        // Checks interactive elements, CSS property, class, and data attribute
+        "function __hermesIsDragRegion(el) {"
+        "    var interactiveTags = ['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'A', 'LABEL'];"
+        "    if (interactiveTags.indexOf(el.tagName) !== -1) return false;"
         "    while (el && el !== document.body && el !== document.documentElement) {"
         "        var style = window.getComputedStyle(el);"
         "        var region = style.getPropertyValue('-webkit-app-region') || style.getPropertyValue('app-region');"
-        "        if (region === 'no-drag') return true;"
-        "        if (region === 'drag') return false;"
+        "        if (region === 'no-drag') return false;"
+        "        if (region === 'drag') return true;"
+        "        if (el.classList && el.classList.contains('hermes-no-drag')) return false;"
+        "        if (el.classList && el.classList.contains('hermes-title-bar')) return true;"
+        "        if (el.hasAttribute && el.hasAttribute('data-hermes-drag')) return true;"
         "        el = el.parentElement;"
         "    }"
         "    return false;"
@@ -176,9 +182,10 @@
         // Track click timing for double-click detection (only for drag regions)
         "window.__hermesDragClick = { time: 0, x: 0, y: 0 };"
         // Listen for mousedown to inform native about drag regions
+        // Only trigger drag/zoom for explicit drag regions, not entire content
         "document.addEventListener('mousedown', function(e) {"
         "    if (e.button !== 0) return;"
-        "    if (__hermesIsNoDragRegion(e.target)) {"
+        "    if (!__hermesIsDragRegion(e.target)) {"
         "        window.webkit.messageHandlers.hermesDragRegion.postMessage('no-drag');"
         "        window.__hermesDragClick = { time: 0, x: 0, y: 0 };"
         "        return;"
