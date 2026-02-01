@@ -1,0 +1,25 @@
+@using Hermes.Blazor.Components
+@using IntegrationTestApp.TestScenarios
+@inherits LayoutComponentBase
+
+<HermesTitleBar>
+    <span style="font-weight: 500;">Hermes Integration Tests</span>
+</HermesTitleBar>
+
+<FluentStack Orientation="Orientation.Horizontal" Style="height: calc(100vh - 32px);">
+    <NavMenu />
+    <FluentBodyContent Style="flex: 1; padding: 20px; overflow: auto;">
+        @Body
+    </FluentBodyContent>
+</FluentStack>
+
+@code {
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Signal that Blazor has initialized and the app is ready
+            TestReporter.Ready();
+        }
+    }
+}

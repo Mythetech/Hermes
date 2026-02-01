@@ -58,9 +58,10 @@
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.*" PrivateAssets="All" />
   </ItemGroup>
 
-  <!-- Allow Hermes.Blazor to access internal members -->
+  <!-- Allow Hermes.Blazor and Hermes.Testing to access internal members -->
   <ItemGroup>
     <InternalsVisibleTo Include="Hermes.Blazor" />
+    <InternalsVisibleTo Include="Hermes.Testing" />
   </ItemGroup>
 
   <!-- Platform-specific compilation symbols -->

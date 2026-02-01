@@ -632,11 +632,24 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
                 };
                 """);
 
+            if (_options.CustomTitleBar)
+            {
+                await _webView.AddScriptToExecuteOnDocumentCreatedAsync(GetDragDetectionScript());
+            }
+
             if (isSmokeTest) Console.WriteLine("WEBVIEW_INIT:script_injected");
 
             _webView.WebMessageReceived += (sender, args) =>
             {
-                WebMessageReceived?.Invoke(args.TryGetWebMessageAsString());
+                var message = args.TryGetWebMessageAsString();
+
+                if (_customTitlebar is not null && message?.StartsWith("{\"type\":\"hermes-drag\"") == true)
+                {
+                    HandleDragMessage(message);
+                    return;
+                }
+
+                WebMessageReceived?.Invoke(message);
             };
 
             _webView.WebResourceRequested += HandleWebResourceRequested;
@@ -860,4 +873,102 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         if (!_isInitialized)
             throw new InvalidOperationException("Window not initialized. Call Initialize() first.");
     }
+
+    #region Custom Titlebar Drag Support
+
+    /// <summary>
+    /// Returns JavaScript that detects -webkit-app-region: drag/no-drag CSS properties
+    /// and posts messages to native code for window dragging. Matches the macOS implementation.
+    /// </summary>
+    private static string GetDragDetectionScript() => """
+        (function() {
+            // Check if element or any ancestor has app-region: drag (and isn't blocked by no-drag)
+            function __hermesIsDragRegion(el) {
+                while (el) {
+                    var style = window.getComputedStyle(el);
+                    var region = style.getPropertyValue('-webkit-app-region') ||
+                                 style.getPropertyValue('app-region');
+                    if (region === 'no-drag') return false;
+                    if (region === 'drag') return true;
+                    // Also check for hermes-specific classes/attributes
+                    if (el.classList && el.classList.contains('hermes-no-drag')) return false;
+                    if (el.hasAttribute && el.hasAttribute('data-hermes-drag')) return true;
+                    el = el.parentElement;
+                }
+                return false;
+            }
+
+            // Track click timing for double-click detection
+            var lastClickTime = 0;
+            var doubleClickThreshold = 500;
+
+            document.addEventListener('mousedown', function(e) {
+                // Only handle left mouse button
+                if (e.button !== 0) return;
+
+                if (!__hermesIsDragRegion(e.target)) {
+                    window.external.sendMessage(JSON.stringify({type:'hermes-drag', action:'no-drag'}));
+                    return;
+                }
+
+                var now = Date.now();
+                if (now - lastClickTime < doubleClickThreshold) {
+                    // Double-click on drag region - toggle maximize
+                    window.external.sendMessage(JSON.stringify({type:'hermes-drag', action:'double-click'}));
+                    lastClickTime = 0;
+                } else {
+                    // Single click - initiate drag
+                    window.external.sendMessage(JSON.stringify({type:'hermes-drag', action:'drag'}));
+                    lastClickTime = now;
+                }
+            });
+        })();
+        """;
+
+    /// <summary>
+    /// Handles drag-related messages from JavaScript for custom titlebar window dragging.
+    /// </summary>
+    private void HandleDragMessage(string message)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(message);
+            var action = doc.RootElement.GetProperty("action").GetString();
+
+            switch (action)
+            {
+                case "drag":
+                    // Initiate window drag using Windows system drag
+                    // ReleaseCapture allows the window to receive the drag
+                    // WM_NCLBUTTONDOWN with HTCAPTION tells Windows to start a title bar drag
+                    PInvoke.ReleaseCapture();
+                    PInvoke.SendMessage(_hwnd, PInvoke.WM_NCLBUTTONDOWN, (WPARAM)PInvoke.HTCAPTION, 0);
+                    break;
+
+                case "double-click":
+                    // Toggle maximize on double-click (standard Windows behavior)
+                    if (PInvoke.IsZoomed(_hwnd))
+                    {
+                        PInvoke.ShowWindow(_hwnd, SHOW_WINDOW_CMD.SW_RESTORE);
+                        Restored?.Invoke();
+                    }
+                    else
+                    {
+                        PInvoke.ShowWindow(_hwnd, SHOW_WINDOW_CMD.SW_MAXIMIZE);
+                        Maximized?.Invoke();
+                    }
+                    break;
+
+                case "no-drag":
+                    // Click was on a non-draggable element, no action needed
+                    break;
+            }
+        }
+        catch
+        {
+            // Ignore malformed messages
+        }
+    }
+
+    #endregion
 }

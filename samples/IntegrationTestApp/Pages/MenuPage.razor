@@ -1,0 +1,56 @@
+@page "/menu"
+
+<FluentStack Orientation="Orientation.Vertical" VerticalGap="20">
+    <FluentCard>
+        <h1>Native Menu Tests</h1>
+        <p>This page documents the native menu tests that run on startup.</p>
+    </FluentCard>
+
+    <FluentCard>
+        <h2>Menu Structure</h2>
+        <p>The application creates a native menu bar with the following structure:</p>
+        <FluentTreeView>
+            <FluentTreeItem Text="File" Expanded="true">
+                <FluentTreeItem Text="New (Ctrl+N)" />
+                <FluentTreeItem Text="Open... (Ctrl+O)" />
+                <FluentTreeItem Text="---" />
+                <FluentTreeItem Text="Exit (Alt+F4)" />
+            </FluentTreeItem>
+            <FluentTreeItem Text="Edit" Expanded="true">
+                <FluentTreeItem Text="Undo (Ctrl+Z)" />
+                <FluentTreeItem Text="Redo (Ctrl+Y)" />
+                <FluentTreeItem Text="---" />
+                <FluentTreeItem Text="Cut (Ctrl+X)" />
+                <FluentTreeItem Text="Copy (Ctrl+C)" />
+                <FluentTreeItem Text="Paste (Ctrl+V)" />
+            </FluentTreeItem>
+            <FluentTreeItem Text="Help" Expanded="true">
+                <FluentTreeItem Text="About" />
+            </FluentTreeItem>
+        </FluentTreeView>
+    </FluentCard>
+
+    <FluentCard>
+        <h2>Accelerator Tests</h2>
+        <p>Keyboard accelerators are tested automatically on startup:</p>
+        <ul>
+            <li><strong>Cross-platform mapping</strong> - <code>Ctrl</code> maps to <code>Cmd</code> on macOS</li>
+            <li><strong>Modifier combinations</strong> - <code>Ctrl+Shift+S</code>, <code>Alt+F4</code></li>
+            <li><strong>Special keys</strong> - Function keys, numeric keys</li>
+        </ul>
+    </FluentCard>
+
+    <FluentCard>
+        <h2>Test Status</h2>
+        <FluentStack Orientation="Orientation.Vertical" VerticalGap="10">
+            <div>
+                <FluentBadge Appearance="Appearance.Accent">menu-creation</FluentBadge>
+                <span style="margin-left: 10px;">Menu bar created successfully</span>
+            </div>
+            <div>
+                <FluentBadge Appearance="Appearance.Accent">menu-accelerator</FluentBadge>
+                <span style="margin-left: 10px;">Accelerators configured successfully</span>
+            </div>
+        </FluentStack>
+    </FluentCard>
+</FluentStack>

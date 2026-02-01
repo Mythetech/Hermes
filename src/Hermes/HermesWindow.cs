@@ -49,6 +49,15 @@ public sealed class HermesWindow : IDisposable
         _backend = CreatePlatformBackend();
     }
 
+    /// <summary>
+    /// Create a Hermes window with a custom backend.
+    /// Used by Hermes.Testing for mock/recording backends.
+    /// </summary>
+    internal HermesWindow(IHermesWindowBackend backend)
+    {
+        _backend = backend;
+    }
+
     #region Fluent Configuration (before initialization)
 
     /// <summary>
