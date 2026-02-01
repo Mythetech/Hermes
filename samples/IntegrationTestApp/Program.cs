@@ -88,7 +88,9 @@ public static class Program
             var runner = new ScenarioRunner(app, autoExit);
             _ = Task.Run(async () =>
             {
-                await Task.Delay(1000);
+                // Wait for message loop to start pumping and WebView to begin initializing
+                // On Windows CI, WebView2 initialization can be slow
+                await Task.Delay(3000);
                 await runner.RunAllScenariosAsync();
             });
         }
