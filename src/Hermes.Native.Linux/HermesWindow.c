@@ -283,6 +283,10 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
     // Inject JavaScript bridge
     const char* bridgeScript =
         "console.log('[Hermes JS] Bridge script injecting...');\n"
+        "window.__hermesReceiveCallbacks = [];\n"
+        "window.__hermesDispatchMessage = function(message) {\n"
+        "    window.__hermesReceiveCallbacks.forEach(function(cb) { cb(message); });\n"
+        "};\n"
         "window.external = {\n"
         "    sendMessage: function(message) {\n"
         "        console.log('[Hermes JS] sendMessage called:', message.substring(0, 100));\n"
@@ -290,7 +294,7 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
         "    },\n"
         "    receiveMessage: function(callback) {\n"
         "        console.log('[Hermes JS] receiveMessage callback registered');\n"
-        "        window.__hermesReceiveCallback = callback;\n"
+        "        window.__hermesReceiveCallbacks.push(callback);\n"
         "    }\n"
         "};\n"
         "console.log('[Hermes JS] Bridge ready');\n";
@@ -502,7 +506,7 @@ void Hermes_Window_SendWebMessage(void* window, const char* message) {
     }
 
     char* script = g_strdup_printf(
-        "if(window.__hermesReceiveCallback) window.__hermesReceiveCallback(\"%s\");",
+        "if(window.__hermesDispatchMessage) window.__hermesDispatchMessage(\"%s\");",
         escaped->str);
     g_string_free(escaped, TRUE);
 
