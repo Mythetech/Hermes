@@ -172,6 +172,12 @@ jobs:
             exit 1
           }
 
+          # Verify tests actually ran (not just smoke test)
+          if ($stdout -notmatch "HERMES_TEST_SUMMARY:") {
+            Write-Error "FAIL: Integration test scenarios did not run (no HERMES_TEST_SUMMARY marker)"
+            exit 1
+          }
+
           if ($process.ExitCode -ne 0) {
             Write-Error "FAIL: Process exited with code $($process.ExitCode)"
             exit 1
@@ -269,6 +275,12 @@ jobs:
             exit 1
           fi
 
+          # Verify tests actually ran (not just smoke test)
+          if ! grep -q "HERMES_TEST_SUMMARY:" stdout.txt; then
+            echo "FAIL: Integration test scenarios did not run (no HERMES_TEST_SUMMARY marker)"
+            exit 1
+          fi
+
           if [[ $EXIT_CODE -ne 0 ]]; then
             echo "FAIL: Process exited with code $EXIT_CODE"
             exit 1
@@ -341,6 +353,12 @@ jobs:
 
           if grep -q "HERMES_TEST_FAIL:" stdout.txt; then
             echo "FAIL: One or more integration tests failed"
+            exit 1
+          fi
+
+          # Verify tests actually ran (not just smoke test)
+          if ! grep -q "HERMES_TEST_SUMMARY:" stdout.txt; then
+            echo "FAIL: Integration test scenarios did not run (no HERMES_TEST_SUMMARY marker)"
             exit 1
           fi
 

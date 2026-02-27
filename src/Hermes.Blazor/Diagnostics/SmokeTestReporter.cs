@@ -13,6 +13,9 @@ public static class SmokeTestReporter
     private static readonly bool _exitOnSuccess =
         Environment.GetEnvironmentVariable("HERMES_SMOKE_TEST_EXIT") == "1";
 
+    private static readonly bool _isIntegrationTest =
+        Environment.GetEnvironmentVariable("HERMES_INTEGRATION_TEST") == "1";
+
     private static bool _firstRenderReported;
 
     /// <summary>
@@ -33,7 +36,7 @@ public static class SmokeTestReporter
         Console.WriteLine($"HERMES_READY:{elapsedMilliseconds:F2}");
         Console.Out.Flush();
 
-        if (_exitOnSuccess)
+        if (_exitOnSuccess && !_isIntegrationTest)
         {
             Environment.Exit(0);
         }
