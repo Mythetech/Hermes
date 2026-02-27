@@ -1,4 +1,5 @@
 using Hermes;
+using Hermes.Abstractions;
 using Hermes.Blazor;
 
 namespace IntegrationTestApp.TestScenarios;
