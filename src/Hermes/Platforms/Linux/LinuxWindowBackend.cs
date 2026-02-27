@@ -341,6 +341,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
     public void BeginInvoke(Action action)
     {
+        GCHandle handle = default;
         var invokeDelegate = new LinuxNativeDelegates.InvokeCallback(() =>
         {
             try
@@ -351,11 +352,14 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
             {
                 // Swallow exceptions in async invoke
             }
+            finally
+            {
+                if (handle.IsAllocated)
+                    handle.Free();
+            }
         });
 
-        // Keep delegate alive - add to pinned list
-        _pinnedDelegates.Add(invokeDelegate);
-
+        handle = GCHandle.Alloc(invokeDelegate);
         LinuxNative.WindowBeginInvoke(_windowHandle, Marshal.GetFunctionPointerForDelegate(invokeDelegate));
     }
 
