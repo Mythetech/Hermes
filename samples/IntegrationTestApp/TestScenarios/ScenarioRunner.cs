@@ -59,8 +59,18 @@ public sealed class ScenarioRunner : IDisposable
         if (_autoExit)
         {
             Console.WriteLine("Auto-exiting after test completion...");
+
             // Close must happen on the UI thread
             _app.MainWindow.Invoke(() => _app.MainWindow.Close());
+
+            // Backstop: if Close() doesn't terminate the app within 5 seconds, force exit.
+            // On some platforms (e.g. macOS) Close may not fully stop the run loop.
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(5000);
+                Console.WriteLine("Force-exiting: Close() did not terminate the app within 5s.");
+                Environment.Exit(TestReporter.AllPassed ? 0 : 1);
+            });
         }
     }
 
@@ -183,17 +193,30 @@ public sealed class ScenarioRunner : IDisposable
 
             _app.MainWindow.OnWebMessage(handler);
 
-            // The JS bridge is already initialized by the time this test runs:
-            // - 3s initial delay in Program.cs before any tests start
-            // - Several seconds of prior test execution (resize, move, focus)
-            // - Console logs confirm "Bridge ready" fires well before this point
-            // Send ping directly - no need to wait for js-ready signal.
-            Console.WriteLine("WEB_MESSAGE_TEST: Sending ping...");
-            _app.MainWindow.Invoke(() => _app.MainWindow.SendMessage("ping"));
+            // Send ping periodically until we get pong or 30s overall timeout.
+            // WebView2 on Windows can take 30+ seconds to initialize in CI,
+            // and the page may not have fully loaded on first attempt.
+            using var overallCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            _ = Task.Run(async () =>
+            {
+                while (!overallCts.IsCancellationRequested && !pongTcs.Task.IsCompleted)
+                {
+                    try
+                    {
+                        Console.WriteLine("WEB_MESSAGE_TEST: Sending ping...");
+                        _app.MainWindow.Invoke(() => _app.MainWindow.SendMessage("ping"));
+                    }
+                    catch
+                    {
+                        // SendMessage may fail if WebView not fully ready yet
+                    }
 
-            // Wait for pong response
-            using var pongCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var result = await pongTcs.Task.WaitAsync(pongCts.Token);
+                    try { await Task.Delay(2000, overallCts.Token); }
+                    catch (OperationCanceledException) { break; }
+                }
+            }, overallCts.Token);
+
+            var result = await pongTcs.Task.WaitAsync(overallCts.Token);
 
             TestReporter.Assert("web-message-roundtrip",
                 result.Contains("pong"),
@@ -201,7 +224,7 @@ public sealed class ScenarioRunner : IDisposable
         }
         catch (OperationCanceledException)
         {
-            TestReporter.Fail("web-message-roundtrip", "Timeout waiting for pong response");
+            TestReporter.Fail("web-message-roundtrip", "Timeout waiting for pong response after 30s");
         }
         catch (Exception ex)
         {
