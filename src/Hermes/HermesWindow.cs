@@ -19,6 +19,8 @@ public sealed class HermesWindow : IDisposable
     private bool _initialized;
     private bool _disposed;
 
+    private const int MinPersistableSize = 10;
+
     // Track last known normal (non-maximized) window state for persistence
     private int _lastNormalX;
     private int _lastNormalY;
@@ -650,7 +652,12 @@ public sealed class HermesWindow : IDisposable
             _backend.Moved += OnMovedForPersistence;
             _backend.Maximized += OnMaximizedForPersistence;
             _backend.Restored += OnRestoredForPersistence;
-            CaptureNormalState();
+
+            // Seed normal state from options (not backend, which may report 0x0 before Show())
+            _lastNormalX = _options.X ?? 0;
+            _lastNormalY = _options.Y ?? 0;
+            _lastNormalWidth = _options.Width;
+            _lastNormalHeight = _options.Height;
         }
 
         _initialized = true;
@@ -663,6 +670,12 @@ public sealed class HermesWindow : IDisposable
 
         if (WindowStateStore.Instance.TryGetState(_windowStateKey, out var state) && state is not null)
         {
+            if (state.Width < MinPersistableSize || state.Height < MinPersistableSize)
+            {
+                HermesLogger.Warning($"Ignoring corrupted window state for '{_windowStateKey}': size {state.Width}x{state.Height}");
+                return;
+            }
+
             _options.X = state.X;
             _options.Y = state.Y;
             _options.Width = state.Width;
@@ -693,6 +706,12 @@ public sealed class HermesWindow : IDisposable
                 IsMaximized = isMaximized
             };
 
+            if (state.Width < MinPersistableSize || state.Height < MinPersistableSize)
+            {
+                HermesLogger.Warning($"Skipping window state save for '{_windowStateKey}': degenerate size {state.Width}x{state.Height}");
+                return;
+            }
+
             WindowStateStore.Instance.SaveState(_windowStateKey, state);
             HermesLogger.Info($"Saved window state for '{_windowStateKey}'");
         }
@@ -709,6 +728,12 @@ public sealed class HermesWindow : IDisposable
 
         try
         {
+            if (width < MinPersistableSize || height < MinPersistableSize)
+            {
+                HermesLogger.Warning($"Skipping window state save for '{_windowStateKey}': degenerate size {width}x{height}");
+                return;
+            }
+
             var state = new WindowState
             {
                 X = x,
@@ -724,19 +749,6 @@ public sealed class HermesWindow : IDisposable
         catch (Exception ex)
         {
             HermesLogger.Error($"Failed to save window state for '{_windowStateKey}': {ex.Message}");
-        }
-    }
-
-    private void CaptureNormalState()
-    {
-        if (!_backend.IsMaximized)
-        {
-            var pos = _backend.Position;
-            var size = _backend.Size;
-            _lastNormalX = pos.X;
-            _lastNormalY = pos.Y;
-            _lastNormalWidth = size.Width;
-            _lastNormalHeight = size.Height;
         }
     }
 

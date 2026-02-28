@@ -110,6 +110,15 @@ public sealed class TestableHermesWindow : IDisposable
     }
 
     /// <summary>
+    /// Enable window state persistence.
+    /// </summary>
+    public TestableHermesWindow RememberWindowState(string? key = null)
+    {
+        _window.RememberWindowState(key);
+        return this;
+    }
+
+    /// <summary>
     /// Start the window maximized.
     /// </summary>
     public TestableHermesWindow Maximize()
