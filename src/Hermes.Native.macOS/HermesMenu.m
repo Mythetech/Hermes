@@ -144,7 +144,7 @@
 }
 
 - (void)removeItemFromMenu:(NSString*)menuLabel itemId:(NSString*)itemId {
-    NSMenu* menu = [self findMenuByLabel:menuLabel];
+    NSMenu* menu = [self findMenuByPath:menuLabel];
     if (!menu) return;
 
     NSMenuItem* item = _itemsById[itemId];
