@@ -21,9 +21,20 @@
     <Authors>Mythetech</Authors>
     <Description>Blazor integration for Hermes desktop framework</Description>
     <PackageTags>blazor;desktop;hermes;webview</PackageTags>
+    <PackageProjectUrl>https://github.com/Mythetech/Hermes</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Mythetech/Hermes.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
+
+  <!-- Include LICENSE and README in NuGet package -->
+  <ItemGroup>
+    <None Include="../../LICENSE" Pack="true" PackagePath="/" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
 
   <!-- SourceLink for debugging -->
   <ItemGroup>

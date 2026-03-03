@@ -1,3 +1,4 @@
+// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;

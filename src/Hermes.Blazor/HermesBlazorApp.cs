@@ -1,3 +1,4 @@
+// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 using System.Diagnostics.CodeAnalysis;
 using Hermes.Blazor.Threading;
 using Hermes.Diagnostics;

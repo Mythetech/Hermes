@@ -1,3 +1,4 @@
+// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 #include "HermesMenu.h"
 #include "HermesWindow.h"
 #include "Exports.h"

@@ -1,3 +1,4 @@
+// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 using System.Diagnostics;
 using System.Text.Json;
 using Spectre.Console;

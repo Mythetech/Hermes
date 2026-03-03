@@ -1,3 +1,4 @@
+// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 using System.Runtime.Versioning;
 using Microsoft.Win32;
 using Windows.Win32;

@@ -1,3 +1,4 @@
+// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 using Hermes.Storage;
 using Hermes.Testing;
 using Xunit;

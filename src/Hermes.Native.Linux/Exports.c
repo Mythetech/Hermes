@@ -1,3 +1,4 @@
+// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 // Exports.c
 // This file ensures all exported symbols are available in the shared library.
 // The actual implementations are in:

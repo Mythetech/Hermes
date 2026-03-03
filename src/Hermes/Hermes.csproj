@@ -31,9 +31,20 @@
     <Authors>Mythetech</Authors>
     <Description>Cross-platform native desktop framework for .NET</Description>
     <PackageTags>desktop;native;webview;blazor;cross-platform</PackageTags>
+    <PackageProjectUrl>https://github.com/Mythetech/Hermes</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Mythetech/Hermes.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
+
+  <!-- Include LICENSE and README in NuGet package -->
+  <ItemGroup>
+    <None Include="../../LICENSE" Pack="true" PackagePath="/" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
 
   <!-- Multi-RID packaging for CI (passed via -p:IsPackaging=true -p:CIArtifactsPath=...) -->
   <ItemGroup Condition="'$(IsPackaging)' == 'true' AND '$(CIArtifactsPath)' != ''">

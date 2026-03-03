@@ -1,3 +1,4 @@
+// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 #include "Exports.h"
 #include "HermesWindow.h"
 #include <gtk/gtk.h>

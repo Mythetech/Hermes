@@ -1,3 +1,4 @@
+// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 #ifndef HERMES_DIALOGS_H
 #define HERMES_DIALOGS_H
 
