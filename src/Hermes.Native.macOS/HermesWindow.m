@@ -1,3 +1,4 @@
+// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 #import "HermesWindow.h"
 #import "HermesWindowDelegate.h"
 #import "HermesUiDelegate.h"

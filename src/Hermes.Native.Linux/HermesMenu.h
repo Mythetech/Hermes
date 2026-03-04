@@ -1,3 +1,4 @@
+// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 #ifndef HERMES_MENU_H
 #define HERMES_MENU_H
 

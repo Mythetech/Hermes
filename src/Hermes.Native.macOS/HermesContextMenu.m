@@ -1,3 +1,4 @@
+// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 #import "HermesContextMenu.h"
 #import "HermesWindow.h"
 #import "HermesMenu.h" // For parseAccelerator
