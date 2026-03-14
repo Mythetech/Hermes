@@ -9,9 +9,7 @@ A modern, AOT-compatible native desktop framework for .NET 10.
 
 Hermes is a cross-platform desktop framework that enables .NET developers to create native desktop applications with web-based UIs. It provides native windows, menus, dialogs, and WebView integration across Windows, macOS, and Linux.
 
-Designed for .NET 10 and modern development workflows, Hermes prioritizes AOT compatibility, minimal native code, and runtime performance. Unlike frameworks that rely on large C++ codebases, Hermes uses pure C# on Windows (via CsWin32 source generators) and thin native shims on macOS and Linux—totaling approximately 3,800 lines of native code compared to 12,300+ in similar frameworks.
-
-Hermes builds upon patterns established by [Photino](https://github.com/nickg/Photino). See [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES/) for attribution.
+Designed for .NET 10 and modern development workflows, Hermes prioritizes AOT compatibility, minimal native code, and runtime performance. Unlike frameworks that rely on large C++ codebases, Hermes uses pure C# on Windows (via CsWin32 source generators) and thin native shims on macOS and Linux—totaling approximately 4,900 lines of native code.
 
 ## Features
 
@@ -132,8 +130,8 @@ Hermes minimizes native code by leveraging platform-specific .NET capabilities:
 | Platform | Approach | Native Code |
 |----------|----------|-------------|
 | Windows | CsWin32 source generators + WebView2 NuGet | None |
-| macOS | Thin Objective-C shim with `LibraryImport` | ~2,400 LOC |
-| Linux | Thin C shim with `LibraryImport` | ~1,400 LOC |
+| macOS | Thin Objective-C shim with `LibraryImport` | ~3,100 LOC |
+| Linux | Thin C shim with `LibraryImport` | ~1,800 LOC |
 
 This architecture provides:
 - **Easier maintenance** — Most logic lives in C#, not platform-specific native code
@@ -160,5 +158,3 @@ For detailed technical information, see [ARCHITECTURE.md](ARCHITECTURE.md).
 Hermes is source-available under the [Elastic License 2.0](LICENSE).
 
 **Free for:** non-commercial use, educational use, open source projects, and commercial use under $1M annual revenue. See [COMMERCIAL.md](COMMERCIAL.md) for details.
-
-This project incorporates patterns from Photino. See [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES/) for attribution details.
