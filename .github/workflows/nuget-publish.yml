@@ -69,6 +69,7 @@ jobs:
           path: |
             src/Hermes/bin/Release/net10.0/Hermes.dll
             src/Hermes/bin/Release/net10.0/Hermes.pdb
+          retention-days: 14
 
       # macOS only: Upload native binary
       - name: Upload Native Binary (macOS)
@@ -77,6 +78,7 @@ jobs:
         with:
           name: native-osx
           path: src/Hermes.Native.macOS/lib/libHermes.Native.macOS.dylib
+          retention-days: 14
 
       # Linux only: Upload native binary
       - name: Upload Native Binary (Linux)
@@ -85,6 +87,7 @@ jobs:
         with:
           name: native-linux
           path: src/Hermes.Native.Linux/lib/libHermes.Native.Linux.so
+          retention-days: 14
 
   smoke-test:
     needs: build
@@ -224,6 +227,7 @@ jobs:
         with:
           name: nuget-packages
           path: packages/*.nupkg
+          retention-days: 14
 
       - name: Publish to NuGet.org
         run: |
