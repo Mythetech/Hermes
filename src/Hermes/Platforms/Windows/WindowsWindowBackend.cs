@@ -650,7 +650,8 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
                     return;
                 }
 
-                WebMessageReceived?.Invoke(message);
+                if (message is not null)
+                    WebMessageReceived?.Invoke(message);
             };
 
             _webView.WebResourceRequested += HandleWebResourceRequested;
