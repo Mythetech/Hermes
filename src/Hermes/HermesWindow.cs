@@ -677,12 +677,23 @@ public sealed class HermesWindow : IDisposable
                 return;
             }
 
-            _options.X = state.X;
-            _options.Y = state.Y;
             _options.Width = state.Width;
             _options.Height = state.Height;
             _options.Maximized = state.IsMaximized;
-            _options.CenterOnScreen = false; // Use saved position instead of centering
+
+            if (state.IsMaximized)
+            {
+                // When maximized, let the OS place the window, saved position may be from
+                // a different monitor configuration and could launch off-screen
+                HermesLogger.Info($"Restoring maximized state for '{_windowStateKey}', skipping saved position");
+            }
+            else
+            {
+                // Clamp negative positions as a safety net for existing bad state files
+                _options.X = Math.Max(0, state.X);
+                _options.Y = Math.Max(0, state.Y);
+                _options.CenterOnScreen = false; // Use saved position instead of centering
+            }
 
             HermesLogger.Info($"Restored window state for '{_windowStateKey}'");
         }
@@ -698,10 +709,21 @@ public sealed class HermesWindow : IDisposable
             // When maximized, save the cached normal dimensions (captured before maximize)
             // Otherwise, save the current backend dimensions
             var isMaximized = _backend.IsMaximized;
+            var x = isMaximized ? _lastNormalX : _backend.Position.X;
+            var y = isMaximized ? _lastNormalY : _backend.Position.Y;
+
+            // Clamp negative positions, these are typically bogus values from maximize transitions
+            if (x < 0 || y < 0)
+            {
+                HermesLogger.Warning($"Clamping negative position for '{_windowStateKey}': ({x}, {y})");
+                x = Math.Max(0, x);
+                y = Math.Max(0, y);
+            }
+
             var state = new WindowState
             {
-                X = isMaximized ? _lastNormalX : _backend.Position.X,
-                Y = isMaximized ? _lastNormalY : _backend.Position.Y,
+                X = x,
+                Y = y,
                 Width = isMaximized ? _lastNormalWidth : _backend.Size.Width,
                 Height = isMaximized ? _lastNormalHeight : _backend.Size.Height,
                 IsMaximized = isMaximized
@@ -733,6 +755,14 @@ public sealed class HermesWindow : IDisposable
             {
                 HermesLogger.Warning($"Skipping window state save for '{_windowStateKey}': degenerate size {width}x{height}");
                 return;
+            }
+
+            // Clamp negative positions, these are typically bogus values from maximize transitions
+            if (x < 0 || y < 0)
+            {
+                HermesLogger.Warning($"Clamping negative position for '{_windowStateKey}': ({x}, {y})");
+                x = Math.Max(0, x);
+                y = Math.Max(0, y);
             }
 
             var state = new WindowState
