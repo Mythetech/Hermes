@@ -373,3 +373,83 @@ jobs:
       - name: Skipped
         if: steps.check.outputs.skip == 'true'
         run: echo "Skipping ${{ matrix.platform }} - not selected"
+
+  single-instance-test:
+    name: Single Instance Tests (${{ matrix.platform }})
+    needs: unit-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: macos
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check if platform should run
+        id: check
+        shell: bash
+        run: |
+          if [[ "${{ github.event.inputs.platforms }}" != "" && "${{ github.event.inputs.platforms }}" != "all" && "${{ github.event.inputs.platforms }}" != "${{ matrix.platform }}" ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.skip != 'true'
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.check.outputs.skip != 'true'
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build Single Instance Integration Tests
+        if: steps.check.outputs.skip != 'true'
+        run: dotnet build tests/Hermes.SingleInstance.IntegrationTests -c Release
+
+      - name: Run Single Instance Integration Tests
+        if: steps.check.outputs.skip != 'true'
+        shell: bash
+        run: |
+          APP_PATH="tests/Hermes.SingleInstance.IntegrationTests/bin/Release/net10.0/Hermes.SingleInstance.IntegrationTests"
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            APP_PATH="${APP_PATH}.exe"
+          fi
+
+          chmod +x "$APP_PATH" 2>/dev/null || true
+
+          set +e
+          timeout 60s "$APP_PATH" > stdout.txt 2>&1 || true
+          EXIT_CODE=${PIPESTATUS[0]:-$?}
+          set -e
+
+          echo "=== Test Output ==="
+          cat stdout.txt
+
+          if ! grep -q "HERMES_READY:" stdout.txt; then
+            echo "FAIL: Never received HERMES_READY marker"
+            exit 1
+          fi
+
+          if grep -q "HERMES_TEST_FAIL:" stdout.txt; then
+            echo "FAIL: One or more single-instance tests failed"
+            exit 1
+          fi
+
+          if ! grep -q "HERMES_TEST_SUMMARY:" stdout.txt; then
+            echo "FAIL: Tests did not complete (no HERMES_TEST_SUMMARY marker)"
+            exit 1
+          fi
+
+          echo ""
+          echo "PASS: Single instance integration tests completed successfully"
+
+      - name: Skipped
+        if: steps.check.outputs.skip == 'true'
+        run: echo "Skipping ${{ matrix.platform }} - not selected"
