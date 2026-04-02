@@ -424,9 +424,28 @@ jobs:
 
           chmod +x "$APP_PATH" 2>/dev/null || true
 
+          TIMEOUT=60
+
           set +e
-          timeout 60s "$APP_PATH" > stdout.txt 2>&1 || true
-          EXIT_CODE=${PIPESTATUS[0]:-$?}
+          "$APP_PATH" > stdout.txt 2>&1 &
+          PID=$!
+
+          elapsed=0
+          while kill -0 "$PID" 2>/dev/null; do
+            if [[ $elapsed -ge $TIMEOUT ]]; then
+              kill "$PID" 2>/dev/null || true
+              wait "$PID" 2>/dev/null || true
+              echo "=== Test Output ==="
+              cat stdout.txt
+              echo "FAIL: Process did not exit within ${TIMEOUT}s"
+              exit 1
+            fi
+            sleep 1
+            ((elapsed++))
+          done
+
+          wait "$PID"
+          EXIT_CODE=$?
           set -e
 
           echo "=== Test Output ==="
