@@ -95,30 +95,43 @@ Enable React, Vue, Angular, Svelte and other JS/TS frameworks as an alternative 
 ---
 
 ### Single Instance Support
-**Status:** Not started
+**Status:** Complete
 **Platforms:** All
 **Complexity:** Low
 
-Ensure only one instance of the application runs at a time.
+Ensures only one instance of the application runs at a time, with command-line arg forwarding from second instances to the first. Uses cross-platform .NET APIs (named Mutex + named pipes), no native code required.
 
-| Platform | API |
-|----------|-----|
-| Windows | CreateMutex / named pipe |
-| macOS | NSDistributedNotificationCenter / file lock |
-| Linux | File lock in /tmp or D-Bus |
-
-**Proposed API:**
+**API (non-Blazor):**
 ```csharp
-HermesWindow.Create()
-    .SingleInstance(onSecondInstance: args => {
-        // Bring existing window to front
-    })
+using var guard = HermesApplication.SingleInstance("my-app-id");
+if (!guard.IsFirstInstance)
+{
+    guard.NotifyFirstInstance(args);
+    return;
+}
+
+guard.SecondInstanceLaunched += secondArgs =>
+{
+    window.Invoke(() => { /* bring to front, handle args */ });
+};
 ```
 
-**Features needed:**
-- [ ] Detect existing instance
-- [ ] Callback when second instance launches
-- [ ] Pass command line args to existing instance
+**API (Blazor):**
+```csharp
+var builder = HermesBlazorAppBuilder.CreateDefault(args);
+builder.SingleInstance("my-app-id", guard =>
+{
+    guard.SecondInstanceLaunched += secondArgs =>
+    {
+        // Bring window to front, handle args
+    };
+});
+```
+
+**Features:**
+- [x] Detect existing instance
+- [x] Callback when second instance launches
+- [x] Pass command line args to existing instance
 
 ---
 

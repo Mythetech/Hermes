@@ -1,6 +1,7 @@
 // Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 using Hermes.Abstractions;
 using Hermes.DockMenu;
+using Hermes.SingleInstance;
 
 namespace Hermes;
 
@@ -80,6 +81,34 @@ public static class HermesApplication
             _dockMenu?.Dispose();
             _dockMenu = null;
         }
+    }
+
+    /// <summary>
+    /// Creates a single-instance guard for the application.
+    /// Call this early in Main() before creating any windows.
+    /// </summary>
+    /// <param name="applicationId">
+    /// A unique identifier for this application. Must contain only alphanumeric characters,
+    /// hyphens, underscores, and dots.
+    /// </param>
+    /// <returns>
+    /// A <see cref="SingleInstanceGuard"/> that should be disposed when the application exits.
+    /// Check <see cref="SingleInstanceGuard.IsFirstInstance"/> to determine if this is the primary instance.
+    /// </returns>
+    /// <example>
+    /// <code>
+    /// using var guard = HermesApplication.SingleInstance("my-app");
+    /// if (!guard.IsFirstInstance)
+    /// {
+    ///     guard.NotifyFirstInstance(args);
+    ///     return;
+    /// }
+    /// // Continue with window creation...
+    /// </code>
+    /// </example>
+    public static SingleInstanceGuard SingleInstance(string applicationId)
+    {
+        return new SingleInstanceGuard(applicationId);
     }
 
     private static IDockMenuBackend? CreateDockMenuBackend()
