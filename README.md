@@ -9,18 +9,18 @@ A modern, AOT-compatible native desktop framework for .NET 10.
 
 Hermes is a cross-platform desktop framework that enables .NET developers to create native desktop applications with web-based UIs. It provides native windows, menus, dialogs, and WebView integration across Windows, macOS, and Linux.
 
-Designed for .NET 10 and modern development workflows, Hermes prioritizes AOT compatibility, minimal native code, and runtime performance. Unlike frameworks that rely on large C++ codebases, Hermes uses pure C# on Windows (via CsWin32 source generators) and thin native shims on macOS and Linux—totaling approximately 4,900 lines of native code.
+Designed for .NET 10 and modern development workflows, Hermes prioritizes AOT compatibility, minimal native code, and runtime performance. Unlike frameworks that rely on large C++ codebases, Hermes uses pure C# on Windows (via CsWin32 source generators) and thin native shims on macOS and Linux, totaling approximately 4,900 lines of native code.
 
 ## Features
 
-- **Native Windows and WebView** — Platform-native windows with embedded WebView2 (Windows), WebKitGTK (Linux), and WKWebView (macOS)
-- **Native Menus** — Full menu bar support with keyboard accelerators and runtime modification for plugin systems
-- **Context Menus** — Native right-click menus with screen coordinate positioning
-- **File Dialogs** — Native open, save, and folder selection dialogs with file filters
-- **AOT Compatible** — Designed for Native AOT from day one using `LibraryImport` instead of `DllImport`
-- **Blazor Integration** — First-class support for Blazor applications via `Hermes.Blazor`
-- **Cross-Platform** — Single codebase targeting Windows, macOS, and Linux
-- **Minimal Dependencies** — Pure C# on Windows; thin native layers only where required
+- **Native Windows and WebView** Platform-native windows with embedded WebView2 (Windows), WebKitGTK (Linux), and WKWebView (macOS)
+- **Native Menus** Full menu bar support with keyboard accelerators and runtime modification for plugin systems
+- **Context Menus** Native right-click menus with screen coordinate positioning
+- **File Dialogs** Native open, save, and folder selection dialogs with file filters
+- **AOT Compatible**,Designed for Native AOT from day one using `LibraryImport` instead of `DllImport`
+- **Blazor Integration** First-class support for Blazor applications via `Hermes.Blazor`
+- **Cross-Platform** Single codebase targeting Windows, macOS, and Linux
+- **Minimal Dependencies** Pure C# on Windows; thin native layers only where required
 
 ## Platform Support
 
@@ -84,7 +84,7 @@ app.Run();
 
 ## Native Menus
 
-Hermes provides a fluent API for building native menus with full support for runtime modification—enabling dynamic plugin loading scenarios.
+Hermes provides a fluent API for building native menus with full support for runtime modification, enabling dynamic plugin loading scenarios.
 
 ```csharp
 // Build menus with fluent API
@@ -121,7 +121,7 @@ window.MenuBar.AddMenu("Plugins", plugins =>
 });
 ```
 
-Accelerators automatically translate between platforms—`Ctrl+S` on Windows/Linux becomes `Cmd+S` on macOS.
+Accelerators automatically translate between platforms, `Ctrl+S` on Windows/Linux becomes `Cmd+S` on macOS.
 
 ## Architecture
 
@@ -134,9 +134,9 @@ Hermes minimizes native code by leveraging platform-specific .NET capabilities:
 | Linux | Thin C shim with `LibraryImport` | ~1,800 LOC |
 
 This architecture provides:
-- **Easier maintenance** — Most logic lives in C#, not platform-specific native code
-- **AOT compatibility** — `LibraryImport` generates marshalling code at compile time
-- **Reduced build complexity** — No C++ toolchain required on Windows
+- **Easier maintenance**, Most logic lives in C#, not platform-specific native code
+- **AOT compatibility**, `LibraryImport` generates marshalling code at compile time
+- **Reduced build complexity**, No C++ toolchain required on Windows
 
 For detailed technical information, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -149,9 +149,9 @@ For detailed technical information, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Documentation
 
-- [Architecture Overview](ARCHITECTURE.md) — Technical design and platform strategy
-- [Platform Differences](PLATFORM-DIFFERENCES.md) — Cross-platform behavior notes
-- [Roadmap](ROADMAP.md) — Planned features and enhancements
+- [Architecture Overview](ARCHITECTURE.md): Technical design and platform strategy
+- [Platform Differences](PLATFORM-DIFFERENCES.md): Cross-platform behavior notes
+- [Roadmap](ROADMAP.md): Planned features and enhancements
 
 ## License
 

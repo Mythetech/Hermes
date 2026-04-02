@@ -65,7 +65,7 @@ make
 - Follow existing code conventions in the project
 - Use `file`-scoped namespaces
 - Prefer modern C# features (.NET 10 target)
-- Keep native code minimal — prefer managed C# solutions where possible
+- Keep native code minimal, preferring managed C# solutions where possible
 - Ensure AOT compatibility for new public APIs
 
 ## Architecture

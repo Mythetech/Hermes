@@ -23,7 +23,7 @@ public class WindowStatePersistenceTests
             .RememberWindowState(key);
 
         testWindow.Show();
-        // Close immediately — no resize or move events
+        // Close immediately, no resize or move events
         testWindow.Close();
 
         Assert.True(WindowStateStore.Instance.TryGetState(key, out var state));
@@ -58,7 +58,7 @@ public class WindowStatePersistenceTests
     }
 
     /// <summary>
-    /// Degenerate state should not be saved to disk — the save should be skipped entirely.
+    /// Degenerate state should not be saved to disk, the save should be skipped entirely.
     /// </summary>
     [Fact]
     public void Save_RejectsDegenerateSize()

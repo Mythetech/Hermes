@@ -74,7 +74,7 @@ Programmatic clipboard access for copy/paste operations.
 
 Enable React, Vue, Angular, Svelte and other JS/TS frameworks as an alternative to Blazor. The core infrastructure already supports this - the `window.external` bridge is injected at the native level.
 
-**Research & API Design:** [.claude/plans/elegant-pondering-goose.md](/.claude/plans/elegant-pondering-goose.md)
+**Research & API Design:** [docs/plans/SpaAlternatives.md](docs/plans/SpaAlternatives.md)
 
 **New package:** `Hermes.Web` providing:
 - [ ] Static file serving with SPA fallback (`UseStaticFiles()`, `UseSpaFallback()`)

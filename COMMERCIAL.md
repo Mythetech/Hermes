@@ -6,10 +6,10 @@ Hermes is source-available under the [Elastic License 2.0](LICENSE).
 
 You may use Hermes **free of charge** for:
 
-- **Non-commercial purposes** — Personal projects, hobbyist development, experimentation
-- **Educational purposes** — Academic research, teaching, student projects
-- **Open source projects** — Projects licensed under OSI-approved licenses (MIT, Apache 2.0, BSD, GPL, etc.)
-- **Small businesses** — Commercial use by organizations with less than **$1 million USD** in annual revenue
+- **Non-commercial purposes** Personal projects, hobbyist development, experimentation
+- **Educational purposes** Academic research, teaching, student projects
+- **Open source projects** Projects licensed under OSI-approved licenses (MIT, Apache 2.0, BSD, GPL, etc.)
+- **Small businesses** Commercial use by organizations with less than **$1 million USD** in annual revenue
 
 ## Paid License
 
@@ -27,10 +27,10 @@ This includes:
 
 Whether free or paid, your license includes:
 
-- **Unlimited distribution** — Distribute your application to as many users as you want
-- **No seat limits** — No restrictions on team size or number of developers
-- **No user tracking** — We don't count or monitor your end users
-- **Perpetual use of shipped versions** — Applications you ship continue to work even if you don't renew
+- **Unlimited distribution**,Distribute your application to as many users as you want
+- **No seat limits** No restrictions on team size or number of developers
+- **No user tracking** We don't count or monitor your end users
+- **Perpetual use of shipped versions** Applications you ship continue to work even if you don't renew
 
 ## Contact
 
