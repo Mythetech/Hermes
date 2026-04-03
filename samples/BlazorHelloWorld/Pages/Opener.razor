@@ -1,0 +1,73 @@
+@page "/opener"
+
+<h1>Opener</h1>
+<p class="subtitle">Open files, URLs, and folders in their default applications</p>
+
+<div class="opener-section">
+    <h2>Open URL</h2>
+    <input type="text" @bind="_url" placeholder="https://example.com" />
+    <button @onclick="OnOpenUrl">Open in Browser</button>
+</div>
+
+<div class="opener-section">
+    <h2>Open File</h2>
+    <input type="text" @bind="_filePath" placeholder="/path/to/file.pdf" />
+    <button @onclick="OnOpenFile">Open File</button>
+</div>
+
+<div class="opener-section">
+    <h2>Reveal in File Manager</h2>
+    <input type="text" @bind="_revealPath" placeholder="/path/to/file.txt" />
+    <button @onclick="OnReveal">Reveal</button>
+</div>
+
+@if (_error is not null)
+{
+    <div class="error">@_error</div>
+}
+
+@code {
+    private string _url = "https://example.com";
+    private string _filePath = "";
+    private string _revealPath = "";
+    private string? _error;
+
+    private void OnOpenUrl()
+    {
+        _error = null;
+        try
+        {
+            HermesApplication.OpenUrl(_url);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void OnOpenFile()
+    {
+        _error = null;
+        try
+        {
+            HermesApplication.OpenFile(_filePath);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void OnReveal()
+    {
+        _error = null;
+        try
+        {
+            HermesApplication.RevealInFileManager(_revealPath);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

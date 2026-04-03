@@ -111,6 +111,33 @@ public static class HermesApplication
         return new SingleInstanceGuard(applicationId);
     }
 
+    /// <summary>
+    /// Opens a URL in the default browser.
+    /// Only http:// and https:// schemes are allowed.
+    /// </summary>
+    /// <param name="url">The URL to open.</param>
+    /// <exception cref="ArgumentException">Thrown when the URL is null, empty, or uses a disallowed scheme.</exception>
+    public static void OpenUrl(string url) => Opener.OpenUrl(url);
+
+    /// <summary>
+    /// Opens a file or directory in its default application.
+    /// Directories are opened in the default file manager.
+    /// </summary>
+    /// <param name="path">The path to the file or directory to open.</param>
+    /// <exception cref="ArgumentException">Thrown when the path is null or empty.</exception>
+    /// <exception cref="FileNotFoundException">Thrown when the path does not exist.</exception>
+    public static void OpenFile(string path) => Opener.OpenFile(path);
+
+    /// <summary>
+    /// Reveals a file or directory in the platform's file manager.
+    /// For files, the containing folder is opened and the file is selected (macOS and Windows).
+    /// On Linux, the containing directory is opened without file selection.
+    /// </summary>
+    /// <param name="path">The path to the file or directory to reveal.</param>
+    /// <exception cref="ArgumentException">Thrown when the path is null or empty.</exception>
+    /// <exception cref="FileNotFoundException">Thrown when the path does not exist.</exception>
+    public static void RevealInFileManager(string path) => Opener.RevealInFileManager(path);
+
     private static IDockMenuBackend? CreateDockMenuBackend()
     {
 #if MACOS
