@@ -460,6 +460,11 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         parameters.OnFocusIn = Marshal.GetFunctionPointerForDelegate(focusInDelegate);
         parameters.OnFocusOut = Marshal.GetFunctionPointerForDelegate(focusOutDelegate);
         parameters.OnWebMessage = Marshal.GetFunctionPointerForDelegate(webMessageDelegate);
+
+        // Set up WebView crash callback
+        var webViewCrashDelegate = new LinuxNativeDelegates.WebViewCrashCallback(OnNativeWebViewCrash);
+        _pinnedDelegates.Add(webViewCrashDelegate);
+        parameters.OnWebViewCrash = Marshal.GetFunctionPointerForDelegate(webViewCrashDelegate);
     }
 
     private void OnNativeClosing()
@@ -491,6 +496,18 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     {
         var message = Marshal.PtrToStringUTF8(messagePtr) ?? "";
         WebMessageReceived?.Invoke(message);
+    }
+
+    private void OnNativeWebViewCrash()
+    {
+        if (!Diagnostics.HermesCrashInterceptor.IsEnabled)
+            return;
+
+        var context = Diagnostics.HermesCrashInterceptor.BuildCrashContext(
+            new InvalidOperationException("WebKit web process terminated"),
+            Diagnostics.CrashSource.WebViewCrash);
+
+        Diagnostics.HermesCrashInterceptor.NotifyCrash(context);
     }
 
     private IntPtr OnNativeCustomScheme(IntPtr urlPtr, out int numBytes, out IntPtr contentTypePtr)

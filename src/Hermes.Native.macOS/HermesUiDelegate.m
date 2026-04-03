@@ -86,4 +86,12 @@
     }
 }
 
+#pragma mark - WKNavigationDelegate
+
+- (void)webViewWebContentProcessDidTerminate:(WKWebView*)webView {
+    if (_hermesWindow && _hermesWindow.onWebViewCrash) {
+        _hermesWindow.onWebViewCrash();
+    }
+}
+
 @end

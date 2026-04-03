@@ -2,6 +2,7 @@
 using Hermes;
 using Hermes.Abstractions;
 using Hermes.Blazor;
+using Hermes.Diagnostics;
 
 namespace IntegrationTestApp.TestScenarios;
 
@@ -48,6 +49,9 @@ public sealed class ScenarioRunner : IDisposable
         await RunResizeEventTestAsync();
         await RunMoveEventTestAsync();
         await RunFocusEventTestAsync();
+
+        // Crash interception test
+        await RunCrashInterceptionTestAsync();
 
         // Web message test runs LAST - gives WebView2 maximum time to initialize
         // On Windows, WebView2 init is async and can take several seconds in CI
@@ -372,6 +376,57 @@ public sealed class ScenarioRunner : IDisposable
         catch (Exception ex)
         {
             TestReporter.Fail("focus-event", ex.Message);
+        }
+    }
+
+    private async Task RunCrashInterceptionTestAsync()
+    {
+        TestReporter.Start("crash-interception");
+        try
+        {
+            var crashReceived = new TaskCompletionSource<HermesCrashContext>();
+
+            HermesCrashInterceptor.ProductName = "IntegrationTestApp";
+            HermesCrashInterceptor.ProductVersion = "1.0.0";
+            HermesCrashInterceptor.OnCrash = ctx => crashReceived.TrySetResult(ctx);
+            HermesCrashInterceptor.Enable();
+
+            // Fire-and-forget a task that throws, making it unobserved
+            var faulted = Task.Run(() => throw new InvalidOperationException("integration test crash"));
+            await faulted.ContinueWith(_ => { }, TaskContinuationOptions.OnlyOnFaulted);
+            faulted = null;
+
+            // Force GC to trigger UnobservedTaskException
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var context = await crashReceived.Task.WaitAsync(cts.Token);
+
+            var passed = context.Source == CrashSource.UnobservedTask
+                && context.Exception.ExceptionType == "System.InvalidOperationException"
+                && context.Exception.Message == "integration test crash"
+                && context.Platform.ProductName == "IntegrationTestApp"
+                && context.Platform.ProductVersion == "1.0.0"
+                && context.Platform.DotNetVersion != null
+                && context.Platform.OperatingSystem != null;
+
+            TestReporter.Assert("crash-interception", passed,
+                $"Unexpected context: Source={context.Source}, Type={context.Exception.ExceptionType}");
+
+            HermesCrashInterceptor.Disable();
+            HermesCrashInterceptor.OnCrash = null;
+            HermesCrashInterceptor.ProductName = null;
+            HermesCrashInterceptor.ProductVersion = null;
+        }
+        catch (OperationCanceledException)
+        {
+            TestReporter.Fail("crash-interception", "Timeout waiting for OnCrash callback");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail("crash-interception", ex.Message);
         }
     }
 

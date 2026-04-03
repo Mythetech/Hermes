@@ -426,6 +426,11 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
         parameters.OnFocusIn = Marshal.GetFunctionPointerForDelegate(focusInDelegate);
         parameters.OnFocusOut = Marshal.GetFunctionPointerForDelegate(focusOutDelegate);
         parameters.OnWebMessage = Marshal.GetFunctionPointerForDelegate(webMessageDelegate);
+
+        // Set up WebView crash callback
+        var webViewCrashDelegate = new MacNativeDelegates.WebViewCrashCallback(OnNativeWebViewCrash);
+        _pinnedDelegates.Add(webViewCrashDelegate);
+        parameters.OnWebViewCrash = Marshal.GetFunctionPointerForDelegate(webViewCrashDelegate);
     }
 
     private void OnNativeClosing()
@@ -451,6 +456,18 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
     private void OnNativeFocusOut()
     {
         FocusOut?.Invoke();
+    }
+
+    private void OnNativeWebViewCrash()
+    {
+        if (!Diagnostics.HermesCrashInterceptor.IsEnabled)
+            return;
+
+        var context = Diagnostics.HermesCrashInterceptor.BuildCrashContext(
+            new InvalidOperationException("WKWebView content process terminated"),
+            Diagnostics.CrashSource.WebViewCrash);
+
+        Diagnostics.HermesCrashInterceptor.NotifyCrash(context);
     }
 
     private void OnNativeWebMessage(IntPtr messagePtr)
