@@ -21,7 +21,7 @@ public sealed class OpenerTests
 
     [Theory]
     [InlineData("not-a-url")]
-    [InlineData("ftp://example.com")]
+    [InlineData("ftp://docs.mythetech.com")]
     [InlineData("file:///etc/passwd")]
     [InlineData("javascript:alert(1)")]
     [InlineData("data:text/html,<h1>hi</h1>")]
@@ -31,10 +31,10 @@ public sealed class OpenerTests
     }
 
     [Theory]
-    [InlineData("http://example.com")]
-    [InlineData("https://example.com")]
-    [InlineData("HTTP://EXAMPLE.COM")]
-    [InlineData("HTTPS://EXAMPLE.COM")]
+    [InlineData("http://docs.mythetech.com/smoke-test")]
+    [InlineData("https://docs.mythetech.com/smoke-test")]
+    [InlineData("HTTP://DOCS.MYTHETECH.COM/SMOKE-TEST")]
+    [InlineData("HTTPS://DOCS.MYTHETECH.COM/SMOKE-TEST")]
     public void OpenUrl_ValidScheme_DoesNotThrowArgumentException(string url)
     {
         // These will attempt to launch a browser, so we just verify no ArgumentException.

@@ -76,10 +76,10 @@ public class TestableHermesWindowTests
     public void Load_RecordsNavigation()
     {
         using var testWindow = new TestableHermesWindow()
-            .Load("https://example.com");
+            .Load("https://docs.mythetech.com/smoke-test");
         testWindow.Show();
 
-        HermesAssert.NavigatedTo(testWindow.Recording, "https://example.com");
+        HermesAssert.NavigatedTo(testWindow.Recording, "https://docs.mythetech.com/smoke-test");
     }
 
     [Fact]

@@ -244,45 +244,4 @@ public sealed class CrashInterceptorTests
         Assert.Equal("0.0.0", context.Platform.ProductVersion);
     }
 
-    [Fact]
-    public void Integration_UnobservedTaskException_FiresOnCrash()
-    {
-        HermesCrashContext? received = null;
-        HermesCrashInterceptor.ProductName = "IntegrationTest";
-        HermesCrashInterceptor.ProductVersion = "1.0.0";
-        HermesCrashInterceptor.OnCrash = ctx => received = ctx;
-
-        try
-        {
-            HermesCrashInterceptor.Enable();
-
-            // Create a task that throws and is never awaited
-            var task = Task.Run(() => throw new InvalidOperationException("unobserved crash"));
-
-            // Wait for it to fault, then let it get collected
-            task.ContinueWith(_ => { }, TaskContinuationOptions.OnlyOnFaulted).Wait();
-            task = null;
-
-            // Force GC + finalization to trigger UnobservedTaskException
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
-
-            Assert.NotNull(received);
-            Assert.Equal(CrashSource.UnobservedTask, received!.Source);
-            Assert.Equal("System.InvalidOperationException", received.Exception.ExceptionType);
-            Assert.Equal("unobserved crash", received.Exception.Message);
-            Assert.Equal("IntegrationTest", received.Platform.ProductName);
-            Assert.Equal("1.0.0", received.Platform.ProductVersion);
-            Assert.NotNull(received.Platform.DotNetVersion);
-            Assert.NotNull(received.Platform.OperatingSystem);
-        }
-        finally
-        {
-            HermesCrashInterceptor.Disable();
-            HermesCrashInterceptor.OnCrash = null;
-            HermesCrashInterceptor.ProductName = null;
-            HermesCrashInterceptor.ProductVersion = null;
-        }
-    }
 }

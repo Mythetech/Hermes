@@ -104,9 +104,9 @@ public class HermesAssertTests
     public void NavigatedTo_PassesWhenUrlMatches()
     {
         var backend = new RecordingWindowBackend();
-        backend.NavigateToUrl("https://example.com");
+        backend.NavigateToUrl("https://docs.mythetech.com/smoke-test");
 
-        HermesAssert.NavigatedTo(backend.Recording, "https://example.com");
+        HermesAssert.NavigatedTo(backend.Recording, "https://docs.mythetech.com/smoke-test");
     }
 
     [Fact]
@@ -116,16 +116,16 @@ public class HermesAssertTests
         backend.NavigateToUrl("https://other.com");
 
         Assert.Throws<HermesAssertionException>(() =>
-            HermesAssert.NavigatedTo(backend.Recording, "https://example.com"));
+            HermesAssert.NavigatedTo(backend.Recording, "https://docs.mythetech.com/smoke-test"));
     }
 
     [Fact]
     public void NavigatedToPattern_PassesWhenPatternMatches()
     {
         var backend = new RecordingWindowBackend();
-        backend.NavigateToUrl("https://example.com/page/123");
+        backend.NavigateToUrl("https://docs.mythetech.com/smoke-test/page/123");
 
-        HermesAssert.NavigatedToPattern(backend.Recording, "example.com");
+        HermesAssert.NavigatedToPattern(backend.Recording, "docs.mythetech.com");
     }
 
     [Fact]

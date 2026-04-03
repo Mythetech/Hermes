@@ -61,9 +61,9 @@ public class RecordingWindowBackendTests
     {
         var backend = new RecordingWindowBackend();
 
-        backend.NavigateToUrl("https://example.com");
+        backend.NavigateToUrl("https://docs.mythetech.com/smoke-test");
 
-        Assert.True(backend.Recording.NavigatedTo("https://example.com"));
+        Assert.True(backend.Recording.NavigatedTo("https://docs.mythetech.com/smoke-test"));
         Assert.True(backend.Recording.MethodWasCalled("NavigateToUrl"));
     }
 
@@ -187,7 +187,7 @@ public class RecordingWindowBackendTests
     public void Recording_Clear_RemovesAllRecordedData()
     {
         var backend = new RecordingWindowBackend();
-        backend.NavigateToUrl("https://example.com");
+        backend.NavigateToUrl("https://docs.mythetech.com/smoke-test");
         backend.SendWebMessage("test");
         backend.SimulateWebMessage("response");
         backend.SimulateMaximize();
