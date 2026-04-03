@@ -28,6 +28,7 @@
 @property (nonatomic, assign) FocusCallback onFocusOut;
 @property (nonatomic, assign) WebMessageCallback onWebMessage;
 @property (nonatomic, assign) CustomSchemeCallback onCustomScheme;
+@property (nonatomic, assign) WebViewCrashCallback onWebViewCrash;
 
 // State
 @property (nonatomic, assign) int64_t uiThreadId;

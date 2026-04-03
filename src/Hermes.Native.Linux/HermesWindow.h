@@ -24,6 +24,7 @@ struct _HermesWindow {
     FocusCallback onFocusOut;
     WebMessageCallback onWebMessage;
     CustomSchemeCallback onCustomScheme;
+    WebViewCrashCallback onWebViewCrash;
 
     // State tracking
     int lastWidth;

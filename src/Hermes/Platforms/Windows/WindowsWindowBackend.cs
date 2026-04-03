@@ -655,6 +655,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
             };
 
             _webView.WebResourceRequested += HandleWebResourceRequested;
+            _webView.ProcessFailed += HandleWebViewProcessFailed;
             foreach (var scheme in _customSchemeHandlers.Keys)
             {
                 var filter = $"{scheme}://*";
@@ -739,6 +740,21 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         {
             if (isSmokeTest) Console.WriteLine($"RESOURCE_ERROR:{ex.GetType().Name}:{ex.Message}");
         }
+    }
+
+    private void HandleWebViewProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs e)
+    {
+        if (!Diagnostics.HermesCrashInterceptor.IsEnabled)
+            return;
+
+        var reason = e.ProcessFailedKind.ToString();
+        var description = e.Reason.ToString();
+        var message = $"WebView2 process failed: {reason} ({description})";
+
+        var context = Diagnostics.HermesCrashInterceptor.BuildCrashContext(
+            new InvalidOperationException(message), Diagnostics.CrashSource.WebViewCrash);
+
+        Diagnostics.HermesCrashInterceptor.NotifyCrash(context);
     }
 
     private static string GetContentType(string path)

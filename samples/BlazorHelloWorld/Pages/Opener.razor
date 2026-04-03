@@ -5,7 +5,7 @@
 
 <div class="opener-section">
     <h2>Open URL</h2>
-    <input type="text" @bind="_url" placeholder="https://example.com" />
+    <input type="text" @bind="_url" placeholder="https://docs.mythetech.com/smoke-test" />
     <button @onclick="OnOpenUrl">Open in Browser</button>
 </div>
 
@@ -27,7 +27,7 @@
 }
 
 @code {
-    private string _url = "https://example.com";
+    private string _url = "https://docs.mythetech.com/smoke-test";
     private string _filePath = "";
     private string _revealPath = "";
     private string? _error;

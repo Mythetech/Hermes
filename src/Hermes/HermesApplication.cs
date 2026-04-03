@@ -84,6 +84,14 @@ public static class HermesApplication
     }
 
     /// <summary>
+    /// Enable crash interception for the application.
+    /// Installs handlers for unhandled exceptions, unobserved task exceptions,
+    /// and WebView process crashes. Wire <see cref="Diagnostics.HermesCrashInterceptor.OnCrash"/>
+    /// to receive crash context.
+    /// </summary>
+    public static void EnableCrashInterception() => Diagnostics.HermesCrashInterceptor.Enable();
+
+    /// <summary>
     /// Creates a single-instance guard for the application.
     /// Call this early in Main() before creating any windows.
     /// </summary>

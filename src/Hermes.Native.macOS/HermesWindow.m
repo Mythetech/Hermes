@@ -19,6 +19,7 @@
         _onFocusOut = params->OnFocusOut;
         _onWebMessage = params->OnWebMessage;
         _onCustomScheme = params->OnCustomScheme;
+        _onWebViewCrash = params->OnWebViewCrash;
         _schemeHandlers = [NSMutableArray new];
         _pendingSchemes = [NSMutableArray new];
 
@@ -237,6 +238,7 @@
 
     [_webView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     _webView.UIDelegate = _uiDelegate;
+    _webView.navigationDelegate = _uiDelegate;
     [_window.contentView addSubview:_webView];
 }
 

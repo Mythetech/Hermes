@@ -158,6 +158,16 @@ static void on_uri_scheme_request(WebKitURISchemeRequest* request, gpointer user
     }
 }
 
+static gboolean on_web_process_terminated(WebKitWebView* webView,
+                                           WebKitWebProcessTerminationReason reason,
+                                           gpointer userData) {
+    HermesWindow* hw = (HermesWindow*)userData;
+    if (hw->onWebViewCrash) {
+        hw->onWebViewCrash();
+    }
+    return FALSE;
+}
+
 // ============================================================================
 // Window Creation
 // ============================================================================
@@ -173,6 +183,7 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
     hw->onFocusOut = params->OnFocusOut;
     hw->onWebMessage = params->OnWebMessage;
     hw->onCustomScheme = params->OnCustomScheme;
+    hw->onWebViewCrash = params->OnWebViewCrash;
     hw->uiThreadId = (int64_t)pthread_self();
 
     // Store custom schemes
@@ -255,6 +266,10 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
 
     // Create WebView
     hw->webView = webkit_web_view_new_with_user_content_manager(hw->userContentManager);
+
+    // WebView crash detection
+    g_signal_connect(hw->webView, "web-process-terminated",
+                     G_CALLBACK(on_web_process_terminated), hw);
 
     // Register custom URI schemes
     WebKitWebContext* context = webkit_web_view_get_context(WEBKIT_WEB_VIEW(hw->webView));

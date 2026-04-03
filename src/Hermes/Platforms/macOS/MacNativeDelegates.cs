@@ -60,4 +60,10 @@ internal static class MacNativeDelegates
     /// </summary>
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void InvokeCallback();
+
+    /// <summary>
+    /// Called when the WebView content process terminates.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void WebViewCrashCallback();
 }

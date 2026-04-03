@@ -6,7 +6,7 @@
 
 @class HermesWindow;
 
-@interface HermesUiDelegate : NSObject <WKUIDelegate, WKScriptMessageHandler>
+@interface HermesUiDelegate : NSObject <WKUIDelegate, WKNavigationDelegate, WKScriptMessageHandler>
 
 @property (nonatomic, weak) HermesWindow* hermesWindow;
 
