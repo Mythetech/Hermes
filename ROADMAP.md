@@ -136,29 +136,23 @@ builder.SingleInstance("my-app-id", guard =>
 ---
 
 ### Opener (External App Launcher)
-**Status:** Not started
+**Status:** Complete
 **Platforms:** All
 **Complexity:** Low
 
-Open files, folders, and URLs in their default applications.
+Open files, folders, and URLs in their default applications. Uses `Process.Start` with `UseShellExecute = true` for cross-platform support, with platform-specific handling for `RevealInFileManager`.
 
-| Platform | API |
-|----------|-----|
-| Windows | ShellExecute |
-| macOS | NSWorkspace.open() |
-| Linux | xdg-open / gio open |
-
-**Proposed API:**
+**API:**
 ```csharp
 HermesApplication.OpenUrl("https://example.com");
 HermesApplication.OpenFile("/path/to/file.pdf");
 HermesApplication.RevealInFileManager("/path/to/file.txt");
 ```
 
-**Features needed:**
-- [ ] Open URL in default browser
-- [ ] Open file in default application
-- [ ] Reveal file/folder in file manager
+**Features:**
+- [x] Open URL in default browser (http/https only)
+- [x] Open file in default application
+- [x] Reveal file/folder in file manager
 
 ---
 
