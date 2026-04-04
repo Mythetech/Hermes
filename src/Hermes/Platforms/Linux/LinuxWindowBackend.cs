@@ -47,11 +47,9 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
         _uiThreadId = Environment.CurrentManagedThreadId;
 
-        // CustomTitleBar on Linux enables chromeless mode for custom window chrome
-        if (options.CustomTitleBar)
-        {
-            options.Chromeless = true;
-        }
+        // CustomTitleBar is not supported on Linux/GTK - ignore the flag
+        // and keep native window decorations (min/max/close buttons).
+        // The Chromeless flag is intentionally NOT set here.
 
         // Create native parameter struct
         var parameters = new HermesWindowParams
@@ -73,7 +71,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
             Minimized = options.Minimized,
             DevToolsEnabled = options.DevToolsEnabled,
             ContextMenuEnabled = options.ContextMenuEnabled,
-            CustomTitleBar = options.CustomTitleBar
+            CustomTitleBar = false // Not supported on Linux/GTK
         };
 
         // Marshal strings
@@ -384,7 +382,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     internal LinuxMenuBackend CreateMenuBackend()
     {
         EnsureInitialized();
-        _menuBackend ??= new LinuxMenuBackend(_windowHandle);
+        _menuBackend ??= new LinuxMenuBackend(_windowHandle, this);
         return _menuBackend;
     }
 

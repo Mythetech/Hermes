@@ -118,7 +118,8 @@ public sealed class HermesWindowOptions
     /// Enable custom title bar mode.
     /// On macOS: Uses transparent title bar with native traffic light buttons, allowing
     /// WebView content to extend under the title bar area.
-    /// On Windows/Linux: Enables chromeless mode for fully custom window chrome.
+    /// On Windows: Enables DWM frame extension for fully custom window chrome.
+    /// On Linux: Not supported. This flag is ignored and native GTK decorations are preserved.
     /// </summary>
     public bool CustomTitleBar { get; set; }
 
