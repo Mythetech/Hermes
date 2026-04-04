@@ -2,6 +2,7 @@
 using Hermes;
 using Hermes.Abstractions;
 using Hermes.Blazor;
+using Hermes.Contracts.Diagnostics;
 using Hermes.Diagnostics;
 
 namespace IntegrationTestApp.TestScenarios;

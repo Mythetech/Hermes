@@ -465,7 +465,7 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
 
         var context = Diagnostics.HermesCrashInterceptor.BuildCrashContext(
             new InvalidOperationException("WKWebView content process terminated"),
-            Diagnostics.CrashSource.WebViewCrash);
+            Contracts.Diagnostics.CrashSource.WebViewCrash);
 
         Diagnostics.HermesCrashInterceptor.NotifyCrash(context);
     }

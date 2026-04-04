@@ -505,7 +505,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
         var context = Diagnostics.HermesCrashInterceptor.BuildCrashContext(
             new InvalidOperationException("WebKit web process terminated"),
-            Diagnostics.CrashSource.WebViewCrash);
+            Contracts.Diagnostics.CrashSource.WebViewCrash);
 
         Diagnostics.HermesCrashInterceptor.NotifyCrash(context);
     }

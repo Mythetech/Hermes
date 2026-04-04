@@ -1,6 +1,7 @@
 // Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 using System.Diagnostics;
 using System.Threading;
+using Hermes.Contracts.Diagnostics;
 
 namespace Hermes.Diagnostics;
 

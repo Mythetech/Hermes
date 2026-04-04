@@ -1,5 +1,5 @@
 // Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
-namespace Hermes.Diagnostics;
+namespace Hermes.Contracts.Diagnostics;
 
 /// <summary>
 /// Identifies the origin of an intercepted crash.

@@ -69,6 +69,10 @@
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.*" PrivateAssets="All" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Hermes.Contracts\Hermes.Contracts.csproj" />
+  </ItemGroup>
+
   <!-- Allow Hermes.Blazor, Hermes.Testing, and Hermes.Tests to access internal members -->
   <ItemGroup>
     <InternalsVisibleTo Include="Hermes.Blazor" />

@@ -752,7 +752,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         var message = $"WebView2 process failed: {reason} ({description})";
 
         var context = Diagnostics.HermesCrashInterceptor.BuildCrashContext(
-            new InvalidOperationException(message), Diagnostics.CrashSource.WebViewCrash);
+            new InvalidOperationException(message), Contracts.Diagnostics.CrashSource.WebViewCrash);
 
         Diagnostics.HermesCrashInterceptor.NotifyCrash(context);
     }
