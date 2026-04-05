@@ -510,7 +510,6 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
 
     for (int i = 0; i < hw->customSchemeCount; i++) {
         const char* scheme = hw->customSchemes[i];
-        webkit_security_manager_register_uri_scheme_as_local(securityManager, scheme);
         webkit_security_manager_register_uri_scheme_as_secure(securityManager, scheme);
         webkit_security_manager_register_uri_scheme_as_cors_enabled(securityManager, scheme);
         webkit_web_context_register_uri_scheme(context, scheme, on_uri_scheme_request, hw, NULL);
@@ -866,7 +865,6 @@ void Hermes_Window_RegisterCustomScheme(void* window, const char* scheme) {
     WebKitWebContext* context = webkit_web_view_get_context(WEBKIT_WEB_VIEW(hw->webView));
     WebKitSecurityManager* securityManager = webkit_web_context_get_security_manager(context);
 
-    webkit_security_manager_register_uri_scheme_as_local(securityManager, scheme);
     webkit_security_manager_register_uri_scheme_as_secure(securityManager, scheme);
     webkit_security_manager_register_uri_scheme_as_cors_enabled(securityManager, scheme);
     webkit_web_context_register_uri_scheme(context, scheme, on_uri_scheme_request, hw, NULL);

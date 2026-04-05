@@ -403,12 +403,7 @@ MigrationBackup/
 FodyWeavers.xsd
 
 # VS Code files for those working on multiple tools
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-!.vscode/*.code-snippets
+.vscode/
 
 # Local History for Visual Studio Code
 .history/
@@ -423,6 +418,8 @@ FodyWeavers.xsd
 *.msm
 *.msp
 
-# macOS native library build output
+# Native library build output
 src/Hermes.Native.macOS/lib/
+src/Hermes.Native.Linux/lib/
+src/Hermes.Native.Linux/build/
 **/dist/**
