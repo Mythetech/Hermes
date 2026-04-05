@@ -78,6 +78,7 @@ internal struct HermesWindowParams
     public IntPtr OnWebMessage;
     public IntPtr OnCustomScheme;
     public IntPtr OnWebViewCrash;
+    public IntPtr OnPageLoaded;
 
     // Custom URL schemes to register (must be set before WebView creation)
     // Fixed-size array of 16 pointers to UTF-8 strings

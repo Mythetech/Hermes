@@ -66,4 +66,10 @@ internal static class LinuxNativeDelegates
     /// </summary>
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void WebViewCrashCallback();
+
+    /// <summary>
+    /// Called when the WebView has finished loading a page.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void PageLoadedCallback();
 }
