@@ -75,6 +75,12 @@ public interface IHermesWindowBackend : IDisposable
     /// </summary>
     HermesPlatform Platform { get; }
 
+    /// <summary>
+    /// Gets whether custom title bar mode is active on this platform.
+    /// This may differ from the requested option if the platform does not support it.
+    /// </summary>
+    bool IsCustomTitleBarActive { get; }
+
     #endregion
 
     #region WebView

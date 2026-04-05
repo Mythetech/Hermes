@@ -120,6 +120,9 @@ void* Hermes_Menu_Create(void* window, MenuItemCallback callback);
 /// Destroy the menu backend
 void Hermes_Menu_Destroy(void* menu);
 
+/// Hide the native menu bar widget (for custom titlebar mode)
+void Hermes_Menu_Hide(void* menu);
+
 /// Add a new top-level menu (insertIndex -1 appends)
 void Hermes_Menu_AddMenu(void* menu, const char* label, int insertIndex);
 
