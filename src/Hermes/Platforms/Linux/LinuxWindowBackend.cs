@@ -374,6 +374,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     public event Action<string>? WebMessageReceived;
     public event Action? Maximized;
     public event Action? Restored;
+    internal event Action? PageLoaded;
 
     #endregion
 
@@ -463,6 +464,11 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         var webViewCrashDelegate = new LinuxNativeDelegates.WebViewCrashCallback(OnNativeWebViewCrash);
         _pinnedDelegates.Add(webViewCrashDelegate);
         parameters.OnWebViewCrash = Marshal.GetFunctionPointerForDelegate(webViewCrashDelegate);
+
+        // Set up page loaded callback (used for JS accelerator injection)
+        var pageLoadedDelegate = new LinuxNativeDelegates.PageLoadedCallback(OnNativePageLoaded);
+        _pinnedDelegates.Add(pageLoadedDelegate);
+        parameters.OnPageLoaded = Marshal.GetFunctionPointerForDelegate(pageLoadedDelegate);
     }
 
     private void OnNativeClosing()
@@ -493,8 +499,15 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     private void OnNativeWebMessage(IntPtr messagePtr)
     {
         var message = Marshal.PtrToStringUTF8(messagePtr) ?? "";
+        if (message.StartsWith("__hermes_accel:", StringComparison.Ordinal))
+        {
+            _menuBackend?.HandleAcceleratorMessage(message.Substring(15));
+            return;
+        }
         WebMessageReceived?.Invoke(message);
     }
+
+    private void OnNativePageLoaded() => PageLoaded?.Invoke();
 
     private void OnNativeWebViewCrash()
     {

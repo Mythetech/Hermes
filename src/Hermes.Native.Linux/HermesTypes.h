@@ -15,6 +15,7 @@ typedef void* (*CustomSchemeCallback)(const char* url, int* numBytes, char** con
 typedef void (*MenuItemCallback)(const char* itemId);
 typedef void (*InvokeCallback)(void);
 typedef void (*WebViewCrashCallback)(void);
+typedef void (*PageLoadedCallback)(void);
 
 // Window initialization parameters
 typedef struct {
@@ -55,6 +56,7 @@ typedef struct {
     WebMessageCallback OnWebMessage;
     CustomSchemeCallback OnCustomScheme;
     WebViewCrashCallback OnWebViewCrash;
+    PageLoadedCallback OnPageLoaded;
 
     // Custom URL schemes to register (must be set before WebView creation)
     const char* CustomSchemeNames[16];

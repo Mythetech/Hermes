@@ -14,6 +14,9 @@ internal sealed class LinuxMenuBackend : IMenuBackend
     private readonly LinuxNativeDelegates.MenuItemCallback _menuCallback;
     private string? _appName;
 
+    // Maps normalized JS key combo (e.g. "ctrl+o") → itemId (e.g. "file.open")
+    private readonly Dictionary<string, string> _accelerators = new(StringComparer.Ordinal);
+
     public event Action<string>? MenuItemClicked;
 
     internal LinuxMenuBackend(IntPtr windowHandle, LinuxWindowBackend windowBackend)
@@ -36,6 +39,9 @@ internal sealed class LinuxMenuBackend : IMenuBackend
         {
             RunOnGtkThread(() => LinuxNative.MenuHide(_menuHandle));
         }
+
+        // Subscribe to page load to inject JS keyboard accelerator handler
+        _windowBackend.PageLoaded += OnPageLoaded;
     }
 
     /// <summary>
@@ -67,16 +73,22 @@ internal sealed class LinuxMenuBackend : IMenuBackend
     public void AddItem(string menuLabel, string itemId, string itemLabel, string? accelerator = null)
     {
         RunOnGtkThread(() => LinuxNative.MenuAddItem(_menuHandle, menuLabel, itemId, itemLabel, accelerator));
+        if (!string.IsNullOrEmpty(accelerator))
+            RegisterAccelerator(itemId, accelerator);
     }
 
     public void InsertItem(string menuLabel, string afterItemId, string itemId, string itemLabel, string? accelerator = null)
     {
         RunOnGtkThread(() => LinuxNative.MenuInsertItem(_menuHandle, menuLabel, afterItemId, itemId, itemLabel, accelerator));
+        if (!string.IsNullOrEmpty(accelerator))
+            RegisterAccelerator(itemId, accelerator);
     }
 
     public void RemoveItem(string menuLabel, string itemId)
     {
         RunOnGtkThread(() => LinuxNative.MenuRemoveItem(_menuHandle, menuLabel, itemId));
+        var key = _accelerators.FirstOrDefault(kv => kv.Value == itemId).Key;
+        if (key is not null) _accelerators.Remove(key);
     }
 
     public void AddSeparator(string menuLabel)
@@ -102,6 +114,8 @@ internal sealed class LinuxMenuBackend : IMenuBackend
     public void SetItemAccelerator(string menuLabel, string itemId, string accelerator)
     {
         RunOnGtkThread(() => LinuxNative.MenuSetItemAccelerator(_menuHandle, menuLabel, itemId, accelerator));
+        RegisterAccelerator(itemId, accelerator);
+        InjectAcceleratorScript();
     }
 
     #region Submenu Operations
@@ -114,6 +128,8 @@ internal sealed class LinuxMenuBackend : IMenuBackend
     public void AddSubmenuItem(string menuPath, string itemId, string itemLabel, string? accelerator = null)
     {
         RunOnGtkThread(() => LinuxNative.MenuAddSubmenuItem(_menuHandle, menuPath, itemId, itemLabel, accelerator));
+        if (!string.IsNullOrEmpty(accelerator))
+            RegisterAccelerator(itemId, accelerator);
     }
 
     public void AddSubmenuSeparator(string menuPath)
@@ -135,6 +151,8 @@ internal sealed class LinuxMenuBackend : IMenuBackend
 
         // Add item to the app menu
         RunOnGtkThread(() => LinuxNative.MenuAddItem(_menuHandle, AppName, itemId, itemLabel, accelerator));
+        if (!string.IsNullOrEmpty(accelerator))
+            RegisterAccelerator(itemId, accelerator);
     }
 
     public void AddAppMenuSeparator(string? position = null)
@@ -165,5 +183,104 @@ internal sealed class LinuxMenuBackend : IMenuBackend
     {
         var itemId = Marshal.PtrToStringUTF8(itemIdPtr) ?? "";
         MenuItemClicked?.Invoke(itemId);
+    }
+
+    internal void HandleAcceleratorMessage(string itemId)
+    {
+        if (!string.IsNullOrEmpty(itemId))
+            MenuItemClicked?.Invoke(itemId);
+    }
+
+    private void OnPageLoaded()
+    {
+        if (_accelerators.Count > 0)
+            InjectAcceleratorScript();
+    }
+
+    private void RegisterAccelerator(string itemId, string accelerator)
+    {
+        var normalized = NormalizeAccelerator(accelerator);
+        if (normalized is not null)
+            _accelerators[normalized] = itemId;
+    }
+
+    private static string? NormalizeAccelerator(string accelerator)
+    {
+        if (string.IsNullOrEmpty(accelerator)) return null;
+
+        var sb = new System.Text.StringBuilder();
+        var parts = accelerator.Split('+');
+        string? keyPart = null;
+
+        foreach (var part in parts)
+        {
+            var lower = part.ToLowerInvariant();
+            switch (lower)
+            {
+                case "ctrl":
+                case "control": sb.Append("ctrl+"); break;
+                case "alt":     sb.Append("alt+"); break;
+                case "shift":   sb.Append("shift+"); break;
+                default:
+                    // Empty string from splitting "Ctrl++" means literal '+' key
+                    keyPart = string.IsNullOrEmpty(part) ? "+" : lower switch
+                    {
+                        "space"     => "space",
+                        "enter"     => "enter",
+                        "return"    => "enter",
+                        "escape"    => "escape",
+                        "esc"       => "escape",
+                        "delete"    => "delete",
+                        "del"       => "delete",
+                        "backspace" => "backspace",
+                        "tab"       => "tab",
+                        _ => lower
+                    };
+                    break;
+            }
+        }
+
+        if (keyPart is null) return null;
+        sb.Append(keyPart);
+        return sb.ToString();
+    }
+
+    private void InjectAcceleratorScript()
+    {
+        var sb = new System.Text.StringBuilder("{");
+        bool first = true;
+        foreach (var (key, id) in _accelerators)
+        {
+            if (!first) sb.Append(',');
+            first = false;
+            sb.Append('"');
+            sb.Append(key.Replace("\\", "\\\\").Replace("\"", "\\\""));
+            sb.Append("\":\"");
+            sb.Append(id.Replace("\\", "\\\\").Replace("\"", "\\\""));
+            sb.Append('"');
+        }
+        sb.Append('}');
+
+        var mapJson = sb.ToString();
+        var script = $$"""
+            (function(){
+              window.__hermesAccels={{mapJson}};
+              if(!window.__hermesAccelListenerInstalled){
+                window.__hermesAccelListenerInstalled=true;
+                document.addEventListener('keydown',function(e){
+                  var key='';
+                  if(e.ctrlKey) key+='ctrl+';
+                  if(e.altKey) key+='alt+';
+                  if(e.shiftKey) key+='shift+';
+                  var k=e.key===' '?'space':e.key.toLowerCase();
+                  key+=k;
+                  var id=window.__hermesAccels[key];
+                  if(id){e.preventDefault();e.stopPropagation();window.external.sendMessage('__hermes_accel:'+id);}
+                },true);
+              }
+            })();
+            """;
+
+        LinuxNative.WindowRunJavascript(_windowHandle, script);
     }
 }

@@ -372,6 +372,13 @@ static gboolean on_web_process_terminated(WebKitWebView* webView,
     return FALSE;
 }
 
+static void on_load_changed(WebKitWebView* webView, WebKitLoadEvent event, gpointer user_data) {
+    if (event == WEBKIT_LOAD_FINISHED) {
+        HermesWindow* hw = (HermesWindow*)user_data;
+        if (hw->onPageLoaded) hw->onPageLoaded();
+    }
+}
+
 // ============================================================================
 // Window Creation
 // ============================================================================
@@ -388,6 +395,7 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
     hw->onWebMessage = params->OnWebMessage;
     hw->onCustomScheme = params->OnCustomScheme;
     hw->onWebViewCrash = params->OnWebViewCrash;
+    hw->onPageLoaded = params->OnPageLoaded;
     hw->customTitleBar = params->CustomTitleBar;
     hw->uiThreadId = (int64_t)pthread_self();
 
@@ -503,6 +511,10 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
     // WebView crash detection
     g_signal_connect(hw->webView, "web-process-terminated",
                      G_CALLBACK(on_web_process_terminated), hw);
+
+    // Page load notification (used for JS accelerator injection)
+    g_signal_connect(hw->webView, "load-changed",
+                     G_CALLBACK(on_load_changed), hw);
 
     // Register custom URI schemes
     WebKitWebContext* context = webkit_web_view_get_context(WEBKIT_WEB_VIEW(hw->webView));
