@@ -11,7 +11,6 @@
 #include <gdk/gdkwayland.h>
 #endif
 
-#define HERMES_RESIZE_MARGIN 6
 #define HERMES_RESIZE_BORDER 6
 
 // Thread ID for the UI thread
@@ -168,6 +167,27 @@ static gboolean on_button_press_timestamp(GtkWidget* widget, GdkEventButton* eve
     HermesWindow* hw = (HermesWindow*)data;
     hw->lastButtonTime = event->time;
     return FALSE;  // Don't consume — let other handlers process
+}
+
+// Shrink the WebView's input region so pointer events near the window edges
+// pass through to the parent GtkWindow surface. The WebView still renders
+// edge-to-edge (no visible border), but the outer strip becomes a "dead zone"
+// for input, allowing GTK CSD resize grips or our custom edge handlers to work.
+static void on_webview_size_allocate(GtkWidget* widget, GdkRectangle* allocation, gpointer data) {
+    int border = HERMES_RESIZE_BORDER;
+
+    // Don't inset if the allocation is too small
+    if (allocation->width <= 2 * border || allocation->height <= 2 * border)
+        return;
+
+    cairo_rectangle_int_t rect = {
+        border, border,
+        allocation->width - 2 * border,
+        allocation->height - 2 * border
+    };
+    cairo_region_t* region = cairo_region_create_rectangle(&rect);
+    gtk_widget_input_shape_combine_region(widget, region);
+    cairo_region_destroy(region);
 }
 
 // ============================================================================
@@ -546,14 +566,20 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
     if (hw->customTitleBar) {
         const char* dragScript =
             "(function() {\n"
+            "    var interactiveTags = {BUTTON:1, INPUT:1, SELECT:1, TEXTAREA:1, A:1};\n"
             "    function __hermesIsDragRegion(el) {\n"
             "        while (el) {\n"
+            "            if (interactiveTags[el.tagName]) return false;\n"
             "            var style = window.getComputedStyle(el);\n"
             "            var region = style.getPropertyValue('-webkit-app-region') ||\n"
             "                         style.getPropertyValue('app-region');\n"
             "            if (region === 'no-drag') return false;\n"
             "            if (region === 'drag') return true;\n"
-            "            if (el.classList && el.classList.contains('hermes-no-drag')) return false;\n"
+            "            if (el.classList) {\n"
+            "                if (el.classList.contains('hermes-no-drag') || el.classList.contains('no-drag')) return false;\n"
+            "                if (el.classList.contains('hermes-menu-bar') || el.classList.contains('hermes-window-controls')) return false;\n"
+            "                if (el.classList.contains('hermes-menu-dropdown')) return false;\n"
+            "            }\n"
             "            if (el.classList && el.classList.contains('hermes-title-bar')) return true;\n"
             "            if (el.hasAttribute && el.hasAttribute('data-hermes-drag')) return true;\n"
             "            el = el.parentElement;\n"
@@ -564,10 +590,7 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
             "    var doubleClickThreshold = 500;\n"
             "    document.addEventListener('mousedown', function(e) {\n"
             "        if (e.button !== 0) return;\n"
-            "        if (!__hermesIsDragRegion(e.target)) {\n"
-            "            window.external.sendMessage(JSON.stringify({type:'hermes-drag', action:'no-drag'}));\n"
-            "            return;\n"
-            "        }\n"
+            "        if (!__hermesIsDragRegion(e.target)) return;\n"
             "        var now = Date.now();\n"
             "        if (now - lastClickTime < doubleClickThreshold) {\n"
             "            window.external.sendMessage(JSON.stringify({type:'hermes-drag', action:'double-click'}));\n"
@@ -588,39 +611,29 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
         webkit_user_script_unref(dragUserScript);
     }
 
-    // Resize margin: expose a thin strip of the GTK window surface at edges
-    // so pointer events reach GTK's CSD resize grips (Wayland) or our custom
-    // edge-detect handlers (undecorated windows) instead of being consumed
-    // by the WebKit wl_subsurface.
-    gboolean needs_resize_margin = FALSE;
+    // Inset the WebView's input region so pointer events near the window edges
+    // pass through to the parent GTK window surface. This allows:
+    // - Wayland: GTK CSD resize grips to receive events (WebKit subsurface
+    //   would otherwise consume them)
+    // - Undecorated windows: our custom edge-detect resize handlers to fire
+    // The WebView still renders edge-to-edge with no visible border.
+    if (params->Resizable) {
+        gboolean needs_input_inset = FALSE;
 
-    if (params->Chromeless || params->CustomTitleBar) {
-        needs_resize_margin = TRUE;
-    }
-
-#ifdef GDK_WINDOWING_WAYLAND
-    if (!needs_resize_margin && GDK_IS_WAYLAND_DISPLAY(gdk_display_get_default())) {
-        needs_resize_margin = TRUE;
-    }
-#endif
-
-    if (needs_resize_margin && params->Resizable) {
-        gtk_widget_set_margin_start(hw->webView, HERMES_RESIZE_MARGIN);
-        gtk_widget_set_margin_end(hw->webView, HERMES_RESIZE_MARGIN);
-        gtk_widget_set_margin_bottom(hw->webView, HERMES_RESIZE_MARGIN);
-        if (!params->CustomTitleBar) {
-            gtk_widget_set_margin_top(hw->webView, HERMES_RESIZE_MARGIN);
+        if (params->Chromeless || params->CustomTitleBar) {
+            needs_input_inset = TRUE;
         }
 
-        // Style margin strip to blend with GTK theme
-        GtkCssProvider* provider = gtk_css_provider_new();
-        gtk_css_provider_load_from_data(provider,
-            "window { background-color: @theme_bg_color; }", -1, NULL);
-        gtk_style_context_add_provider(
-            gtk_widget_get_style_context(hw->window),
-            GTK_STYLE_PROVIDER(provider),
-            GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-        g_object_unref(provider);
+#ifdef GDK_WINDOWING_WAYLAND
+        if (!needs_input_inset && GDK_IS_WAYLAND_DISPLAY(gdk_display_get_default())) {
+            needs_input_inset = TRUE;
+        }
+#endif
+
+        if (needs_input_inset) {
+            g_signal_connect(hw->webView, "size-allocate",
+                G_CALLBACK(on_webview_size_allocate), hw);
+        }
     }
 
     // Add WebView to container
