@@ -10,6 +10,12 @@ pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
 pkg_check_modules(WEBKIT2GTK REQUIRED webkit2gtk-4.1)
 pkg_check_modules(SOUP REQUIRED libsoup-3.0)
 
+# Optional Wayland support for display-server-aware resize handling
+pkg_check_modules(GDK_WAYLAND gdk-wayland-3.0)
+if(GDK_WAYLAND_FOUND)
+    message(STATUS "GDK Wayland backend found — enabling Wayland-aware resize")
+endif()
+
 # Source files
 set(SOURCES
     HermesWindow.c
@@ -29,6 +35,12 @@ target_include_directories(Hermes.Native.Linux PRIVATE
     ${WEBKIT2GTK_INCLUDE_DIRS}
     ${SOUP_INCLUDE_DIRS}
 )
+
+# Wayland headers and compile definition
+if(GDK_WAYLAND_FOUND)
+    target_compile_definitions(Hermes.Native.Linux PRIVATE GDK_WINDOWING_WAYLAND)
+    target_include_directories(Hermes.Native.Linux PRIVATE ${GDK_WAYLAND_INCLUDE_DIRS})
+endif()
 
 # Link libraries
 target_link_libraries(Hermes.Native.Linux PRIVATE

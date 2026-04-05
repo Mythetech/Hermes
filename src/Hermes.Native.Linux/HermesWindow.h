@@ -35,6 +35,7 @@ struct _HermesWindow {
     gboolean isShown;
     gboolean hasRoundedCorners;
     gboolean customTitleBar;
+    guint32 lastButtonTime;
 
     // Custom schemes (up to 16)
     char* customSchemes[16];
