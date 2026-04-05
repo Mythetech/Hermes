@@ -7,6 +7,13 @@
 #include <pthread.h>
 #include <libsoup/soup.h>
 
+#ifdef GDK_WINDOWING_WAYLAND
+#include <gdk/gdkwayland.h>
+#endif
+
+#define HERMES_RESIZE_MARGIN 6
+#define HERMES_RESIZE_BORDER 6
+
 // Thread ID for the UI thread
 static pthread_t g_uiThreadId = 0;
 static gboolean g_gtkInitialized = FALSE;
@@ -83,6 +90,90 @@ static gboolean on_window_focus_out(GtkWidget* widget, GdkEventFocus* event, gpo
     return FALSE;
 }
 
+// ============================================================================
+// Edge Resize Handling (for undecorated / Wayland windows)
+// ============================================================================
+
+static int get_resize_edge(int x, int y, int w, int h, int border) {
+    gboolean top = y < border, bottom = y > h - border;
+    gboolean left = x < border, right = x > w - border;
+
+    if (top && left)     return GDK_WINDOW_EDGE_NORTH_WEST;
+    if (top && right)    return GDK_WINDOW_EDGE_NORTH_EAST;
+    if (bottom && left)  return GDK_WINDOW_EDGE_SOUTH_WEST;
+    if (bottom && right) return GDK_WINDOW_EDGE_SOUTH_EAST;
+    if (top)    return GDK_WINDOW_EDGE_NORTH;
+    if (bottom) return GDK_WINDOW_EDGE_SOUTH;
+    if (left)   return GDK_WINDOW_EDGE_WEST;
+    if (right)  return GDK_WINDOW_EDGE_EAST;
+    return -1;
+}
+
+static gboolean on_edge_motion(GtkWidget* widget, GdkEventMotion* event, gpointer data) {
+    HermesWindow* hw = (HermesWindow*)data;
+    if (gtk_window_is_maximized(GTK_WINDOW(hw->window))) return FALSE;
+    if (!gtk_window_get_resizable(GTK_WINDOW(hw->window))) return FALSE;
+
+    int w = gtk_widget_get_allocated_width(widget);
+    int h = gtk_widget_get_allocated_height(widget);
+    int edge = get_resize_edge((int)event->x, (int)event->y, w, h, HERMES_RESIZE_BORDER);
+
+    const char* cursor_name = NULL;
+    switch (edge) {
+        case GDK_WINDOW_EDGE_NORTH:      cursor_name = "n-resize"; break;
+        case GDK_WINDOW_EDGE_SOUTH:      cursor_name = "s-resize"; break;
+        case GDK_WINDOW_EDGE_WEST:       cursor_name = "w-resize"; break;
+        case GDK_WINDOW_EDGE_EAST:       cursor_name = "e-resize"; break;
+        case GDK_WINDOW_EDGE_NORTH_WEST: cursor_name = "nw-resize"; break;
+        case GDK_WINDOW_EDGE_NORTH_EAST: cursor_name = "ne-resize"; break;
+        case GDK_WINDOW_EDGE_SOUTH_WEST: cursor_name = "sw-resize"; break;
+        case GDK_WINDOW_EDGE_SOUTH_EAST: cursor_name = "se-resize"; break;
+    }
+
+    GdkWindow* gdk_win = gtk_widget_get_window(widget);
+    if (cursor_name) {
+        GdkCursor* cursor = gdk_cursor_new_from_name(
+            gdk_window_get_display(gdk_win), cursor_name);
+        gdk_window_set_cursor(gdk_win, cursor);
+        if (cursor) g_object_unref(cursor);
+    } else {
+        gdk_window_set_cursor(gdk_win, NULL);
+    }
+    return FALSE;
+}
+
+static gboolean on_edge_button_press(GtkWidget* widget, GdkEventButton* event, gpointer data) {
+    HermesWindow* hw = (HermesWindow*)data;
+    if (event->button != 1) return FALSE;
+    if (gtk_window_is_maximized(GTK_WINDOW(hw->window))) return FALSE;
+    if (!gtk_window_get_resizable(GTK_WINDOW(hw->window))) return FALSE;
+
+    int w = gtk_widget_get_allocated_width(widget);
+    int h = gtk_widget_get_allocated_height(widget);
+    int edge = get_resize_edge((int)event->x, (int)event->y, w, h, HERMES_RESIZE_BORDER);
+
+    if (edge >= 0) {
+        // Use event->time, not GDK_CURRENT_TIME — Wayland compositors
+        // validate the serial and reject stale timestamps
+        gtk_window_begin_resize_drag(GTK_WINDOW(hw->window),
+            (GdkWindowEdge)edge, event->button,
+            (int)event->x_root, (int)event->y_root, event->time);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+// Capture button timestamps for Wayland drag/resize compatibility
+static gboolean on_button_press_timestamp(GtkWidget* widget, GdkEventButton* event, gpointer data) {
+    HermesWindow* hw = (HermesWindow*)data;
+    hw->lastButtonTime = event->time;
+    return FALSE;  // Don't consume — let other handlers process
+}
+
+// ============================================================================
+// Custom Titlebar Drag Handling
+// ============================================================================
+
 static void handle_drag_message(HermesWindow* hw, const char* message) {
     // Parse action from JSON: {"type":"hermes-drag","action":"..."}
     const char* actionKey = "\"action\":\"";
@@ -104,8 +195,10 @@ static void handle_drag_message(HermesWindow* hw, const char* message) {
         int x, y;
         gdk_device_get_position(pointer, NULL, &x, &y);
 
+        // Use lastButtonTime captured from button-press-event — Wayland
+        // compositors validate the serial and reject GDK_CURRENT_TIME
         gtk_window_begin_move_drag(GTK_WINDOW(hw->window),
-            GDK_BUTTON_PRIMARY, x, y, GDK_CURRENT_TIME);
+            GDK_BUTTON_PRIMARY, x, y, hw->lastButtonTime);
     } else if (actionLen == 12 && strncmp(actionStart, "double-click", 12) == 0) {
         // Toggle maximize
         if (gtk_window_is_maximized(GTK_WINDOW(hw->window))) {
@@ -313,6 +406,17 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
             g_signal_connect(hw->window, "screen-changed", G_CALLBACK(on_screen_changed), hw);
             hw->hasRoundedCorners = TRUE;
         }
+
+        // Edge resize handlers for undecorated windows — these fire in the
+        // margin strip where no WebKit subsurface consumes pointer events
+        if (params->Resizable) {
+            gtk_widget_add_events(hw->window,
+                GDK_POINTER_MOTION_MASK | GDK_BUTTON_PRESS_MASK);
+            g_signal_connect(hw->window, "motion-notify-event",
+                G_CALLBACK(on_edge_motion), hw);
+            g_signal_connect(hw->window, "button-press-event",
+                G_CALLBACK(on_edge_button_press), hw);
+        }
     }
 
     // Resizable
@@ -357,6 +461,12 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
     g_signal_connect(hw->window, "configure-event", G_CALLBACK(on_window_configure), hw);
     g_signal_connect(hw->window, "focus-in-event", G_CALLBACK(on_window_focus_in), hw);
     g_signal_connect(hw->window, "focus-out-event", G_CALLBACK(on_window_focus_out), hw);
+
+    // Capture button timestamps for Wayland compositor compatibility
+    // (needed for begin_move_drag/begin_resize_drag which reject GDK_CURRENT_TIME)
+    gtk_widget_add_events(hw->window, GDK_BUTTON_PRESS_MASK);
+    g_signal_connect(hw->window, "button-press-event",
+        G_CALLBACK(on_button_press_timestamp), hw);
 
     // Create container
     hw->container = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
@@ -476,6 +586,41 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
             NULL, NULL);
         webkit_user_content_manager_add_script(hw->userContentManager, dragUserScript);
         webkit_user_script_unref(dragUserScript);
+    }
+
+    // Resize margin: expose a thin strip of the GTK window surface at edges
+    // so pointer events reach GTK's CSD resize grips (Wayland) or our custom
+    // edge-detect handlers (undecorated windows) instead of being consumed
+    // by the WebKit wl_subsurface.
+    gboolean needs_resize_margin = FALSE;
+
+    if (params->Chromeless || params->CustomTitleBar) {
+        needs_resize_margin = TRUE;
+    }
+
+#ifdef GDK_WINDOWING_WAYLAND
+    if (!needs_resize_margin && GDK_IS_WAYLAND_DISPLAY(gdk_display_get_default())) {
+        needs_resize_margin = TRUE;
+    }
+#endif
+
+    if (needs_resize_margin && params->Resizable) {
+        gtk_widget_set_margin_start(hw->webView, HERMES_RESIZE_MARGIN);
+        gtk_widget_set_margin_end(hw->webView, HERMES_RESIZE_MARGIN);
+        gtk_widget_set_margin_bottom(hw->webView, HERMES_RESIZE_MARGIN);
+        if (!params->CustomTitleBar) {
+            gtk_widget_set_margin_top(hw->webView, HERMES_RESIZE_MARGIN);
+        }
+
+        // Style margin strip to blend with GTK theme
+        GtkCssProvider* provider = gtk_css_provider_new();
+        gtk_css_provider_load_from_data(provider,
+            "window { background-color: @theme_bg_color; }", -1, NULL);
+        gtk_style_context_add_provider(
+            gtk_widget_get_style_context(hw->window),
+            GTK_STYLE_PROVIDER(provider),
+            GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+        g_object_unref(provider);
     }
 
     // Add WebView to container
