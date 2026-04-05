@@ -30,6 +30,12 @@ internal sealed class LinuxMenuBackend : IMenuBackend
 
         if (_menuHandle == IntPtr.Zero)
             throw new InvalidOperationException("Failed to create native menu.");
+
+        // Hide native menu bar when using custom titlebar (HTML menus render instead)
+        if (windowBackend.IsCustomTitleBarActive)
+        {
+            RunOnGtkThread(() => LinuxNative.MenuHide(_menuHandle));
+        }
     }
 
     /// <summary>

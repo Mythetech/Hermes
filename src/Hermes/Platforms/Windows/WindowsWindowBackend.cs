@@ -279,6 +279,8 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
     public HermesPlatform Platform => HermesPlatform.Windows;
 
+    public bool IsCustomTitleBarActive => _options.CustomTitleBar;
+
     public void NavigateToUrl(string url)
     {
         ThrowIfNotInitialized();

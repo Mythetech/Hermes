@@ -14,9 +14,9 @@ public class LinuxCustomTitleBarTests
     [Fact]
     public void CustomTitleBar_DoesNotImply_Chromeless()
     {
-        // CustomTitleBar and Chromeless are independent options.
-        // On Linux, the backend ignores CustomTitleBar rather than
-        // converting it to Chromeless, so native decorations are preserved.
+        // CustomTitleBar and Chromeless are independent options at the options level.
+        // On Linux, the native C code handles CustomTitleBar by removing decorations,
+        // but the managed options remain independent.
         var options = new HermesWindowOptions { CustomTitleBar = true };
 
         Assert.True(options.CustomTitleBar);
@@ -24,7 +24,7 @@ public class LinuxCustomTitleBarTests
     }
 
     [Fact]
-    public void CustomTitleBar_WithRecordingBackend_DoesNotSetChromeless()
+    public void CustomTitleBar_WithRecordingBackend_SetsIsCustomTitleBarActive()
     {
         using var testWindow = new TestableHermesWindow()
             .SetTitle("Titlebar Test")
@@ -36,7 +36,19 @@ public class LinuxCustomTitleBarTests
         var opts = testWindow.Backend.InitialOptions;
         Assert.NotNull(opts);
         Assert.True(opts!.CustomTitleBar);
-        Assert.False(opts.Chromeless);
+        Assert.True(testWindow.Backend.IsCustomTitleBarActive);
+    }
+
+    [Fact]
+    public void NoCustomTitleBar_IsCustomTitleBarActive_IsFalse()
+    {
+        using var testWindow = new TestableHermesWindow()
+            .SetTitle("Default Test")
+            .SetSize(800, 600);
+
+        testWindow.Show();
+
+        Assert.False(testWindow.Backend.IsCustomTitleBarActive);
     }
 
     [Fact]

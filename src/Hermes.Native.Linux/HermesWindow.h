@@ -33,6 +33,8 @@ struct _HermesWindow {
     int lastY;
     int64_t uiThreadId;
     gboolean isShown;
+    gboolean hasRoundedCorners;
+    gboolean customTitleBar;
 
     // Custom schemes (up to 16)
     char* customSchemes[16];

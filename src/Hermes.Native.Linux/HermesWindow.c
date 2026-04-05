@@ -83,6 +83,40 @@ static gboolean on_window_focus_out(GtkWidget* widget, GdkEventFocus* event, gpo
     return FALSE;
 }
 
+static void handle_drag_message(HermesWindow* hw, const char* message) {
+    // Parse action from JSON: {"type":"hermes-drag","action":"..."}
+    const char* actionKey = "\"action\":\"";
+    const char* actionStart = strstr(message, actionKey);
+    if (!actionStart) return;
+
+    actionStart += strlen(actionKey);
+    const char* actionEnd = strchr(actionStart, '"');
+    if (!actionEnd) return;
+
+    size_t actionLen = actionEnd - actionStart;
+
+    if (actionLen == 4 && strncmp(actionStart, "drag", 4) == 0) {
+        // Initiate window drag
+        GdkDisplay* display = gdk_display_get_default();
+        GdkSeat* seat = gdk_display_get_default_seat(display);
+        GdkDevice* pointer = gdk_seat_get_pointer(seat);
+
+        int x, y;
+        gdk_device_get_position(pointer, NULL, &x, &y);
+
+        gtk_window_begin_move_drag(GTK_WINDOW(hw->window),
+            GDK_BUTTON_PRIMARY, x, y, GDK_CURRENT_TIME);
+    } else if (actionLen == 12 && strncmp(actionStart, "double-click", 12) == 0) {
+        // Toggle maximize
+        if (gtk_window_is_maximized(GTK_WINDOW(hw->window))) {
+            gtk_window_unmaximize(GTK_WINDOW(hw->window));
+        } else {
+            gtk_window_maximize(GTK_WINDOW(hw->window));
+        }
+    }
+    // "no-drag" action is intentionally ignored
+}
+
 static void on_script_message_received(WebKitUserContentManager* manager,
                                         WebKitJavascriptResult* jsResult,
                                         gpointer user_data) {
@@ -91,10 +125,15 @@ static void on_script_message_received(WebKitUserContentManager* manager,
     JSCValue* value = webkit_javascript_result_get_js_value(jsResult);
     if (jsc_value_is_string(value)) {
         char* message = jsc_value_to_string(value);
-        if (hw->onWebMessage && message) {
-            hw->onWebMessage(message);
+        if (message) {
+            // Intercept drag messages for custom titlebar
+            if (hw->customTitleBar && strstr(message, "\"hermes-drag\"")) {
+                handle_drag_message(hw, message);
+            } else if (hw->onWebMessage) {
+                hw->onWebMessage(message);
+            }
+            g_free(message);
         }
-        g_free(message);
     }
 }
 
@@ -105,6 +144,58 @@ static gboolean on_context_menu(WebKitWebView* webView,
                                  gpointer user_data) {
     // Return TRUE to suppress context menu
     return TRUE;
+}
+
+// ============================================================================
+// Rounded Corner Drawing
+// ============================================================================
+
+#define HERMES_CORNER_RADIUS 12
+
+static void draw_rounded_rect(cairo_t* cr, double x, double y, double w, double h, double r) {
+    cairo_new_sub_path(cr);
+    cairo_arc(cr, x + w - r, y + r, r, -G_PI_2, 0);
+    cairo_arc(cr, x + w - r, y + h - r, r, 0, G_PI_2);
+    cairo_arc(cr, x + r, y + h - r, r, G_PI_2, G_PI);
+    cairo_arc(cr, x + r, y + r, r, G_PI, 3 * G_PI_2);
+    cairo_close_path(cr);
+}
+
+static gboolean on_window_draw(GtkWidget* widget, cairo_t* cr, gpointer user_data) {
+    if (gtk_window_is_maximized(GTK_WINDOW(widget))) {
+        return FALSE;
+    }
+
+    int width = gtk_widget_get_allocated_width(widget);
+    int height = gtk_widget_get_allocated_height(widget);
+
+    // Clear to fully transparent
+    cairo_set_source_rgba(cr, 0, 0, 0, 0);
+    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+    cairo_paint(cr);
+
+    // Clip to rounded rectangle
+    draw_rounded_rect(cr, 0, 0, width, height, HERMES_CORNER_RADIUS);
+    cairo_clip(cr);
+
+    // Render GTK theme background within the clip
+    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+    GtkStyleContext* style = gtk_widget_get_style_context(widget);
+    gtk_render_background(style, cr, 0, 0, width, height);
+
+    // Propagate draw to children
+    gtk_container_propagate_draw(GTK_CONTAINER(widget),
+        gtk_bin_get_child(GTK_BIN(widget)), cr);
+
+    return TRUE;
+}
+
+static void on_screen_changed(GtkWidget* widget, GdkScreen* prev_screen, gpointer user_data) {
+    GdkScreen* screen = gtk_widget_get_screen(widget);
+    GdkVisual* rgba_visual = gdk_screen_get_rgba_visual(screen);
+    if (rgba_visual) {
+        gtk_widget_set_visual(widget, rgba_visual);
+    }
 }
 
 // ============================================================================
@@ -184,6 +275,7 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
     hw->onWebMessage = params->OnWebMessage;
     hw->onCustomScheme = params->OnCustomScheme;
     hw->onWebViewCrash = params->OnWebViewCrash;
+    hw->customTitleBar = params->CustomTitleBar;
     hw->uiThreadId = (int64_t)pthread_self();
 
     // Store custom schemes
@@ -210,6 +302,17 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
     // Chromeless (no decorations) - also enabled by CustomTitleBar
     if (params->Chromeless || params->CustomTitleBar) {
         gtk_window_set_decorated(GTK_WINDOW(hw->window), FALSE);
+
+        // Rounded corners via RGBA visual + Cairo clipping
+        GdkScreen* screen = gtk_widget_get_screen(hw->window);
+        GdkVisual* rgba_visual = gdk_screen_get_rgba_visual(screen);
+        if (rgba_visual) {
+            gtk_widget_set_visual(hw->window, rgba_visual);
+            gtk_widget_set_app_paintable(hw->window, TRUE);
+            g_signal_connect(hw->window, "draw", G_CALLBACK(on_window_draw), hw);
+            g_signal_connect(hw->window, "screen-changed", G_CALLBACK(on_screen_changed), hw);
+            hw->hasRoundedCorners = TRUE;
+        }
     }
 
     // Resizable
@@ -291,6 +394,12 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
     webkit_settings_set_enable_javascript(settings, TRUE);
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
 
+    // Transparent WebView background for rounded corners
+    if (hw->hasRoundedCorners) {
+        GdkRGBA transparent = { 0.0, 0.0, 0.0, 0.0 };
+        webkit_web_view_set_background_color(WEBKIT_WEB_VIEW(hw->webView), &transparent);
+    }
+
     // Disable context menu if requested
     if (!params->ContextMenuEnabled) {
         g_signal_connect(hw->webView, "context-menu", G_CALLBACK(on_context_menu), hw);
@@ -322,6 +431,52 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
         NULL, NULL);
     webkit_user_content_manager_add_script(hw->userContentManager, userScript);
     webkit_user_script_unref(userScript);
+
+    // Inject drag detection script for custom titlebar
+    if (hw->customTitleBar) {
+        const char* dragScript =
+            "(function() {\n"
+            "    function __hermesIsDragRegion(el) {\n"
+            "        while (el) {\n"
+            "            var style = window.getComputedStyle(el);\n"
+            "            var region = style.getPropertyValue('-webkit-app-region') ||\n"
+            "                         style.getPropertyValue('app-region');\n"
+            "            if (region === 'no-drag') return false;\n"
+            "            if (region === 'drag') return true;\n"
+            "            if (el.classList && el.classList.contains('hermes-no-drag')) return false;\n"
+            "            if (el.classList && el.classList.contains('hermes-title-bar')) return true;\n"
+            "            if (el.hasAttribute && el.hasAttribute('data-hermes-drag')) return true;\n"
+            "            el = el.parentElement;\n"
+            "        }\n"
+            "        return false;\n"
+            "    }\n"
+            "    var lastClickTime = 0;\n"
+            "    var doubleClickThreshold = 500;\n"
+            "    document.addEventListener('mousedown', function(e) {\n"
+            "        if (e.button !== 0) return;\n"
+            "        if (!__hermesIsDragRegion(e.target)) {\n"
+            "            window.external.sendMessage(JSON.stringify({type:'hermes-drag', action:'no-drag'}));\n"
+            "            return;\n"
+            "        }\n"
+            "        var now = Date.now();\n"
+            "        if (now - lastClickTime < doubleClickThreshold) {\n"
+            "            window.external.sendMessage(JSON.stringify({type:'hermes-drag', action:'double-click'}));\n"
+            "            lastClickTime = 0;\n"
+            "        } else {\n"
+            "            window.external.sendMessage(JSON.stringify({type:'hermes-drag', action:'drag'}));\n"
+            "            lastClickTime = now;\n"
+            "        }\n"
+            "    });\n"
+            "})();\n";
+
+        WebKitUserScript* dragUserScript = webkit_user_script_new(
+            dragScript,
+            WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END,
+            NULL, NULL);
+        webkit_user_content_manager_add_script(hw->userContentManager, dragUserScript);
+        webkit_user_script_unref(dragUserScript);
+    }
 
     // Add WebView to container
     gtk_box_pack_start(GTK_BOX(hw->container), hw->webView, TRUE, TRUE, 0);
@@ -360,6 +515,12 @@ void Hermes_Window_Show(void* window) {
 
     hw->isShown = TRUE;
     gtk_widget_show_all(hw->window);
+
+    // Reassert resizability after widget realization,
+    // as widget packing or geometry hints may override it
+    if (gtk_window_get_resizable(GTK_WINDOW(hw->window)) == FALSE) {
+        gtk_window_set_resizable(GTK_WINDOW(hw->window), TRUE);
+    }
 }
 
 void Hermes_Window_Close(void* window) {

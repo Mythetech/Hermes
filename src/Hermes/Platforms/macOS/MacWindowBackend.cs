@@ -37,6 +37,7 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
             throw new InvalidOperationException("Window has already been initialized.");
 
         _uiThreadId = Environment.CurrentManagedThreadId;
+        IsCustomTitleBarActive = options.CustomTitleBar;
 
         // Create native parameter struct
         var parameters = new HermesWindowParams
@@ -227,6 +228,8 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
     }
 
     public HermesPlatform Platform => HermesPlatform.macOS;
+
+    public bool IsCustomTitleBarActive { get; private set; }
 
     #endregion
 

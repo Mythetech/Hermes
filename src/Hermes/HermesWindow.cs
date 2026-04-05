@@ -569,6 +569,11 @@ public sealed class HermesWindow : IDisposable
     public HermesPlatform Platform => _backend.Platform;
 
     /// <summary>
+    /// Gets whether custom title bar mode is active on this platform.
+    /// </summary>
+    public bool IsCustomTitleBarActive => _backend.IsCustomTitleBarActive;
+
+    /// <summary>
     /// Minimize the window at runtime.
     /// </summary>
     public void MinimizeWindow()

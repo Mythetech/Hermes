@@ -126,6 +126,9 @@ internal static partial class LinuxNative
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Menu_Destroy")]
     internal static partial void MenuDestroy(IntPtr menu);
 
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Menu_Hide")]
+    internal static partial void MenuHide(IntPtr menu);
+
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Menu_AddMenu", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void MenuAddMenu(IntPtr menu, string label, int insertIndex);
 

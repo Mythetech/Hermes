@@ -35,6 +35,11 @@ public sealed class RecordingWindowBackend : IHermesWindowBackend
     public HermesPlatform Platform { get; set; } = HermesPlatform.Windows;
 
     /// <summary>
+    /// Whether custom title bar mode is active.
+    /// </summary>
+    public bool IsCustomTitleBarActive { get; set; }
+
+    /// <summary>
     /// Whether the window has been initialized.
     /// </summary>
     public bool IsInitialized => _isInitialized;
@@ -135,6 +140,7 @@ public sealed class RecordingWindowBackend : IHermesWindowBackend
     {
         Recording.RecordMethodCall(nameof(Initialize), options);
         InitialOptions = options;
+        IsCustomTitleBarActive = options.CustomTitleBar;
         _title = options.Title;
         _size = (options.Width, options.Height);
         if (options.X.HasValue && options.Y.HasValue)

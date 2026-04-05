@@ -135,6 +135,13 @@ void Hermes_Menu_Destroy(void* menu) {
     hermes_menu_destroy((HermesMenu*)menu);
 }
 
+void Hermes_Menu_Hide(void* menu) {
+    HermesMenu* hm = (HermesMenu*)menu;
+    if (!hm || !hm->menuBar) return;
+    gtk_widget_hide(hm->menuBar);
+    gtk_widget_set_no_show_all(hm->menuBar, TRUE);
+}
+
 void Hermes_Menu_AddMenu(void* menu, const char* label, int insertIndex) {
     HermesMenu* hm = (HermesMenu*)menu;
     if (!hm || !label) return;
