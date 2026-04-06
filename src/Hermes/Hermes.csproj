@@ -59,7 +59,11 @@
     <None Include="$(CIArtifactsPath)/native/libHermes.Native.macOS.dylib" Pack="true" PackagePath="runtimes/osx/native/" />
     <!-- Linux native library -->
     <None Include="$(CIArtifactsPath)/native/libHermes.Native.Linux.so" Pack="true" PackagePath="runtimes/linux-x64/native/" />
-    <!-- MSBuild targets for conditional platform dependencies -->
+    <!-- Windows: WebView2 managed SDK and native loader (bundled because NuGet can't resolve
+         PackageReferences added via .targets files during restore) -->
+    <None Include="$(CIArtifactsPath)/webview2-win-x64/Microsoft.Web.WebView2.Core.dll" Pack="true" PackagePath="runtimes/win-x64/lib/net10.0/" />
+    <None Include="$(CIArtifactsPath)/webview2-win-x64/runtimes/win-x64/native/WebView2Loader.dll" Pack="true" PackagePath="runtimes/win-x64/native/" />
+    <!-- MSBuild targets for conditional platform dependencies (Linux GTK/WebKit) -->
     <None Include="Hermes.targets" Pack="true" PackagePath="buildTransitive/net10.0/Mythetech.Hermes.targets" />
     <None Include="Hermes.targets" Pack="true" PackagePath="build/net10.0/Mythetech.Hermes.targets" />
   </ItemGroup>

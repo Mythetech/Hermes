@@ -5,10 +5,7 @@
     It conditionally adds platform-specific dependencies based on the target runtime.
   -->
 
-  <!-- Windows: Requires WebView2 -->
-  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win')) OR ($([MSBuild]::IsOSPlatform('Windows')) AND '$(RuntimeIdentifier)' == '')">
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3240.44" />
-  </ItemGroup>
+  <!-- Windows: WebView2 managed SDK is bundled in the Hermes NuGet package (runtimes/win-x64/) -->
 
   <!-- Linux: Requires GtkSharp and WebkitGtkSharp -->
   <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('linux')) OR ($([MSBuild]::IsOSPlatform('Linux')) AND '$(RuntimeIdentifier)' == '')">

@@ -71,6 +71,17 @@ jobs:
             src/Hermes/bin/Release/net10.0/Hermes.pdb
           retention-days: 14
 
+      # Windows only: Upload WebView2 managed SDK (needed at runtime, doesn't flow transitively via NuGet)
+      - name: Upload WebView2 Binaries
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: webview2-win-x64
+          path: |
+            src/Hermes/bin/Release/net10.0/Microsoft.Web.WebView2.Core.dll
+            src/Hermes/bin/Release/net10.0/runtimes/win-x64/native/WebView2Loader.dll
+          retention-days: 14
+
       # macOS only: Upload native binary
       - name: Upload Native Binary (macOS)
         if: matrix.os == 'macos-latest'
@@ -185,6 +196,12 @@ jobs:
         with:
           name: native-linux
           path: artifacts/native
+
+      - name: Download WebView2 Binaries (Windows)
+        uses: actions/download-artifact@v4
+        with:
+          name: webview2-win-x64
+          path: artifacts/webview2-win-x64
 
       - name: Restore
         run: dotnet restore
