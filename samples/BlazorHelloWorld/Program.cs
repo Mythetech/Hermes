@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using Hermes;
 using Hermes.Blazor;
+using Hermes.StatusIcon;
 using BlazorHelloWorld;
 using Hermes.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
@@ -189,6 +190,39 @@ public static class Program
 
             metrics.Mark("Dock menu configured");
         }
+
+        // Step 3c: Configure system tray icon
+        var trayIconPath = Path.Combine(AppContext.BaseDirectory, "wwwroot", "smileyTemplate.png");
+        var tray = HermesApplication.CreateStatusIcon()
+            .SetIcon(trayIconPath)
+            .SetTooltip("Hermes Blazor - Hello World")
+            .SetMenu(menu =>
+            {
+                menu.AddItem("BlazorHelloWorld", "tray.title", item => item.WithEnabled(false))
+                    .AddSeparator()
+                    .AddItem("Show Window", "tray.show")
+                    .AddSeparator()
+                    .AddItem("Quit", "tray.quit");
+            })
+            .OnClicked(() =>
+            {
+                app.MainWindow.Show();
+            });
+
+        tray.Menu!.ItemClicked += itemId =>
+        {
+            if (itemId == "tray.show")
+                app.MainWindow.Show();
+
+            if (itemId == "tray.quit")
+            {
+                tray.Dispose();
+                app.MainWindow.Close();
+            }
+        };
+
+        tray.Show();
+        metrics.Mark("Tray icon configured");
 
         // Step 4: Run
         Console.WriteLine();

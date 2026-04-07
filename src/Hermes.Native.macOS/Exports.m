@@ -4,6 +4,7 @@
 #import "HermesMenu.h"
 #import "HermesContextMenu.h"
 #import "HermesDockMenu.h"
+#import "HermesStatusIcon.h"
 #import "HermesDialogs.h"
 #import "HermesAppDelegate.h"
 #import <Cocoa/Cocoa.h>
@@ -629,6 +630,141 @@ void Hermes_DockMenu_ClearSubmenu(void* dockMenu, const char* submenuId) {
     @autoreleasepool {
         HermesDockMenu* menu = (__bridge HermesDockMenu*)dockMenu;
         [menu clearSubmenu:[NSString stringWithUTF8String:submenuId]];
+    }
+}
+
+#pragma mark - Status Icon Operations
+
+void* Hermes_StatusIcon_Create(MenuItemCallback menuCallback, InvokeCallback clickCallback) {
+    @autoreleasepool {
+        HermesStatusIcon* statusIcon = [[HermesStatusIcon alloc] initWithMenuCallback:menuCallback
+                                                                        clickCallback:clickCallback];
+        return (__bridge_retained void*)statusIcon;
+    }
+}
+
+void Hermes_StatusIcon_Destroy(void* statusIcon) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge_transfer HermesStatusIcon*)statusIcon;
+        (void)icon; // Release
+    }
+}
+
+void Hermes_StatusIcon_Show(void* statusIcon) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon show];
+    }
+}
+
+void Hermes_StatusIcon_Hide(void* statusIcon) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon hide];
+    }
+}
+
+void Hermes_StatusIcon_SetIconFromPath(void* statusIcon, const char* filePath) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon setIconFromPath:[NSString stringWithUTF8String:filePath]];
+    }
+}
+
+void Hermes_StatusIcon_SetIconFromData(void* statusIcon, const void* data, int length) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon setIconFromData:data length:length];
+    }
+}
+
+void Hermes_StatusIcon_SetTooltip(void* statusIcon, const char* tooltip) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon setTooltip:[NSString stringWithUTF8String:tooltip]];
+    }
+}
+
+void Hermes_StatusIcon_AddItem(void* statusIcon, const char* itemId, const char* label) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon addItem:[NSString stringWithUTF8String:itemId]
+                label:[NSString stringWithUTF8String:label]];
+    }
+}
+
+void Hermes_StatusIcon_AddSeparator(void* statusIcon) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon addSeparator];
+    }
+}
+
+void Hermes_StatusIcon_RemoveItem(void* statusIcon, const char* itemId) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon removeItem:[NSString stringWithUTF8String:itemId]];
+    }
+}
+
+void Hermes_StatusIcon_Clear(void* statusIcon) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon clear];
+    }
+}
+
+void Hermes_StatusIcon_SetItemEnabled(void* statusIcon, const char* itemId, bool enabled) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon setItemEnabled:[NSString stringWithUTF8String:itemId] enabled:enabled];
+    }
+}
+
+void Hermes_StatusIcon_SetItemChecked(void* statusIcon, const char* itemId, bool checked) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon setItemChecked:[NSString stringWithUTF8String:itemId] checked:checked];
+    }
+}
+
+void Hermes_StatusIcon_SetItemLabel(void* statusIcon, const char* itemId, const char* label) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon setItemLabel:[NSString stringWithUTF8String:itemId]
+                     label:[NSString stringWithUTF8String:label]];
+    }
+}
+
+void Hermes_StatusIcon_AddSubmenu(void* statusIcon, const char* submenuId, const char* label) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon addSubmenu:[NSString stringWithUTF8String:submenuId]
+                   label:[NSString stringWithUTF8String:label]];
+    }
+}
+
+void Hermes_StatusIcon_AddSubmenuItem(void* statusIcon, const char* submenuId,
+                                      const char* itemId, const char* label) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon addSubmenuItem:[NSString stringWithUTF8String:submenuId]
+                      itemId:[NSString stringWithUTF8String:itemId]
+                       label:[NSString stringWithUTF8String:label]];
+    }
+}
+
+void Hermes_StatusIcon_AddSubmenuSeparator(void* statusIcon, const char* submenuId) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon addSubmenuSeparator:[NSString stringWithUTF8String:submenuId]];
+    }
+}
+
+void Hermes_StatusIcon_ClearSubmenu(void* statusIcon, const char* submenuId) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon clearSubmenu:[NSString stringWithUTF8String:submenuId]];
     }
 }
 

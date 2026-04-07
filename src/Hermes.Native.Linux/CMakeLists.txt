@@ -9,6 +9,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
 pkg_check_modules(WEBKIT2GTK REQUIRED webkit2gtk-4.1)
 pkg_check_modules(SOUP REQUIRED libsoup-3.0)
+pkg_check_modules(APPINDICATOR REQUIRED appindicator3-0.1)
 
 # Optional Wayland support for display-server-aware resize handling
 pkg_check_modules(GDK_WAYLAND gdk-wayland-3.0)
@@ -22,6 +23,7 @@ set(SOURCES
     HermesMenu.c
     HermesDialogs.c
     HermesContextMenu.c
+    HermesStatusIcon.c
     Exports.c
 )
 
@@ -34,6 +36,7 @@ target_include_directories(Hermes.Native.Linux PRIVATE
     ${GTK3_INCLUDE_DIRS}
     ${WEBKIT2GTK_INCLUDE_DIRS}
     ${SOUP_INCLUDE_DIRS}
+    ${APPINDICATOR_INCLUDE_DIRS}
 )
 
 # Wayland headers and compile definition
@@ -47,6 +50,7 @@ target_link_libraries(Hermes.Native.Linux PRIVATE
     ${GTK3_LIBRARIES}
     ${WEBKIT2GTK_LIBRARIES}
     ${SOUP_LIBRARIES}
+    ${APPINDICATOR_LIBRARIES}
 )
 
 # Compiler flags
@@ -54,6 +58,7 @@ target_compile_options(Hermes.Native.Linux PRIVATE
     ${GTK3_CFLAGS_OTHER}
     ${WEBKIT2GTK_CFLAGS_OTHER}
     ${SOUP_CFLAGS_OTHER}
+    ${APPINDICATOR_CFLAGS_OTHER}
     -Wall
     -Wextra
     -O2
