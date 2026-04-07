@@ -203,6 +203,65 @@ int Hermes_Dialog_ShowMessage(const char* title, const char* message,
                                int buttons, int icon);
 
 // ============================================================================
+// Status Icon Operations
+// ============================================================================
+
+/// Create a status icon with menu and click callbacks
+void* Hermes_StatusIcon_Create(MenuItemCallback menuCallback, InvokeCallback clickCallback);
+
+/// Destroy the status icon and remove from status bar
+void Hermes_StatusIcon_Destroy(void* statusIcon);
+
+/// Show the status icon in the menu bar
+void Hermes_StatusIcon_Show(void* statusIcon);
+
+/// Hide the status icon from the menu bar
+void Hermes_StatusIcon_Hide(void* statusIcon);
+
+/// Set the icon from a file path
+void Hermes_StatusIcon_SetIconFromPath(void* statusIcon, const char* filePath);
+
+/// Set the icon from raw image data
+void Hermes_StatusIcon_SetIconFromData(void* statusIcon, const void* data, int length);
+
+/// Set the tooltip text
+void Hermes_StatusIcon_SetTooltip(void* statusIcon, const char* tooltip);
+
+/// Add a menu item
+void Hermes_StatusIcon_AddItem(void* statusIcon, const char* itemId, const char* label);
+
+/// Add a separator
+void Hermes_StatusIcon_AddSeparator(void* statusIcon);
+
+/// Remove a menu item
+void Hermes_StatusIcon_RemoveItem(void* statusIcon, const char* itemId);
+
+/// Clear all menu items
+void Hermes_StatusIcon_Clear(void* statusIcon);
+
+/// Set whether a menu item is enabled
+void Hermes_StatusIcon_SetItemEnabled(void* statusIcon, const char* itemId, bool enabled);
+
+/// Set whether a menu item is checked
+void Hermes_StatusIcon_SetItemChecked(void* statusIcon, const char* itemId, bool checked);
+
+/// Set the label of a menu item
+void Hermes_StatusIcon_SetItemLabel(void* statusIcon, const char* itemId, const char* label);
+
+/// Add a submenu
+void Hermes_StatusIcon_AddSubmenu(void* statusIcon, const char* submenuId, const char* label);
+
+/// Add an item to a submenu
+void Hermes_StatusIcon_AddSubmenuItem(void* statusIcon, const char* submenuId,
+                                      const char* itemId, const char* label);
+
+/// Add a separator to a submenu
+void Hermes_StatusIcon_AddSubmenuSeparator(void* statusIcon, const char* submenuId);
+
+/// Clear all items from a submenu
+void Hermes_StatusIcon_ClearSubmenu(void* statusIcon, const char* submenuId);
+
+// ============================================================================
 // Memory Management
 // ============================================================================
 

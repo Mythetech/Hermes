@@ -9,6 +9,13 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
 pkg_check_modules(WEBKIT2GTK REQUIRED webkit2gtk-4.1)
 pkg_check_modules(SOUP REQUIRED libsoup-3.0)
+# Optional AppIndicator support for system tray icons
+pkg_check_modules(APPINDICATOR appindicator3-0.1)
+if(APPINDICATOR_FOUND)
+    message(STATUS "AppIndicator found — enabling system tray support")
+else()
+    message(STATUS "AppIndicator not found — system tray support disabled")
+endif()
 
 # Optional Wayland support for display-server-aware resize handling
 pkg_check_modules(GDK_WAYLAND gdk-wayland-3.0)
@@ -25,6 +32,10 @@ set(SOURCES
     Exports.c
 )
 
+if(APPINDICATOR_FOUND)
+    list(APPEND SOURCES HermesStatusIcon.c)
+endif()
+
 # Create shared library
 add_library(Hermes.Native.Linux SHARED ${SOURCES})
 
@@ -35,6 +46,11 @@ target_include_directories(Hermes.Native.Linux PRIVATE
     ${WEBKIT2GTK_INCLUDE_DIRS}
     ${SOUP_INCLUDE_DIRS}
 )
+
+if(APPINDICATOR_FOUND)
+    target_compile_definitions(Hermes.Native.Linux PRIVATE HERMES_HAS_APPINDICATOR)
+    target_include_directories(Hermes.Native.Linux PRIVATE ${APPINDICATOR_INCLUDE_DIRS})
+endif()
 
 # Wayland headers and compile definition
 if(GDK_WAYLAND_FOUND)
@@ -48,6 +64,10 @@ target_link_libraries(Hermes.Native.Linux PRIVATE
     ${WEBKIT2GTK_LIBRARIES}
     ${SOUP_LIBRARIES}
 )
+
+if(APPINDICATOR_FOUND)
+    target_link_libraries(Hermes.Native.Linux PRIVATE ${APPINDICATOR_LIBRARIES})
+endif()
 
 # Compiler flags
 target_compile_options(Hermes.Native.Linux PRIVATE

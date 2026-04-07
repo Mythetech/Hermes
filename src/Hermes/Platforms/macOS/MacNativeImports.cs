@@ -284,6 +284,67 @@ internal static partial class MacNative
 
     #endregion
 
+    #region Status Icon Operations
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_Create")]
+    internal static partial IntPtr StatusIconCreate(IntPtr menuCallback, IntPtr clickCallback);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_Destroy")]
+    internal static partial void StatusIconDestroy(IntPtr statusIcon);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_Show")]
+    internal static partial void StatusIconShow(IntPtr statusIcon);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_Hide")]
+    internal static partial void StatusIconHide(IntPtr statusIcon);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_SetIconFromPath", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void StatusIconSetIconFromPath(IntPtr statusIcon, string filePath);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_SetIconFromData")]
+    internal static partial void StatusIconSetIconFromData(IntPtr statusIcon, IntPtr data, int length);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_SetTooltip", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void StatusIconSetTooltip(IntPtr statusIcon, string tooltip);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_AddItem", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void StatusIconAddItem(IntPtr statusIcon, string itemId, string label);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_AddSeparator")]
+    internal static partial void StatusIconAddSeparator(IntPtr statusIcon);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_RemoveItem", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void StatusIconRemoveItem(IntPtr statusIcon, string itemId);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_Clear")]
+    internal static partial void StatusIconClear(IntPtr statusIcon);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_SetItemEnabled", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void StatusIconSetItemEnabled(IntPtr statusIcon, string itemId,
+                                                          [MarshalAs(UnmanagedType.U1)] bool enabled);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_SetItemChecked", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void StatusIconSetItemChecked(IntPtr statusIcon, string itemId,
+                                                          [MarshalAs(UnmanagedType.U1)] bool isChecked);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_SetItemLabel", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void StatusIconSetItemLabel(IntPtr statusIcon, string itemId, string label);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_AddSubmenu", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void StatusIconAddSubmenu(IntPtr statusIcon, string submenuId, string label);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_AddSubmenuItem", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void StatusIconAddSubmenuItem(IntPtr statusIcon, string submenuId,
+                                                          string itemId, string label);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_AddSubmenuSeparator", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void StatusIconAddSubmenuSeparator(IntPtr statusIcon, string submenuId);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_ClearSubmenu", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void StatusIconClearSubmenu(IntPtr statusIcon, string submenuId);
+
+    #endregion
+
     #region Memory Management
 
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Free")]

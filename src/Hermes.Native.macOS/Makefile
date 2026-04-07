@@ -28,6 +28,7 @@ SOURCES = HermesWindow.m \
           HermesDialogs.m \
           HermesContextMenu.m \
           HermesDockMenu.m \
+          HermesStatusIcon.m \
           HermesAppDelegate.m \
           Exports.m
 

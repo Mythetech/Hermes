@@ -2,6 +2,7 @@
 using Hermes.Abstractions;
 using Hermes.DockMenu;
 using Hermes.SingleInstance;
+using Hermes.StatusIcon;
 
 namespace Hermes;
 
@@ -12,6 +13,8 @@ public static class HermesApplication
 {
     private static NativeDockMenu? _dockMenu;
     private static readonly object _dockMenuLock = new();
+    private static readonly List<NativeStatusIcon> _statusIcons = new();
+    private static readonly object _statusIconsLock = new();
 
     /// <summary>
     /// Gets information about the current operating system.
@@ -71,11 +74,44 @@ public static class HermesApplication
     }
 
     /// <summary>
+    /// Creates a new system tray icon. The icon must be configured and shown by calling Show().
+    /// Multiple tray icons are supported; each has an independent lifecycle.
+    /// Tray icons are automatically disposed on Shutdown().
+    /// Returns null if system tray icons are not supported on the current platform
+    /// (e.g., Linux without libappindicator3 installed).
+    /// </summary>
+    /// <returns>A new <see cref="NativeStatusIcon"/> ready for configuration, or null if not supported.</returns>
+    public static NativeStatusIcon? CreateStatusIcon()
+    {
+        var backend = CreateStatusIconBackend();
+        if (backend is null)
+            return null;
+
+        var icon = new NativeStatusIcon(backend);
+
+        lock (_statusIconsLock)
+        {
+            _statusIcons.Add(icon);
+        }
+
+        return icon;
+    }
+
+    /// <summary>
     /// Shuts down application-level resources.
     /// Call this when the application is exiting to clean up native resources.
     /// </summary>
     public static void Shutdown()
     {
+        lock (_statusIconsLock)
+        {
+            foreach (var icon in _statusIcons)
+            {
+                icon.Dispose();
+            }
+            _statusIcons.Clear();
+        }
+
         lock (_dockMenuLock)
         {
             _dockMenu?.Dispose();
@@ -151,6 +187,33 @@ public static class HermesApplication
 #if MACOS
         if (OperatingSystem.IsMacOS())
             return new Platforms.macOS.MacDockMenuBackend();
+#endif
+        return null;
+    }
+
+    private static IStatusIconBackend? CreateStatusIconBackend()
+    {
+#if WINDOWS
+        if (OperatingSystem.IsWindows())
+            return new Platforms.Windows.WindowsStatusIconBackend();
+#endif
+#if MACOS
+        if (OperatingSystem.IsMacOS())
+            return new Platforms.macOS.MacStatusIconBackend();
+#endif
+#if LINUX
+        if (OperatingSystem.IsLinux())
+        {
+            try
+            {
+                return new Platforms.Linux.LinuxStatusIconBackend();
+            }
+            catch (EntryPointNotFoundException)
+            {
+                // libappindicator3 not available - tray icons not supported
+                return null;
+            }
+        }
 #endif
         return null;
     }

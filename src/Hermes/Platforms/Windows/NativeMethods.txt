@@ -182,3 +182,14 @@ HTTRANSPARENT
 WM_NCACTIVATE
 WM_NCPAINT
 WM_NCLBUTTONDOWN
+WM_APP
+WM_LBUTTONUP
+WM_LBUTTONDBLCLK
+WM_RBUTTONUP
+
+// Foreground / Cursor
+SetForegroundWindow
+GetCursorPos
+
+// Icon loading
+LoadIcon
