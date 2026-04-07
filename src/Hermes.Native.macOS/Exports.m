@@ -96,6 +96,13 @@ void Hermes_Window_Show(void* window) {
     }
 }
 
+void Hermes_Window_Hide(void* window) {
+    @autoreleasepool {
+        HermesWindow* hermesWindow = (__bridge HermesWindow*)window;
+        [hermesWindow hide];
+    }
+}
+
 void Hermes_Window_Close(void* window) {
     @autoreleasepool {
         HermesWindow* hermesWindow = (__bridge HermesWindow*)window;

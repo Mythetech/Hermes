@@ -31,6 +31,9 @@ void* Hermes_Window_Create(const HermesWindowParams* params);
 /// Show the window
 void Hermes_Window_Show(void* window);
 
+/// Hide the window without closing it
+void Hermes_Window_Hide(void* window);
+
 /// Close the window
 void Hermes_Window_Close(void* window);
 

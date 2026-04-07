@@ -30,7 +30,8 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     private HermesWindowOptions _options = null!;
     private bool _isInitialized;
     private bool _isDisposed;
-    private bool _shown;
+    private bool _firstShowComplete;
+    private bool _webViewInitialized;
     private int _uiThreadId;
 
     private CoreWebView2Environment? _webViewEnvironment;
@@ -130,19 +131,33 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     {
         ThrowIfNotInitialized();
 
-        if (_shown)
-            return;
-
-        _shown = true;
-
-        var showCmd = _options.Maximized ? SHOW_WINDOW_CMD.SW_MAXIMIZE
-            : _options.Minimized ? SHOW_WINDOW_CMD.SW_MINIMIZE
-            : SHOW_WINDOW_CMD.SW_SHOW;
+        SHOW_WINDOW_CMD showCmd;
+        if (!_firstShowComplete)
+        {
+            showCmd = _options.Maximized ? SHOW_WINDOW_CMD.SW_MAXIMIZE
+                : _options.Minimized ? SHOW_WINDOW_CMD.SW_MINIMIZE
+                : SHOW_WINDOW_CMD.SW_SHOW;
+            _firstShowComplete = true;
+        }
+        else
+        {
+            showCmd = SHOW_WINDOW_CMD.SW_SHOW;
+        }
 
         PInvoke.ShowWindow(_hwnd, showCmd);
         PInvoke.UpdateWindow(_hwnd);
 
-        _ = InitializeWebViewAsync();
+        if (!_webViewInitialized)
+        {
+            _webViewInitialized = true;
+            _ = InitializeWebViewAsync();
+        }
+    }
+
+    public void Hide()
+    {
+        ThrowIfNotInitialized();
+        PInvoke.ShowWindow(_hwnd, SHOW_WINDOW_CMD.SW_HIDE);
     }
 
     public void WaitForClose()

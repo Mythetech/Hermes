@@ -464,6 +464,18 @@ public sealed class HermesWindow : IDisposable
     }
 
     /// <summary>
+    /// Hide the window without closing it.
+    /// The window can be shown again by calling Show().
+    /// </summary>
+    public void Hide()
+    {
+        if (_initialized)
+        {
+            _backend.Hide();
+        }
+    }
+
+    /// <summary>
     /// Show the window and block until it is closed.
     /// </summary>
     public void WaitForClose()

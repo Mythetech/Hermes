@@ -29,6 +29,9 @@ internal static partial class MacNative
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Window_Show")]
     internal static partial void WindowShow(IntPtr window);
 
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Window_Hide")]
+    internal static partial void WindowHide(IntPtr window);
+
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Window_Close")]
     internal static partial void WindowClose(IntPtr window);
 

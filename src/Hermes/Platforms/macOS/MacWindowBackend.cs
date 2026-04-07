@@ -110,6 +110,12 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
         MacNative.WindowShow(_windowHandle);
     }
 
+    public void Hide()
+    {
+        EnsureInitialized();
+        MacNative.WindowHide(_windowHandle);
+    }
+
     public void Close()
     {
         if (_initialized && _windowHandle != IntPtr.Zero)

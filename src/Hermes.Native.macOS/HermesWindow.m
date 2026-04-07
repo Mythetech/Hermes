@@ -249,6 +249,10 @@
     [NSApp activateIgnoringOtherApps:YES];
 }
 
+- (void)hide {
+    [_window orderOut:nil];
+}
+
 - (void)close {
     [_window close];
 }

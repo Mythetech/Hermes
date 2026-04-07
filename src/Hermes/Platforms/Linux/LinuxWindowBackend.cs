@@ -120,6 +120,12 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         LinuxNative.WindowShow(_windowHandle);
     }
 
+    public void Hide()
+    {
+        EnsureInitialized();
+        LinuxNative.WindowHide(_windowHandle);
+    }
+
     public void Close()
     {
         if (_initialized && _windowHandle != IntPtr.Zero)

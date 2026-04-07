@@ -53,6 +53,7 @@
 
 // Lifecycle
 - (void)show;
+- (void)hide;
 - (void)close;
 - (void)waitForClose;
 

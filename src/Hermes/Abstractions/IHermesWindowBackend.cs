@@ -31,6 +31,12 @@ public interface IHermesWindowBackend : IDisposable
     void Show();
 
     /// <summary>
+    /// Hide the window without closing it.
+    /// The window can be shown again with Show().
+    /// </summary>
+    void Hide();
+
+    /// <summary>
     /// Close the window and release resources.
     /// </summary>
     void Close();

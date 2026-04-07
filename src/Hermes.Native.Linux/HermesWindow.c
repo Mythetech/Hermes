@@ -692,6 +692,13 @@ void Hermes_Window_Show(void* window) {
     }
 }
 
+void Hermes_Window_Hide(void* window) {
+    HermesWindow* hw = (HermesWindow*)window;
+    if (!hw) return;
+
+    gtk_widget_hide(hw->window);
+}
+
 void Hermes_Window_Close(void* window) {
     HermesWindow* hw = (HermesWindow*)window;
     if (!hw) return;

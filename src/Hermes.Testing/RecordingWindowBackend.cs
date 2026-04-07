@@ -165,6 +165,12 @@ public sealed class RecordingWindowBackend : IHermesWindowBackend
         _isShown = true;
     }
 
+    public void Hide()
+    {
+        Recording.RecordMethodCall(nameof(Hide));
+        _isShown = false;
+    }
+
     public void Close()
     {
         Recording.RecordMethodCall(nameof(Close));
