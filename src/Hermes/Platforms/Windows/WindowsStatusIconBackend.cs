@@ -78,7 +78,10 @@ internal sealed class WindowsStatusIconBackend : IStatusIconBackend
         nid.uCallbackMessage = WM_TRAYICON;
 
         // Use default application icon
-        nid.hIcon = PInvoke.LoadIcon(HINSTANCE.Null, PInvoke.IDI_APPLICATION).Value;
+        unsafe
+        {
+            nid.hIcon = (IntPtr)PInvoke.LoadIcon(HINSTANCE.Null, (PCWSTR)(char*)32512).Value; // 32512 = IDI_APPLICATION
+        }
 
         if (!ShellNotifyIcon(NIM_ADD, ref nid))
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to add tray icon");
@@ -112,7 +115,7 @@ internal sealed class WindowsStatusIconBackend : IStatusIconBackend
 
                 if (!hIcon.IsNull)
                 {
-                    UpdateIcon(hIcon.Value);
+                    UpdateIcon((IntPtr)hIcon.Value);
                 }
             }
         }
@@ -141,8 +144,9 @@ internal sealed class WindowsStatusIconBackend : IStatusIconBackend
 
         // szTip is a 128-char buffer
         var tipChars = tooltip.Length > 127 ? tooltip.AsSpan(0, 127) : tooltip.AsSpan();
-        tipChars.CopyTo(nid.szTip.AsSpan());
-        nid.szTip[tipChars.Length] = '\0';
+        var tipDest = nid.szTip;
+        tipChars.CopyTo(tipDest);
+        tipDest[tipChars.Length] = '\0';
 
         ShellNotifyIcon(NIM_MODIFY, ref nid);
     }
@@ -419,7 +423,10 @@ internal sealed class WindowsStatusIconBackend : IStatusIconBackend
     {
         var nid = new NOTIFYICONDATAW();
         nid.cbSize = (uint)Marshal.SizeOf<NOTIFYICONDATAW>();
-        nid.hWnd = _hwnd.Value;
+        unsafe
+        {
+            nid.hWnd = (IntPtr)_hwnd.Value;
+        }
         nid.uID = 1;
         return nid;
     }
