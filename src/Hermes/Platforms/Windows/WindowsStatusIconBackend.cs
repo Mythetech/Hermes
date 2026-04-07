@@ -74,13 +74,13 @@ internal sealed class WindowsStatusIconBackend : IStatusIconBackend
         if (_iconAdded) return;
 
         var nid = CreateNotifyIconData();
-        nid.uFlags = NOTIFY_ICON_DATA_FLAGS.NIF_MESSAGE | NOTIFY_ICON_DATA_FLAGS.NIF_ICON | NOTIFY_ICON_DATA_FLAGS.NIF_TIP;
+        nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
         nid.uCallbackMessage = WM_TRAYICON;
 
         // Use default application icon
-        nid.hIcon = GetDefaultIcon();
+        nid.hIcon = PInvoke.LoadIcon(HINSTANCE.Null, PInvoke.IDI_APPLICATION).Value;
 
-        if (!PInvoke.Shell_NotifyIcon(NOTIFY_ICON_MESSAGE.NIM_ADD, in nid))
+        if (!ShellNotifyIcon(NIM_ADD, ref nid))
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to add tray icon");
 
         _iconAdded = true;
@@ -91,7 +91,7 @@ internal sealed class WindowsStatusIconBackend : IStatusIconBackend
         if (!_iconAdded) return;
 
         var nid = CreateNotifyIconData();
-        PInvoke.Shell_NotifyIcon(NOTIFY_ICON_MESSAGE.NIM_DELETE, in nid);
+        ShellNotifyIcon(NIM_DELETE, ref nid);
         _iconAdded = false;
     }
 
@@ -112,7 +112,7 @@ internal sealed class WindowsStatusIconBackend : IStatusIconBackend
 
                 if (!hIcon.IsNull)
                 {
-                    UpdateIcon(new HICON(hIcon.Value));
+                    UpdateIcon(hIcon.Value);
                 }
             }
         }
@@ -137,15 +137,14 @@ internal sealed class WindowsStatusIconBackend : IStatusIconBackend
         if (!_iconAdded) return;
 
         var nid = CreateNotifyIconData();
-        nid.uFlags = NOTIFY_ICON_DATA_FLAGS.NIF_TIP;
+        nid.uFlags = NIF_TIP;
 
         // szTip is a 128-char buffer
-        var tipSpan = nid.szTip.AsSpan();
-        var truncated = tooltip.Length > 127 ? tooltip.AsSpan(0, 127) : tooltip.AsSpan();
-        truncated.CopyTo(tipSpan);
-        tipSpan[truncated.Length] = '\0';
+        var tipChars = tooltip.Length > 127 ? tooltip.AsSpan(0, 127) : tooltip.AsSpan();
+        tipChars.CopyTo(nid.szTip.AsSpan());
+        nid.szTip[tipChars.Length] = '\0';
 
-        PInvoke.Shell_NotifyIcon(NOTIFY_ICON_MESSAGE.NIM_MODIFY, in nid);
+        ShellNotifyIcon(NIM_MODIFY, ref nid);
     }
 
     #region Menu Item Operations
@@ -184,7 +183,6 @@ internal sealed class WindowsStatusIconBackend : IStatusIconBackend
         _menuIdToItemId.Clear();
         _itemIdToMenuId.Clear();
 
-        // Destroy submenus
         foreach (var submenu in _submenus.Values)
         {
             PInvoke.DestroyMenu(submenu);
@@ -282,7 +280,7 @@ internal sealed class WindowsStatusIconBackend : IStatusIconBackend
         if (_iconAdded)
         {
             var nid = CreateNotifyIconData();
-            PInvoke.Shell_NotifyIcon(NOTIFY_ICON_MESSAGE.NIM_DELETE, in nid);
+            ShellNotifyIcon(NIM_DELETE, ref nid);
             _iconAdded = false;
         }
 
@@ -419,29 +417,22 @@ internal sealed class WindowsStatusIconBackend : IStatusIconBackend
 
     private NOTIFYICONDATAW CreateNotifyIconData()
     {
-        var nid = new NOTIFYICONDATAW
-        {
-            cbSize = (uint)Marshal.SizeOf<NOTIFYICONDATAW>(),
-            hWnd = _hwnd,
-            uID = 1
-        };
+        var nid = new NOTIFYICONDATAW();
+        nid.cbSize = (uint)Marshal.SizeOf<NOTIFYICONDATAW>();
+        nid.hWnd = _hwnd.Value;
+        nid.uID = 1;
         return nid;
     }
 
-    private void UpdateIcon(HICON hIcon)
+    private void UpdateIcon(IntPtr hIcon)
     {
         if (!_iconAdded) return;
 
         var nid = CreateNotifyIconData();
-        nid.uFlags = NOTIFY_ICON_DATA_FLAGS.NIF_ICON;
+        nid.uFlags = NIF_ICON;
         nid.hIcon = hIcon;
 
-        PInvoke.Shell_NotifyIcon(NOTIFY_ICON_MESSAGE.NIM_MODIFY, in nid);
-    }
-
-    private static HICON GetDefaultIcon()
-    {
-        return PInvoke.LoadIcon(HINSTANCE.Null, PInvoke.IDI_APPLICATION);
+        ShellNotifyIcon(NIM_MODIFY, ref nid);
     }
 
     private void CleanupTempIcon()
@@ -453,6 +444,58 @@ internal sealed class WindowsStatusIconBackend : IStatusIconBackend
             _tempIconPath = null;
         }
     }
+
+    private void EnsureNotDisposed()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+    }
+
+    #endregion
+
+    #region Manual P/Invoke for Shell_NotifyIcon (CsWin32 can't generate these for AnyCPU)
+
+    private const uint NIM_ADD = 0x00000000;
+    private const uint NIM_MODIFY = 0x00000001;
+    private const uint NIM_DELETE = 0x00000002;
+
+    private const uint NIF_MESSAGE = 0x00000001;
+    private const uint NIF_ICON = 0x00000002;
+    private const uint NIF_TIP = 0x00000004;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct NOTIFYICONDATAW
+    {
+        public uint cbSize;
+        public IntPtr hWnd;
+        public uint uID;
+        public uint uFlags;
+        public uint uCallbackMessage;
+        public IntPtr hIcon;
+        private unsafe fixed char _szTip[128];
+        public uint dwState;
+        public uint dwStateMask;
+        private unsafe fixed char _szInfo[256];
+        public uint uTimeoutOrVersion;
+        private unsafe fixed char _szInfoTitle[64];
+        public uint dwInfoFlags;
+        public Guid guidItem;
+        public IntPtr hBalloonIcon;
+
+        public unsafe Span<char> szTip
+        {
+            get
+            {
+                fixed (char* p = _szTip)
+                {
+                    return new Span<char>(p, 128);
+                }
+            }
+        }
+    }
+
+    [DllImport("shell32.dll", EntryPoint = "Shell_NotifyIconW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShellNotifyIcon(uint dwMessage, ref NOTIFYICONDATAW lpData);
 
     #endregion
 }

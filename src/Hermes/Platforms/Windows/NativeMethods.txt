@@ -187,12 +187,6 @@ WM_LBUTTONUP
 WM_LBUTTONDBLCLK
 WM_RBUTTONUP
 
-// System Tray (Shell_NotifyIcon)
-Shell_NotifyIcon
-NOTIFYICONDATAW
-NOTIFY_ICON_MESSAGE
-NOTIFY_ICON_DATA_FLAGS
-
 // Foreground / Cursor
 SetForegroundWindow
 GetCursorPos

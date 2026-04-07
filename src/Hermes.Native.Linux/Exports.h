@@ -229,8 +229,10 @@ int Hermes_Dialog_ShowMessage(void* parentWindow, const char* title, const char*
                                int buttons, int icon);
 
 // ============================================================================
-// Status Icon Operations
+// Status Icon Operations (requires libappindicator3)
 // ============================================================================
+
+#ifdef HERMES_HAS_APPINDICATOR
 
 /// Create a status icon (system tray) with a menu callback
 void* Hermes_StatusIcon_Create(MenuItemCallback menuCallback);
@@ -286,6 +288,8 @@ void Hermes_StatusIcon_AddSubmenuSeparator(void* statusIcon, const char* submenu
 
 /// Clear all items from a submenu
 void Hermes_StatusIcon_ClearSubmenu(void* statusIcon, const char* submenuId);
+
+#endif // HERMES_HAS_APPINDICATOR
 
 // ============================================================================
 // Memory Management

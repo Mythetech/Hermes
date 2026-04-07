@@ -6,7 +6,7 @@
 // - HermesMenu.c (menu bar operations)
 // - HermesDialogs.c (file and message dialogs)
 // - HermesContextMenu.c (context menu operations)
-// - HermesStatusIcon.c (system tray / status icon operations)
+// - HermesStatusIcon.c (system tray / status icon operations, requires libappindicator3)
 
 #include "Exports.h"
 
