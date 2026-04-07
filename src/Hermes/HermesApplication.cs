@@ -77,11 +77,16 @@ public static class HermesApplication
     /// Creates a new system tray icon. The icon must be configured and shown by calling Show().
     /// Multiple tray icons are supported; each has an independent lifecycle.
     /// Tray icons are automatically disposed on Shutdown().
+    /// Returns null if system tray icons are not supported on the current platform
+    /// (e.g., Linux without libappindicator3 installed).
     /// </summary>
-    /// <returns>A new <see cref="NativeStatusIcon"/> ready for configuration.</returns>
-    public static NativeStatusIcon CreateStatusIcon()
+    /// <returns>A new <see cref="NativeStatusIcon"/> ready for configuration, or null if not supported.</returns>
+    public static NativeStatusIcon? CreateStatusIcon()
     {
         var backend = CreateStatusIconBackend();
+        if (backend is null)
+            return null;
+
         var icon = new NativeStatusIcon(backend);
 
         lock (_statusIconsLock)
@@ -186,7 +191,7 @@ public static class HermesApplication
         return null;
     }
 
-    private static IStatusIconBackend CreateStatusIconBackend()
+    private static IStatusIconBackend? CreateStatusIconBackend()
     {
 #if WINDOWS
         if (OperatingSystem.IsWindows())
@@ -198,8 +203,18 @@ public static class HermesApplication
 #endif
 #if LINUX
         if (OperatingSystem.IsLinux())
-            return new Platforms.Linux.LinuxStatusIconBackend();
+        {
+            try
+            {
+                return new Platforms.Linux.LinuxStatusIconBackend();
+            }
+            catch (EntryPointNotFoundException)
+            {
+                // libappindicator3 not available - tray icons not supported
+                return null;
+            }
+        }
 #endif
-        throw new PlatformNotSupportedException("System tray icons are not yet supported on this platform.");
+        return null;
     }
 }
