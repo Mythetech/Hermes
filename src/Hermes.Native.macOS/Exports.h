@@ -15,6 +15,9 @@ extern "C" {
 /// Register the application with NSApplication (call once at startup)
 void Hermes_App_Register(void);
 
+/// Set the application to accessory mode (no dock icon, no auto-terminate on last window close)
+void Hermes_App_SetAccessoryMode(void);
+
 // ============================================================================
 // Window Lifecycle
 // ============================================================================
@@ -229,6 +232,9 @@ void Hermes_StatusIcon_SetIconFromData(void* statusIcon, const void* data, int l
 
 /// Set the tooltip text
 void Hermes_StatusIcon_SetTooltip(void* statusIcon, const char* tooltip);
+
+/// Get the screen position and size of the status icon button (top-left origin)
+void Hermes_StatusIcon_GetScreenPosition(void* statusIcon, int* x, int* y, int* width, int* height);
 
 /// Add a menu item
 void Hermes_StatusIcon_AddItem(void* statusIcon, const char* itemId, const char* label);

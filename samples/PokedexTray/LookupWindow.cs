@@ -12,6 +12,7 @@ public static class LookupWindow
         window = new HermesWindow()
             .SetTitle("PokeDex Lookup")
             .SetSize(360, 500)
+            .Center()
             .SetChromeless(true)
             .SetTopMost(true)
             .SetResizable(false)

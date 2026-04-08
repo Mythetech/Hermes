@@ -4,6 +4,8 @@ using PokedexTray;
 
 Console.WriteLine("Starting PokeDex Tray sample...");
 
+HermesApplication.SetAccessoryMode();
+
 using var service = new PokemonService();
 var isVisible = false;
 var window = LookupWindow.Create(service, onHidden: () => isVisible = false);
@@ -13,28 +15,6 @@ var window = LookupWindow.Create(service, onHidden: () => isVisible = false);
 // to be initialized before any status bar items can be created.
 window.Show();
 window.Hide();
-
-// Position the window near the system tray rather than centered on screen.
-// After centering, we can derive screen size from the centered position:
-//   centered.X = (screenWidth - windowWidth) / 2
-//   screenWidth = centered.X * 2 + windowWidth
-var (cx, cy) = window.Position;
-const int windowWidth = 360;
-const int windowHeight = 500;
-const int padding = 8;
-var screenWidth = cx * 2 + windowWidth;
-var screenHeight = cy * 2 + windowHeight;
-
-if (OperatingSystem.IsMacOS())
-{
-    // macOS: tray is in the top menu bar, position top-right below the menu bar
-    window.Position = (screenWidth - windowWidth - padding, 30);
-}
-else
-{
-    // Windows/Linux: tray is bottom-right, position above the taskbar
-    window.Position = (screenWidth - windowWidth - padding, screenHeight - windowHeight - 60);
-}
 
 var trayIconPath = Path.Combine(AppContext.BaseDirectory, "pokeballTemplate.png");
 if (HermesApplication.CreateStatusIcon() is { } tray)
@@ -59,6 +39,7 @@ if (HermesApplication.CreateStatusIcon() is { } tray)
             }
             else
             {
+                PositionWindowUnderTray(window, tray);
                 window.Show();
                 isVisible = true;
             }
@@ -71,6 +52,7 @@ if (HermesApplication.CreateStatusIcon() is { } tray)
             case "tray.lookup":
                 if (!isVisible)
                 {
+                    PositionWindowUnderTray(window, tray);
                     window.Show();
                     isVisible = true;
                 }
@@ -87,6 +69,11 @@ if (HermesApplication.CreateStatusIcon() is { } tray)
     };
 
     tray.Show();
+
+    // Pre-position the window under the tray icon so the initial Show()/Hide()
+    // bootstrap doesn't leave it centered on the wrong monitor.
+    PositionWindowUnderTray(window, tray);
+
     Console.WriteLine("Tray icon active. Click to open the PokeDex lookup window.");
 }
 else
@@ -103,3 +90,17 @@ window.OnClosing(() =>
 window.WaitForClose();
 HermesApplication.Shutdown();
 Console.WriteLine("Goodbye!");
+
+void PositionWindowUnderTray(HermesWindow w, Hermes.StatusIcon.NativeStatusIcon trayIcon)
+{
+    var (ix, iy, iw, ih) = trayIcon.GetScreenPosition();
+    if (ix == 0 && iy == 0 && iw == 0 && ih == 0)
+        return; // Position unknown, leave window where it is
+
+    // Center the window horizontally under the tray icon, directly below it
+    const int windowWidth = 360;
+    int x = ix + (iw / 2) - (windowWidth / 2);
+    int y = iy + ih;
+
+    w.Position = (x, y);
+}

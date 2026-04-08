@@ -115,6 +115,9 @@ public sealed class RecordingStatusIconBackend : IStatusIconBackend
     public void ClearSubmenu(string submenuId)
         => _operations.Add($"ClearSubmenu:{submenuId}");
 
+    public (int X, int Y, int Width, int Height) GetScreenPosition()
+        => (0, 0, 0, 0);
+
     /// <summary>
     /// Simulate a menu item click for testing.
     /// </summary>

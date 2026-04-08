@@ -15,11 +15,53 @@ public static class HermesApplication
     private static readonly object _dockMenuLock = new();
     private static readonly List<NativeStatusIcon> _statusIcons = new();
     private static readonly object _statusIconsLock = new();
+    private static bool _accessoryMode;
+    private static bool _windowCreated;
 
     /// <summary>
     /// Gets information about the current operating system.
     /// </summary>
     public static OSInfo OSInfo => OSInfo.Current;
+
+    /// <summary>
+    /// Gets whether the application is running in accessory mode.
+    /// In accessory mode, the app has no dock icon (macOS), no taskbar entry (Windows/Linux),
+    /// and does not terminate when the last window is closed.
+    /// </summary>
+    public static bool IsAccessoryMode => _accessoryMode;
+
+    /// <summary>
+    /// Sets the application to accessory mode, hiding it from the dock (macOS) and taskbar (Windows/Linux).
+    /// The app will not terminate when the last window is closed, making it suitable for tray-only apps.
+    /// Must be called before creating any windows.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown if called after a window has been created.</exception>
+    public static void SetAccessoryMode()
+    {
+        if (_windowCreated)
+            throw new InvalidOperationException(
+                "SetAccessoryMode() must be called before creating any windows.");
+
+        _accessoryMode = true;
+
+#if MACOS
+        if (OperatingSystem.IsMacOS())
+        {
+            // Set the flag before AppRegister so NSApp is initialized
+            // with Accessory policy from the start, avoiding a Regular→Accessory transition.
+            Platforms.macOS.MacNative.AppSetAccessoryMode();
+            Platforms.macOS.MacNative.AppRegister();
+        }
+#endif
+#if LINUX
+        if (OperatingSystem.IsLinux())
+        {
+            Platforms.Linux.LinuxNative.AppSetAccessoryMode();
+        }
+#endif
+    }
+
+    internal static void MarkWindowCreated() => _windowCreated = true;
 
     /// <summary>
     /// Gets the application dock menu. macOS only; returns null on other platforms.

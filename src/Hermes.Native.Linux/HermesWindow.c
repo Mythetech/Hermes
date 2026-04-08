@@ -16,10 +16,15 @@
 // Thread ID for the UI thread
 static pthread_t g_uiThreadId = 0;
 static gboolean g_gtkInitialized = FALSE;
+static bool g_accessoryMode = false;
 
 // ============================================================================
 // Application Lifecycle
 // ============================================================================
+
+void Hermes_App_SetAccessoryMode(void) {
+    g_accessoryMode = true;
+}
 
 void Hermes_App_Init(int* argc, char*** argv) {
     if (g_gtkInitialized) return;
@@ -408,6 +413,11 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
 
     // Create main window
     hw->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+
+    if (g_accessoryMode) {
+        gtk_window_set_skip_taskbar_hint(GTK_WINDOW(hw->window), TRUE);
+    }
+
     if (params->Title) {
         gtk_window_set_title(GTK_WINDOW(hw->window), params->Title);
     }

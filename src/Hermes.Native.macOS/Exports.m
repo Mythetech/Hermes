@@ -10,6 +10,7 @@
 #import <Cocoa/Cocoa.h>
 
 static BOOL g_appRegistered = NO;
+static BOOL g_accessoryMode = NO;
 static HermesAppDelegate* g_appDelegate = nil;
 
 #pragma mark - Application Lifecycle
@@ -23,7 +24,13 @@ void Hermes_App_Register(void) {
 
         g_appDelegate = [[HermesAppDelegate alloc] init];
         [NSApp setDelegate:g_appDelegate];
-        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+
+        if (g_accessoryMode) {
+            [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+            g_appDelegate.accessoryMode = YES;
+        } else {
+            [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+        }
 
         NSMenu* mainMenu = [[NSMenu alloc] init];
         NSMenuItem* appMenuItem = [[NSMenuItem alloc] init];
@@ -74,6 +81,14 @@ void Hermes_App_Register(void) {
         [mainMenu addItem:appMenuItem];
 
         [NSApp setMainMenu:mainMenu];
+    }
+}
+
+void Hermes_App_SetAccessoryMode(void) {
+    g_accessoryMode = YES;
+    if (g_appRegistered) {
+        [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+        g_appDelegate.accessoryMode = YES;
     }
 }
 
@@ -689,6 +704,13 @@ void Hermes_StatusIcon_SetTooltip(void* statusIcon, const char* tooltip) {
     @autoreleasepool {
         HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
         [icon setTooltip:[NSString stringWithUTF8String:tooltip]];
+    }
+}
+
+void Hermes_StatusIcon_GetScreenPosition(void* statusIcon, int* x, int* y, int* width, int* height) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon getScreenPosition:x y:y width:width height:height];
     }
 }
 

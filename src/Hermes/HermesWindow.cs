@@ -49,6 +49,7 @@ public sealed class HermesWindow : IDisposable
     /// </summary>
     public HermesWindow()
     {
+        HermesApplication.MarkWindowCreated();
         _backend = CreatePlatformBackend();
     }
 

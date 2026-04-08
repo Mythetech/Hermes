@@ -6,6 +6,14 @@
 #import <pthread.h>
 #import <QuartzCore/QuartzCore.h>
 
+@implementation HermesKeyableWindow
+
+- (BOOL)canBecomeKeyWindow {
+    return YES;
+}
+
+@end
+
 @implementation HermesWindow
 
 - (instancetype)initWithParams:(const HermesWindowParams*)params {
@@ -38,10 +46,12 @@
         }
 
         NSRect frame = NSMakeRect(0, 0, params->Width, params->Height);
-        _window = [[NSWindow alloc] initWithContentRect:frame
-                                              styleMask:styleMask
-                                                backing:NSBackingStoreBuffered
-                                                  defer:YES];
+        // Use HermesKeyableWindow for borderless windows so they can accept keyboard input
+        Class windowClass = params->Chromeless ? [HermesKeyableWindow class] : [NSWindow class];
+        _window = [[windowClass alloc] initWithContentRect:frame
+                                                 styleMask:styleMask
+                                                   backing:NSBackingStoreBuffered
+                                                     defer:YES];
 
         if (params->Title) {
             [_window setTitle:[NSString stringWithUTF8String:params->Title]];

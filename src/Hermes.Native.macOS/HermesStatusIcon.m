@@ -43,17 +43,11 @@
     NSEvent* event = [NSApp currentEvent];
 
     if (event.type == NSEventTypeRightMouseUp) {
-        // Right-click: show the context menu
         [_statusItem popUpStatusItemMenu:_menu];
-    } else {
-        // Left-click: fire the click callback, then show the menu
-        if (_clickCallback) {
-            _clickCallback();
-        }
-        // Also show the menu on left-click (standard macOS behavior)
-        if (_menu.numberOfItems > 0) {
-            [_statusItem popUpStatusItemMenu:_menu];
-        }
+    } else if (_clickCallback) {
+        _clickCallback();
+    } else if (_menu.numberOfItems > 0) {
+        [_statusItem popUpStatusItemMenu:_menu];
     }
 }
 
@@ -101,6 +95,25 @@
     // If no icon is set, show the tooltip text as the button title so the item is visible
     if (!_statusItem.button.image) {
         _statusItem.button.title = tooltip;
+    }
+}
+
+- (void)getScreenPosition:(int*)x y:(int*)y width:(int*)width height:(int*)height {
+    NSWindow* buttonWindow = _statusItem.button.window;
+    if (buttonWindow) {
+        NSRect frame = buttonWindow.frame;
+        NSScreen* screen = [NSScreen mainScreen];
+        CGFloat screenHeight = screen.frame.size.height;
+        // Convert from Cocoa bottom-left to top-left origin
+        *x = (int)frame.origin.x;
+        *y = (int)(screenHeight - frame.origin.y - frame.size.height);
+        *width = (int)frame.size.width;
+        *height = (int)frame.size.height;
+    } else {
+        *x = 0;
+        *y = 0;
+        *width = 0;
+        *height = 0;
     }
 }
 

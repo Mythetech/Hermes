@@ -111,6 +111,17 @@ public interface IStatusIconBackend : IDisposable
 
     #endregion
 
+    #region Position
+
+    /// <summary>
+    /// Get the screen position and size of the status icon.
+    /// Returns (x, y, width, height) in screen coordinates with top-left origin.
+    /// Returns (0, 0, 0, 0) if the position cannot be determined.
+    /// </summary>
+    (int X, int Y, int Width, int Height) GetScreenPosition();
+
+    #endregion
+
     #region Events
 
     /// <summary>
