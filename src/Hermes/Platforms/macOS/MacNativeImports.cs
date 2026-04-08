@@ -18,6 +18,9 @@ internal static partial class MacNative
     [LibraryImport(LibraryName, EntryPoint = "Hermes_App_Register")]
     internal static partial void AppRegister();
 
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_App_SetAccessoryMode")]
+    internal static partial void AppSetAccessoryMode();
+
     #endregion
 
     #region Window Lifecycle

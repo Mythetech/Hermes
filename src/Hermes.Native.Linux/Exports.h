@@ -21,6 +21,9 @@ void Hermes_App_Run(void);
 /// Quit the GTK main loop
 void Hermes_App_Quit(void);
 
+/// Set the application to accessory mode (skip taskbar for all windows)
+void Hermes_App_SetAccessoryMode(void);
+
 // ============================================================================
 // Window Lifecycle
 // ============================================================================

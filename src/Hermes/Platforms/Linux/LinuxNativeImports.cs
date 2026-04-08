@@ -24,6 +24,9 @@ internal static partial class LinuxNative
     [LibraryImport(LibraryName, EntryPoint = "Hermes_App_Quit")]
     internal static partial void AppQuit();
 
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_App_SetAccessoryMode")]
+    internal static partial void AppSetAccessoryMode();
+
     #endregion
 
     #region Window Lifecycle

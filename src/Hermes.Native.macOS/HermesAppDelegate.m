@@ -5,7 +5,7 @@
 @implementation HermesAppDelegate
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)sender {
-    return YES;
+    return !self.accessoryMode;
 }
 
 - (NSMenu*)applicationDockMenu:(NSApplication*)sender {

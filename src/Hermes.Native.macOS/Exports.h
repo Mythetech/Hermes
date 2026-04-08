@@ -15,6 +15,9 @@ extern "C" {
 /// Register the application with NSApplication (call once at startup)
 void Hermes_App_Register(void);
 
+/// Set the application to accessory mode (no dock icon, no auto-terminate on last window close)
+void Hermes_App_SetAccessoryMode(void);
+
 // ============================================================================
 // Window Lifecycle
 // ============================================================================

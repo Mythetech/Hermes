@@ -4,6 +4,8 @@ using PokedexTray;
 
 Console.WriteLine("Starting PokeDex Tray sample...");
 
+HermesApplication.SetAccessoryMode();
+
 using var service = new PokemonService();
 var isVisible = false;
 var window = LookupWindow.Create(service, onHidden: () => isVisible = false);

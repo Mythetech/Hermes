@@ -43,17 +43,11 @@
     NSEvent* event = [NSApp currentEvent];
 
     if (event.type == NSEventTypeRightMouseUp) {
-        // Right-click: show the context menu
         [_statusItem popUpStatusItemMenu:_menu];
-    } else {
-        // Left-click: fire the click callback, then show the menu
-        if (_clickCallback) {
-            _clickCallback();
-        }
-        // Also show the menu on left-click (standard macOS behavior)
-        if (_menu.numberOfItems > 0) {
-            [_statusItem popUpStatusItemMenu:_menu];
-        }
+    } else if (_clickCallback) {
+        _clickCallback();
+    } else if (_menu.numberOfItems > 0) {
+        [_statusItem popUpStatusItemMenu:_menu];
     }
 }
 

@@ -855,7 +855,9 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
     private static WINDOW_EX_STYLE CalculateExtendedStyle(HermesWindowOptions options)
     {
-        var exStyle = WINDOW_EX_STYLE.WS_EX_APPWINDOW;
+        var exStyle = HermesApplication.IsAccessoryMode
+            ? WINDOW_EX_STYLE.WS_EX_TOOLWINDOW
+            : WINDOW_EX_STYLE.WS_EX_APPWINDOW;
 
         if (options.TopMost)
             exStyle |= WINDOW_EX_STYLE.WS_EX_TOPMOST;
