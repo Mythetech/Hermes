@@ -313,6 +313,9 @@ internal static partial class MacNative
     [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_SetTooltip", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void StatusIconSetTooltip(IntPtr statusIcon, string tooltip);
 
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_GetScreenPosition")]
+    internal static partial void StatusIconGetScreenPosition(IntPtr statusIcon, out int x, out int y, out int width, out int height);
+
     [LibraryImport(LibraryName, EntryPoint = "Hermes_StatusIcon_AddItem", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void StatusIconAddItem(IntPtr statusIcon, string itemId, string label);
 

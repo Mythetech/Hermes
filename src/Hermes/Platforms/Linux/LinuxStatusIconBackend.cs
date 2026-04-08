@@ -165,6 +165,16 @@ internal sealed class LinuxStatusIconBackend : IStatusIconBackend
 
     #endregion
 
+    #region Position
+
+    public (int X, int Y, int Width, int Height) GetScreenPosition()
+    {
+        // Linux AppIndicator does not expose the tray icon position
+        return (0, 0, 0, 0);
+    }
+
+    #endregion
+
     #region Private Helpers
 
     private void OnNativeMenuItemClicked(IntPtr itemIdPtr)

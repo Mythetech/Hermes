@@ -31,6 +31,7 @@
 - (void)setIconFromPath:(NSString*)filePath;
 - (void)setIconFromData:(const void*)data length:(int)length;
 - (void)setTooltip:(NSString*)tooltip;
+- (void)getScreenPosition:(int*)x y:(int*)y width:(int*)width height:(int*)height;
 
 #pragma mark - Item Operations
 

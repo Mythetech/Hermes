@@ -707,6 +707,13 @@ void Hermes_StatusIcon_SetTooltip(void* statusIcon, const char* tooltip) {
     }
 }
 
+void Hermes_StatusIcon_GetScreenPosition(void* statusIcon, int* x, int* y, int* width, int* height) {
+    @autoreleasepool {
+        HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
+        [icon getScreenPosition:x y:y width:width height:height];
+    }
+}
+
 void Hermes_StatusIcon_AddItem(void* statusIcon, const char* itemId, const char* label) {
     @autoreleasepool {
         HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;

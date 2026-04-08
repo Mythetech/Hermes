@@ -98,6 +98,25 @@
     }
 }
 
+- (void)getScreenPosition:(int*)x y:(int*)y width:(int*)width height:(int*)height {
+    NSWindow* buttonWindow = _statusItem.button.window;
+    if (buttonWindow) {
+        NSRect frame = buttonWindow.frame;
+        NSScreen* screen = [NSScreen mainScreen];
+        CGFloat screenHeight = screen.frame.size.height;
+        // Convert from Cocoa bottom-left to top-left origin
+        *x = (int)frame.origin.x;
+        *y = (int)(screenHeight - frame.origin.y - frame.size.height);
+        *width = (int)frame.size.width;
+        *height = (int)frame.size.height;
+    } else {
+        *x = 0;
+        *y = 0;
+        *width = 0;
+        *height = 0;
+    }
+}
+
 #pragma mark - Item Operations
 
 - (void)addItem:(NSString*)itemId label:(NSString*)label {

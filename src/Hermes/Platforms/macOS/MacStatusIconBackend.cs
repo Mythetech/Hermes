@@ -168,6 +168,17 @@ internal sealed class MacStatusIconBackend : IStatusIconBackend
 
     #endregion
 
+    #region Position
+
+    public (int X, int Y, int Width, int Height) GetScreenPosition()
+    {
+        EnsureNotDisposed();
+        MacNative.StatusIconGetScreenPosition(_handle, out int x, out int y, out int width, out int height);
+        return (x, y, width, height);
+    }
+
+    #endregion
+
     #region Private Helpers
 
     private void OnNativeMenuItemClicked(IntPtr itemIdPtr)

@@ -310,6 +310,20 @@ internal sealed class WindowsStatusIconBackend : IStatusIconBackend
         CleanupTempIcon();
     }
 
+    #region Position
+
+    public (int X, int Y, int Width, int Height) GetScreenPosition()
+    {
+        // On Windows, use the cursor position as a proxy for the tray icon location.
+        // Shell_NotifyIcon_GetRect exists but requires Vista+ and specific icon IDs.
+        // The cursor is positioned over the tray icon when click events fire.
+        if (PInvoke.GetCursorPos(out var pt))
+            return (pt.X, pt.Y, 0, 0);
+        return (0, 0, 0, 0);
+    }
+
+    #endregion
+
     #region Private Helpers
 
     private static void EnsureWindowClassRegistered()

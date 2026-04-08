@@ -57,6 +57,18 @@ public sealed class NativeStatusIcon : IDisposable
     }
 
     /// <summary>
+    /// Get the screen position and size of the status icon.
+    /// Returns (x, y, width, height) in screen coordinates with top-left origin.
+    /// On macOS, returns the exact button frame. On Windows, returns the cursor position at call time.
+    /// Returns (0, 0, 0, 0) if the position cannot be determined.
+    /// </summary>
+    public (int X, int Y, int Width, int Height) GetScreenPosition()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _backend.GetScreenPosition();
+    }
+
+    /// <summary>
     /// Set the icon from a file path (.png, .ico).
     /// </summary>
     /// <param name="filePath">Path to the icon file.</param>

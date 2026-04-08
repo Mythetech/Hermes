@@ -10,6 +10,10 @@
 @class HermesUiDelegate;
 @class HermesUrlSchemeHandler;
 
+/// NSWindow subclass that allows borderless windows to become key (accept keyboard input).
+@interface HermesKeyableWindow : NSWindow
+@end
+
 @interface HermesWindow : NSObject
 
 @property (nonatomic, strong) NSWindow* window;
