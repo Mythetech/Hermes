@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Hermes\Hermes.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="pokeballTemplate.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Copy native library on macOS -->
+  <Target Name="CopyNativeLibrary" AfterTargets="Build" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)..\..\src\Hermes.Native.macOS\lib\libHermes.Native.macOS.dylib"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Copied native macOS library to $(OutputPath)" />
+  </Target>
+
+  <!-- Copy native library on macOS publish -->
+  <Target Name="CopyNativeLibraryOnPublish" AfterTargets="Publish" Condition="$([MSBuild]::IsOSPlatform('OSX')) OR $(RuntimeIdentifier.StartsWith('osx'))">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)..\..\src\Hermes.Native.macOS\lib\libHermes.Native.macOS.dylib"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Copied native macOS library to $(PublishDir)" />
+  </Target>
+
+</Project>
