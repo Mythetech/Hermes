@@ -90,6 +90,7 @@ internal sealed class MockHermesWindowBackend : IHermesWindowBackend
 
     public void Initialize(HermesWindowOptions options) { }
     public void Show() { }
+    public void Hide() { }
     public void Close() { }
     public void WaitForClose() { }
     public void NavigateToUrl(string url) { }
