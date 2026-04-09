@@ -53,65 +53,85 @@ char** Hermes_ShowOpenFileDialog(const char* title,
                                   const char** filters,
                                   int filterCount,
                                   int* resultCount) {
-    @autoreleasepool {
-        *resultCount = 0;
+    __block char** result = NULL;
+    __block int count = 0;
 
-        NSOpenPanel* panel = [NSOpenPanel openPanel];
-        [panel setCanChooseFiles:YES];
-        [panel setCanChooseDirectories:NO];
-        [panel setAllowsMultipleSelection:multiSelect];
+    void (^work)(void) = ^{
+        @autoreleasepool {
+            NSOpenPanel* panel = [NSOpenPanel openPanel];
+            [panel setCanChooseFiles:YES];
+            [panel setCanChooseDirectories:NO];
+            [panel setAllowsMultipleSelection:multiSelect];
 
-        if (title) {
-            [panel setTitle:[NSString stringWithUTF8String:title]];
+            if (title) {
+                [panel setTitle:[NSString stringWithUTF8String:title]];
+            }
+
+            if (defaultPath) {
+                NSString* path = [NSString stringWithUTF8String:defaultPath];
+                [panel setDirectoryURL:[NSURL fileURLWithPath:path]];
+            }
+
+            NSArray<UTType*>* allowedTypes = CreateAllowedContentTypes(filters, filterCount);
+            if (allowedTypes) {
+                [panel setAllowedContentTypes:allowedTypes];
+            }
+
+            NSModalResponse response = [panel runModal];
+            if (response == NSModalResponseOK) {
+                result = CreateStringArray([panel URLs], &count);
+            }
         }
+    };
 
-        if (defaultPath) {
-            NSString* path = [NSString stringWithUTF8String:defaultPath];
-            [panel setDirectoryURL:[NSURL fileURLWithPath:path]];
-        }
-
-        NSArray<UTType*>* allowedTypes = CreateAllowedContentTypes(filters, filterCount);
-        if (allowedTypes) {
-            [panel setAllowedContentTypes:allowedTypes];
-        }
-
-        NSModalResponse response = [panel runModal];
-        if (response == NSModalResponseOK) {
-            return CreateStringArray([panel URLs], resultCount);
-        }
-
-        return NULL;
+    if ([NSThread isMainThread]) {
+        work();
+    } else {
+        dispatch_sync(dispatch_get_main_queue(), work);
     }
+
+    *resultCount = count;
+    return result;
 }
 
 char** Hermes_ShowOpenFolderDialog(const char* title,
                                     const char* defaultPath,
                                     bool multiSelect,
                                     int* resultCount) {
-    @autoreleasepool {
-        *resultCount = 0;
+    __block char** result = NULL;
+    __block int count = 0;
 
-        NSOpenPanel* panel = [NSOpenPanel openPanel];
-        [panel setCanChooseFiles:NO];
-        [panel setCanChooseDirectories:YES];
-        [panel setAllowsMultipleSelection:multiSelect];
+    void (^work)(void) = ^{
+        @autoreleasepool {
+            NSOpenPanel* panel = [NSOpenPanel openPanel];
+            [panel setCanChooseFiles:NO];
+            [panel setCanChooseDirectories:YES];
+            [panel setAllowsMultipleSelection:multiSelect];
 
-        if (title) {
-            [panel setTitle:[NSString stringWithUTF8String:title]];
+            if (title) {
+                [panel setTitle:[NSString stringWithUTF8String:title]];
+            }
+
+            if (defaultPath) {
+                NSString* path = [NSString stringWithUTF8String:defaultPath];
+                [panel setDirectoryURL:[NSURL fileURLWithPath:path]];
+            }
+
+            NSModalResponse response = [panel runModal];
+            if (response == NSModalResponseOK) {
+                result = CreateStringArray([panel URLs], &count);
+            }
         }
+    };
 
-        if (defaultPath) {
-            NSString* path = [NSString stringWithUTF8String:defaultPath];
-            [panel setDirectoryURL:[NSURL fileURLWithPath:path]];
-        }
-
-        NSModalResponse response = [panel runModal];
-        if (response == NSModalResponseOK) {
-            return CreateStringArray([panel URLs], resultCount);
-        }
-
-        return NULL;
+    if ([NSThread isMainThread]) {
+        work();
+    } else {
+        dispatch_sync(dispatch_get_main_queue(), work);
     }
+
+    *resultCount = count;
+    return result;
 }
 
 char* Hermes_ShowSaveFileDialog(const char* title,
@@ -119,34 +139,44 @@ char* Hermes_ShowSaveFileDialog(const char* title,
                                  const char** filters,
                                  int filterCount,
                                  const char* defaultFileName) {
-    @autoreleasepool {
-        NSSavePanel* panel = [NSSavePanel savePanel];
+    __block char* result = NULL;
 
-        if (title) {
-            [panel setTitle:[NSString stringWithUTF8String:title]];
+    void (^work)(void) = ^{
+        @autoreleasepool {
+            NSSavePanel* panel = [NSSavePanel savePanel];
+
+            if (title) {
+                [panel setTitle:[NSString stringWithUTF8String:title]];
+            }
+
+            if (defaultPath) {
+                NSString* path = [NSString stringWithUTF8String:defaultPath];
+                [panel setDirectoryURL:[NSURL fileURLWithPath:path]];
+            }
+
+            if (defaultFileName) {
+                [panel setNameFieldStringValue:[NSString stringWithUTF8String:defaultFileName]];
+            }
+
+            NSArray<UTType*>* allowedTypes = CreateAllowedContentTypes(filters, filterCount);
+            if (allowedTypes) {
+                [panel setAllowedContentTypes:allowedTypes];
+            }
+
+            NSModalResponse response = [panel runModal];
+            if (response == NSModalResponseOK) {
+                result = DuplicateString([[panel URL] path]);
+            }
         }
+    };
 
-        if (defaultPath) {
-            NSString* path = [NSString stringWithUTF8String:defaultPath];
-            [panel setDirectoryURL:[NSURL fileURLWithPath:path]];
-        }
-
-        if (defaultFileName) {
-            [panel setNameFieldStringValue:[NSString stringWithUTF8String:defaultFileName]];
-        }
-
-        NSArray<UTType*>* allowedTypes = CreateAllowedContentTypes(filters, filterCount);
-        if (allowedTypes) {
-            [panel setAllowedContentTypes:allowedTypes];
-        }
-
-        NSModalResponse response = [panel runModal];
-        if (response == NSModalResponseOK) {
-            return DuplicateString([[panel URL] path]);
-        }
-
-        return NULL;
+    if ([NSThread isMainThread]) {
+        work();
+    } else {
+        dispatch_sync(dispatch_get_main_queue(), work);
     }
+
+    return result;
 }
 
 #pragma mark - Message Dialog
@@ -155,83 +185,100 @@ int Hermes_ShowMessageDialog(const char* title,
                               const char* message,
                               int buttons,
                               int icon) {
-    @autoreleasepool {
-        NSAlert* alert = [[NSAlert alloc] init];
+    __block int result = DialogResult_Ok;
 
-        if (message) {
-            [alert setMessageText:[NSString stringWithUTF8String:message]];
+    void (^work)(void) = ^{
+        @autoreleasepool {
+            NSAlert* alert = [[NSAlert alloc] init];
+
+            if (message) {
+                [alert setMessageText:[NSString stringWithUTF8String:message]];
+            }
+
+            if (title) {
+                [alert setInformativeText:[NSString stringWithUTF8String:title]];
+            }
+
+            // Set icon style
+            switch (icon) {
+                case DialogIcon_Info:
+                    [alert setAlertStyle:NSAlertStyleInformational];
+                    break;
+                case DialogIcon_Warning:
+                    [alert setAlertStyle:NSAlertStyleWarning];
+                    break;
+                case DialogIcon_Error:
+                    [alert setAlertStyle:NSAlertStyleCritical];
+                    break;
+                case DialogIcon_Question:
+                    [alert setAlertStyle:NSAlertStyleInformational];
+                    break;
+                default:
+                    [alert setAlertStyle:NSAlertStyleInformational];
+                    break;
+            }
+
+            // Add buttons based on configuration
+            switch (buttons) {
+                case DialogButtons_Ok:
+                    [alert addButtonWithTitle:@"OK"];
+                    break;
+
+                case DialogButtons_OkCancel:
+                    [alert addButtonWithTitle:@"OK"];
+                    [alert addButtonWithTitle:@"Cancel"];
+                    break;
+
+                case DialogButtons_YesNo:
+                    [alert addButtonWithTitle:@"Yes"];
+                    [alert addButtonWithTitle:@"No"];
+                    break;
+
+                case DialogButtons_YesNoCancel:
+                    [alert addButtonWithTitle:@"Yes"];
+                    [alert addButtonWithTitle:@"No"];
+                    [alert addButtonWithTitle:@"Cancel"];
+                    break;
+
+                default:
+                    [alert addButtonWithTitle:@"OK"];
+                    break;
+            }
+
+            NSModalResponse response = [alert runModal];
+
+            // Map response to DialogResult
+            switch (buttons) {
+                case DialogButtons_Ok:
+                    result = DialogResult_Ok;
+                    break;
+
+                case DialogButtons_OkCancel:
+                    result = (response == NSAlertFirstButtonReturn) ? DialogResult_Ok : DialogResult_Cancel;
+                    break;
+
+                case DialogButtons_YesNo:
+                    result = (response == NSAlertFirstButtonReturn) ? DialogResult_Yes : DialogResult_No;
+                    break;
+
+                case DialogButtons_YesNoCancel:
+                    if (response == NSAlertFirstButtonReturn) result = DialogResult_Yes;
+                    else if (response == NSAlertSecondButtonReturn) result = DialogResult_No;
+                    else result = DialogResult_Cancel;
+                    break;
+
+                default:
+                    result = DialogResult_Ok;
+                    break;
+            }
         }
+    };
 
-        if (title) {
-            [alert setInformativeText:[NSString stringWithUTF8String:title]];
-        }
-
-        // Set icon style
-        switch (icon) {
-            case DialogIcon_Info:
-                [alert setAlertStyle:NSAlertStyleInformational];
-                break;
-            case DialogIcon_Warning:
-                [alert setAlertStyle:NSAlertStyleWarning];
-                break;
-            case DialogIcon_Error:
-                [alert setAlertStyle:NSAlertStyleCritical];
-                break;
-            case DialogIcon_Question:
-                [alert setAlertStyle:NSAlertStyleInformational];
-                break;
-            default:
-                [alert setAlertStyle:NSAlertStyleInformational];
-                break;
-        }
-
-        // Add buttons based on configuration
-        switch (buttons) {
-            case DialogButtons_Ok:
-                [alert addButtonWithTitle:@"OK"];
-                break;
-
-            case DialogButtons_OkCancel:
-                [alert addButtonWithTitle:@"OK"];
-                [alert addButtonWithTitle:@"Cancel"];
-                break;
-
-            case DialogButtons_YesNo:
-                [alert addButtonWithTitle:@"Yes"];
-                [alert addButtonWithTitle:@"No"];
-                break;
-
-            case DialogButtons_YesNoCancel:
-                [alert addButtonWithTitle:@"Yes"];
-                [alert addButtonWithTitle:@"No"];
-                [alert addButtonWithTitle:@"Cancel"];
-                break;
-
-            default:
-                [alert addButtonWithTitle:@"OK"];
-                break;
-        }
-
-        NSModalResponse response = [alert runModal];
-
-        // Map response to DialogResult
-        switch (buttons) {
-            case DialogButtons_Ok:
-                return DialogResult_Ok;
-
-            case DialogButtons_OkCancel:
-                return (response == NSAlertFirstButtonReturn) ? DialogResult_Ok : DialogResult_Cancel;
-
-            case DialogButtons_YesNo:
-                return (response == NSAlertFirstButtonReturn) ? DialogResult_Yes : DialogResult_No;
-
-            case DialogButtons_YesNoCancel:
-                if (response == NSAlertFirstButtonReturn) return DialogResult_Yes;
-                if (response == NSAlertSecondButtonReturn) return DialogResult_No;
-                return DialogResult_Cancel;
-
-            default:
-                return DialogResult_Ok;
-        }
+    if ([NSThread isMainThread]) {
+        work();
+    } else {
+        dispatch_sync(dispatch_get_main_queue(), work);
     }
+
+    return result;
 }
