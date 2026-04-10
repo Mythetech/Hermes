@@ -212,7 +212,7 @@ jobs:
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
           else
-            echo "VERSION=0.0.0-preview.${{ github.run_number }}" >> $GITHUB_OUTPUT
+            echo "VERSION=0.1.0-preview.${{ github.run_number }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Build Hermes.Contracts
