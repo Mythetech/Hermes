@@ -6,29 +6,6 @@ This document tracks planned features and improvements for the Hermes framework.
 
 ## High Priority
 
-### System Tray / Status Bar Support
-
-**Status:** Not started
-**Platforms:** All
-
-Native system tray integration for background applications.
-
-| Platform | API                                          |
-| -------- | -------------------------------------------- |
-| macOS    | NSStatusItem / NSStatusBar                   |
-| Windows  | Shell_NotifyIcon (NOTIFYICONDATA)            |
-| Linux    | libappindicator / GtkStatusIcon (deprecated) |
-
-**Features needed:**
-
-- [ ] Show/hide tray icon
-- [ ] Set icon image
-- [ ] Set tooltip
-- [ ] Tray icon click handling
-- [ ] Context menu on tray icon
-
----
-
 ### Native Notifications
 
 **Status:** Not started
@@ -98,8 +75,6 @@ Enable React, Vue, Angular, Svelte and other JS/TS frameworks as an alternative 
 - Electron migration path for existing web apps
 - Smaller bundle size (no Blazor runtime)
 - Mature JS tooling ecosystem (Vite, ESLint, etc.)
-
-**Licensing consideration:** Potential hybrid model - free for npm/JS usage, commercial license for C# integration. Positions Hermes as premium alternative to Photino with proper native OS support.
 
 ---
 
@@ -305,6 +280,7 @@ bool isEnabled = HermesApplication.AutostartEnabled;
 - [x] OS information (platform, version, architecture, locale)
 - [x] Window state persistence (position, size, maximized state)
 - [x] Crash reporting callback
+- [x] System tray / status bar support (all platforms)
 
 ---
 
