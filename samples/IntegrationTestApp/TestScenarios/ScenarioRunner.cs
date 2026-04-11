@@ -51,6 +51,9 @@ public sealed class ScenarioRunner : IDisposable
         await RunMoveEventTestAsync();
         await RunFocusEventTestAsync();
 
+        // Diagnostics session auto-init (must run before anything that overrides AnonymousSessionId)
+        RunHermesSessionAutoInitTest();
+
         // Crash interception test
         await RunCrashInterceptionTestAsync();
 
@@ -377,6 +380,29 @@ public sealed class ScenarioRunner : IDisposable
         catch (Exception ex)
         {
             TestReporter.Fail("focus-event", ex.Message);
+        }
+    }
+
+    private void RunHermesSessionAutoInitTest()
+    {
+        TestReporter.Start("hermes-session-auto-init");
+        try
+        {
+            var sessionId = HermesSession.AnonymousSessionId;
+            var startTime = HermesSession.StartTime;
+            var uptime = HermesSession.Uptime;
+
+            var sessionIdValid = !string.IsNullOrWhiteSpace(sessionId) && Guid.TryParse(sessionId, out _);
+            var startTimeValid = startTime > DateTimeOffset.MinValue && startTime <= DateTimeOffset.UtcNow;
+            var uptimeValid = uptime > TimeSpan.Zero;
+
+            TestReporter.Assert("hermes-session-auto-init",
+                sessionIdValid && startTimeValid && uptimeValid,
+                $"sessionId='{sessionId}' startTime={startTime:O} uptime={uptime}");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail("hermes-session-auto-init", ex.Message);
         }
     }
 

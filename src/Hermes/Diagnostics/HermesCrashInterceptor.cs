@@ -26,11 +26,6 @@ public static class HermesCrashInterceptor
     /// </summary>
     public static string? ProductVersion { get; set; }
 
-    /// <summary>
-    /// Optional anonymous session ID included in crash context.
-    /// </summary>
-    public static string? AnonymousSessionId { get; set; }
-
     private static int _enabled;
 
     /// <summary>
@@ -78,7 +73,7 @@ public static class HermesCrashInterceptor
             Platform: BuildPlatformInfo(),
             CrashedAt: DateTimeOffset.UtcNow,
             Source: source,
-            AnonymousSessionId: AnonymousSessionId);
+            AnonymousSessionId: HermesSession.AnonymousSessionId);
     }
 
     /// <summary>
