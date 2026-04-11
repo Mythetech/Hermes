@@ -144,7 +144,8 @@ public sealed class CrashInterceptorTests
     [Fact]
     public void BuildContext_IncludesAnonymousSessionId()
     {
-        HermesCrashInterceptor.AnonymousSessionId = "session-123";
+        var original = HermesSession.AnonymousSessionId;
+        HermesSession.AnonymousSessionId = "session-123";
 
         try
         {
@@ -155,7 +156,7 @@ public sealed class CrashInterceptorTests
         }
         finally
         {
-            HermesCrashInterceptor.AnonymousSessionId = null;
+            HermesSession.AnonymousSessionId = original;
         }
     }
 
