@@ -1,11 +1,18 @@
 // Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 using System.Text.Json;
 using Hermes;
+using Hermes.Storage;
 
 namespace PokedexTray;
 
 public static class LookupWindow
 {
+    // Keys in the default Hermes KV store. Persistence survives the tray
+    // window being torn down between sessions, which is the localStorage
+    // gap this sample is meant to demonstrate.
+    private const string LastViewedKey = "lastViewedId";
+    private const string FavoritesKey = "favorites";
+
     public static HermesWindow Create(PokemonService service, Action? onHidden = null)
     {
         HermesWindow? window = null;
@@ -46,33 +53,86 @@ public static class LookupWindow
                     });
                     break;
 
-                case "lookup":
-                    var id = root.GetProperty("id").GetInt32();
-                    var info = await service.LookupAsync(id);
-
-                    string response;
-                    if (info is not null)
+                case "init":
                     {
-                        response = JsonSerializer.Serialize(new
+                        // Page just loaded; replay persisted state from the KV store.
+                        var lastViewed = HermesStore.Default.Get<int?>(LastViewedKey);
+                        var favorites = HermesStore.Default.Get<List<Favorite>>(FavoritesKey)
+                                        ?? new List<Favorite>();
+
+                        var initResponse = JsonSerializer.Serialize(new
                         {
-                            name = info.Name,
-                            sprite = info.SpriteUrl,
-                            types = info.Types,
-                            cached = service.WasCacheHit
+                            type = "init",
+                            lastViewedId = lastViewed,
+                            favorites = favorites.Select(f => new { id = f.Id, name = f.Name }).ToArray()
                         });
-                    }
-                    else
-                    {
-                        response = JsonSerializer.Serialize(new { error = $"Pokemon #{id} not found" });
+                        window.Invoke(() => window.SendMessage(initResponse));
+                        break;
                     }
 
-                    window.Invoke(() => window.SendMessage(response));
-                    break;
+                case "lookup":
+                    {
+                        var id = root.GetProperty("id").GetInt32();
+                        var info = await service.LookupAsync(id);
+
+                        string response;
+                        if (info is not null)
+                        {
+                            // Persist last-viewed so the next launch reopens to the same Pokémon.
+                            HermesStore.Default.Set(LastViewedKey, id);
+
+                            response = JsonSerializer.Serialize(new
+                            {
+                                type = "lookup",
+                                id,
+                                name = info.Name,
+                                sprite = info.SpriteUrl,
+                                types = info.Types,
+                                cached = service.WasCacheHit
+                            });
+                        }
+                        else
+                        {
+                            response = JsonSerializer.Serialize(new { type = "lookup", error = $"Pokemon #{id} not found" });
+                        }
+
+                        window.Invoke(() => window.SendMessage(response));
+                        break;
+                    }
+
+                case "toggleFavorite":
+                    {
+                        var id = root.GetProperty("id").GetInt32();
+                        var name = root.GetProperty("name").GetString() ?? "";
+
+                        var favorites = HermesStore.Default.Get<List<Favorite>>(FavoritesKey)
+                                        ?? new List<Favorite>();
+
+                        var existingIndex = favorites.FindIndex(f => f.Id == id);
+                        if (existingIndex >= 0)
+                        {
+                            favorites.RemoveAt(existingIndex);
+                        }
+                        else
+                        {
+                            favorites.Add(new Favorite(id, name));
+                        }
+
+                        HermesStore.Default.Set(FavoritesKey, favorites);
+
+                        var favResponse = JsonSerializer.Serialize(new
+                        {
+                            type = "favorites",
+                            favorites = favorites.Select(f => new { id = f.Id, name = f.Name }).ToArray()
+                        });
+                        window.Invoke(() => window.SendMessage(favResponse));
+                        break;
+                    }
             }
         }
         catch (Exception ex)
         {
-            var error = JsonSerializer.Serialize(new { error = ex.Message });
+            var error = JsonSerializer.Serialize(new { type = "lookup", error = ex.Message });
             window.Invoke(() => window.SendMessage(error));
         }
     }
@@ -199,6 +259,24 @@ public static class LookupWindow
             text-transform: capitalize;
             color: white;
         }
+        .name-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .star-btn {
+            background: none;
+            border: none;
+            color: #555;
+            font-size: 22px;
+            cursor: pointer;
+            padding: 0 4px;
+            line-height: 1;
+            transition: color 0.2s, transform 0.1s;
+        }
+        .star-btn:hover { color: #f1c40f; transform: scale(1.15); }
+        .star-btn.active { color: #f1c40f; }
         .status {
             font-size: 12px;
             color: #888;
@@ -206,6 +284,39 @@ public static class LookupWindow
         }
         .status.cached { color: #2ecc71; }
         .status.fetched { color: #3498db; }
+        .favorites-bar {
+            width: 100%;
+            max-width: 300px;
+            margin-top: 16px;
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .favorites-bar.visible { display: flex; }
+        .favorites-label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .favorites-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .fav-chip {
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: rgba(241, 196, 15, 0.15);
+            border: 1px solid rgba(241, 196, 15, 0.4);
+            color: #f1c40f;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: capitalize;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .fav-chip:hover { background: rgba(241, 196, 15, 0.3); }
         .error {
             color: #e74c3c;
             font-size: 14px;
@@ -254,9 +365,16 @@ public static class LookupWindow
         <div class="error" id="error"></div>
         <div class="result" id="result">
             <img class="sprite" id="sprite" alt="Pokemon sprite" />
-            <div class="name" id="pokeName"></div>
+            <div class="name-row">
+                <div class="name" id="pokeName"></div>
+                <button class="star-btn" id="starBtn" title="Toggle favorite">&#x2606;</button>
+            </div>
             <div class="types" id="types"></div>
             <div class="status" id="status"></div>
+        </div>
+        <div class="favorites-bar" id="favoritesBar">
+            <div class="favorites-label">Favorites (persisted)</div>
+            <div class="favorites-list" id="favoritesList"></div>
         </div>
         <script>
             const idInput = document.getElementById('pokemonId');
@@ -264,9 +382,28 @@ public static class LookupWindow
             const loading = document.getElementById('loading');
             const errorEl = document.getElementById('error');
             const result = document.getElementById('result');
+            const starBtn = document.getElementById('starBtn');
+            const favoritesBar = document.getElementById('favoritesBar');
+            const favoritesList = document.getElementById('favoritesList');
+
+            // Tracks the currently displayed Pokémon so the star button knows
+            // which id to toggle.
+            let currentPokemon = null;
+            // Local mirror of the persisted favorites list, kept in sync with
+            // every server response so the star indicator stays accurate.
+            let favorites = [];
 
             idInput.addEventListener('keydown', e => {
                 if (e.key === 'Enter') doSearch();
+            });
+
+            starBtn.addEventListener('click', () => {
+                if (!currentPokemon) return;
+                window.external.sendMessage(JSON.stringify({
+                    action: 'toggleFavorite',
+                    id: currentPokemon.id,
+                    name: currentPokemon.name
+                }));
             });
 
             function doSearch() {
@@ -282,14 +419,40 @@ public static class LookupWindow
                 window.external.sendMessage(JSON.stringify({ action: 'lookup', id: id }));
             }
 
-            window.external.receiveMessage(function(msg) {
-                searchBtn.disabled = false;
-                loading.classList.remove('visible');
-                const data = JSON.parse(msg);
-                if (data.error) {
-                    showError(data.error);
+            function isFavorited(id) {
+                return favorites.some(f => f.id === id);
+            }
+
+            function renderStar() {
+                if (currentPokemon && isFavorited(currentPokemon.id)) {
+                    starBtn.classList.add('active');
+                    starBtn.innerHTML = '&#x2605;'; // filled
+                } else {
+                    starBtn.classList.remove('active');
+                    starBtn.innerHTML = '&#x2606;'; // outline
+                }
+            }
+
+            function renderFavorites() {
+                favoritesList.innerHTML = '';
+                if (favorites.length === 0) {
+                    favoritesBar.classList.remove('visible');
                     return;
                 }
+                favoritesBar.classList.add('visible');
+                favorites.forEach(f => {
+                    const chip = document.createElement('span');
+                    chip.className = 'fav-chip';
+                    chip.textContent = '#' + f.id + ' ' + f.name;
+                    chip.addEventListener('click', () => {
+                        idInput.value = f.id;
+                        doSearch();
+                    });
+                    favoritesList.appendChild(chip);
+                });
+            }
+
+            function renderLookup(data) {
                 document.getElementById('sprite').src = data.sprite;
                 document.getElementById('pokeName').textContent = data.name;
 
@@ -310,13 +473,48 @@ public static class LookupWindow
                     statusEl.textContent = 'Fetched from API';
                     statusEl.className = 'status fetched';
                 }
+                currentPokemon = { id: data.id, name: data.name };
+                renderStar();
                 result.classList.add('visible');
+            }
+
+            window.external.receiveMessage(function(msg) {
+                const data = JSON.parse(msg);
+
+                if (data.type === 'init') {
+                    favorites = data.favorites || [];
+                    renderFavorites();
+                    if (data.lastViewedId) {
+                        idInput.value = data.lastViewedId;
+                        doSearch();
+                    }
+                    return;
+                }
+
+                if (data.type === 'favorites') {
+                    favorites = data.favorites || [];
+                    renderFavorites();
+                    renderStar();
+                    return;
+                }
+
+                // Default: lookup response
+                searchBtn.disabled = false;
+                loading.classList.remove('visible');
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+                renderLookup(data);
             });
 
             function showError(msg) {
                 errorEl.textContent = msg;
                 result.classList.remove('visible');
             }
+
+            // Ask the host for persisted state as soon as the page is ready.
+            window.external.sendMessage(JSON.stringify({ action: 'init' }));
         </script>
     </body>
     </html>
