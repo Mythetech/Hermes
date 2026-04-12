@@ -170,6 +170,20 @@ else
 
 ---
 
+## Key-Value Store File Locations
+
+The key-value store persists data as JSON files in the platform's standard user data directory. Each named store is a separate file (`{name}.json`).
+
+| Platform | Directory |
+|----------|-----------|
+| **macOS** | `~/Library/Application Support/Hermes/KvStore/` |
+| **Windows** | `%LOCALAPPDATA%\Hermes\KvStore\` |
+| **Linux** | `$XDG_DATA_HOME/Hermes/KvStore/` (defaults to `~/.local/share/Hermes/KvStore/`) |
+
+These paths are resolved by `AppDataDirectories.GetUserDataPath("KvStore")`. The default store is written to `default.json`.
+
+---
+
 ## Known Limitations
 
 ### macOS
