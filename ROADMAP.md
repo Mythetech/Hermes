@@ -188,31 +188,6 @@ Transparent and translucent window backgrounds for overlay/HUD applications.
 
 ---
 
-### Key-Value Store
-
-**Status:** Not started
-**Platforms:** All
-**Complexity:** Medium
-
-Simple persistent storage for app settings and preferences.
-
-**Proposed API:**
-
-```csharp
-var store = HermesStore.Open("settings");
-store.Set("theme", "dark");
-var theme = store.Get<string>("theme");
-await store.SaveAsync();
-```
-
-**Features needed:**
-
-- [ ] Get/set typed values
-- [ ] Automatic persistence to app data directory
-- [ ] JSON-based storage
-
----
-
 ### Autostart (Launch at Login)
 
 **Status:** Not started
@@ -281,6 +256,7 @@ bool isEnabled = HermesApplication.AutostartEnabled;
 - [x] Window state persistence (position, size, maximized state)
 - [x] Crash reporting callback
 - [x] System tray / status bar support (all platforms)
+- [x] Key-value store (persistent, type-safe, JSON-backed)
 
 ---
 
