@@ -44,7 +44,7 @@ Programmatic clipboard access for copy/paste operations.
 
 **Features needed:**
 
-- [ ] Get/set text
+- [x] Get/set text
 - [ ] Get/set HTML
 - [ ] Get/set image
 - [ ] Clipboard change monitoring

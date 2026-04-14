@@ -224,6 +224,21 @@ public static class HermesApplication
     /// <exception cref="FileNotFoundException">Thrown when the path does not exist.</exception>
     public static void RevealInFileManager(string path) => Opener.RevealInFileManager(path);
 
+    /// <summary>
+    /// Copies text to the system clipboard.
+    /// </summary>
+    /// <param name="text">The text to copy.</param>
+    /// <exception cref="ArgumentException">Thrown when text is null or whitespace.</exception>
+    /// <exception cref="PlatformNotSupportedException">Thrown on unsupported platforms.</exception>
+    public static void SetClipboardText(string text) => Clipboard.SetText(text);
+
+    /// <summary>
+    /// Gets text from the system clipboard.
+    /// Returns null if the clipboard is empty or does not contain text.
+    /// </summary>
+    /// <exception cref="PlatformNotSupportedException">Thrown on unsupported platforms.</exception>
+    public static string? GetClipboardText() => Clipboard.GetText();
+
     private static IDockMenuBackend? CreateDockMenuBackend()
     {
 #if MACOS

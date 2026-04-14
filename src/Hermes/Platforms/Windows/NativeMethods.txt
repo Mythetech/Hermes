@@ -193,3 +193,17 @@ GetCursorPos
 
 // Icon loading
 LoadIcon
+
+// Clipboard APIs
+OpenClipboard
+CloseClipboard
+EmptyClipboard
+SetClipboardData
+GetClipboardData
+IsClipboardFormatAvailable
+GlobalAlloc
+GlobalLock
+GlobalUnlock
+GlobalFree
+CF_UNICODETEXT
+GLOBAL_ALLOC_FLAGS
