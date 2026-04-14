@@ -101,7 +101,7 @@ public static class Clipboard
             Windows.Win32.PInvoke.GlobalUnlock(hMem);
 
             var result = Windows.Win32.PInvoke.SetClipboardData(
-                (uint)Windows.Win32.Foundation.CLIPBOARD_FORMAT.CF_UNICODETEXT,
+                13u /* CF_UNICODETEXT */,
                 new Windows.Win32.Foundation.HANDLE(hMem.Value));
 
             if (result.IsNull)
@@ -117,14 +117,14 @@ public static class Clipboard
     private static unsafe string? GetTextWindows()
     {
         if (!Windows.Win32.PInvoke.IsClipboardFormatAvailable(
-                (uint)Windows.Win32.Foundation.CLIPBOARD_FORMAT.CF_UNICODETEXT))
+                13u /* CF_UNICODETEXT */))
             return null;
 
         Windows.Win32.PInvoke.OpenClipboard(default);
         try
         {
             var hMem = Windows.Win32.PInvoke.GetClipboardData(
-                (uint)Windows.Win32.Foundation.CLIPBOARD_FORMAT.CF_UNICODETEXT);
+                13u /* CF_UNICODETEXT */);
 
             if (hMem.IsNull)
                 return null;

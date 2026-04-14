@@ -205,5 +205,5 @@ GlobalAlloc
 GlobalLock
 GlobalUnlock
 GlobalFree
-CF_UNICODETEXT
+CLIPBOARD_FORMAT
 GLOBAL_ALLOC_FLAGS
