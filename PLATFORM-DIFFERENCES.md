@@ -198,6 +198,30 @@ These paths are resolved by `AppDataDirectories.GetUserDataPath("KvStore")`. The
 
 ---
 
+## Autostart (Launch at Login)
+
+Registers the application to launch automatically at system startup/login.
+
+| Platform    | Mechanism         | Location                                               |
+|-------------|-------------------|--------------------------------------------------------|
+| **macOS**   | LaunchAgent plist | `~/Library/LaunchAgents/{appId}.plist`                 |
+| **Windows** | Registry          | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`   |
+| **Linux**   | XDG Desktop Entry | `~/.config/autostart/{appId}.desktop`                  |
+
+### macOS Notes
+
+Uses a LaunchAgent plist with `RunAtLoad = true`. The plist is a plain XML file written to the user's LaunchAgents directory. No native code or entitlements required. A future enhancement could use `SMAppService` (macOS 13+) for signed `.app` bundles, which provides tighter integration with System Settings > Login Items.
+
+### Windows Notes
+
+Writes a string value to the `Run` registry key under `HKEY_CURRENT_USER`. The value name is the app ID, and the value data is the quoted executable path with any launch arguments appended. No elevation required.
+
+### Linux Notes
+
+Writes an XDG-compliant `.desktop` file to `~/.config/autostart/`. Respects the `XDG_CONFIG_HOME` environment variable if set. The directory is created if it doesn't exist. Arguments containing spaces are individually quoted in the `Exec` line.
+
+---
+
 ## Known Limitations
 
 ### macOS
