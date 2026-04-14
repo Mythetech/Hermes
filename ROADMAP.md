@@ -190,7 +190,7 @@ Transparent and translucent window backgrounds for overlay/HUD applications.
 
 ### Autostart (Launch at Login)
 
-**Status:** Not started
+**Status:** Complete
 **Platforms:** All
 **Complexity:** Medium
 
@@ -211,9 +211,9 @@ bool isEnabled = HermesApplication.AutostartEnabled;
 
 **Features needed:**
 
-- [ ] Enable/disable autostart
-- [ ] Query current state
-- [ ] Pass launch arguments
+- [x] Enable/disable autostart
+- [x] Query current state
+- [x] Pass launch arguments
 
 ---
 
