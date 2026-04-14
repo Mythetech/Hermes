@@ -184,6 +184,20 @@ These paths are resolved by `AppDataDirectories.GetUserDataPath("KvStore")`. The
 
 ---
 
+## Clipboard
+
+| Feature | macOS | Windows | Linux |
+|---------|-------|---------|-------|
+| Text get/set | `pbcopy` / `pbpaste` | Win32 Clipboard API | `xclip` |
+| External dependency | None (ships with macOS) | None (built-in) | Requires `xclip` (`sudo apt install xclip`) |
+
+### Notes
+
+- On Linux, `xclip` must be installed. If it is not available, clipboard operations throw `PlatformNotSupportedException` with an install hint.
+- macOS and Linux implementations shell out to external processes, which is slightly slower than the direct Win32 API used on Windows. For text operations this is negligible.
+
+---
+
 ## Known Limitations
 
 ### macOS
