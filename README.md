@@ -4,6 +4,9 @@ A modern, AOT-compatible native desktop framework for .NET 10.
 
 [![NuGet](https://img.shields.io/nuget/v/Mythetech.Hermes)](https://www.nuget.org/packages/Mythetech.Hermes)
 [![License](https://img.shields.io/badge/license-Elastic%20License%202.0-blue)](LICENSE)
+[![Build and Publish NuGet](https://github.com/Mythetech/Hermes/actions/workflows/nuget-publish.yml/badge.svg)](https://github.com/Mythetech/Hermes/actions/workflows/nuget-publish.yml)
+[![Integration Tests](https://github.com/Mythetech/Hermes/actions/workflows/integration-test.yml/badge.svg)](https://github.com/Mythetech/Hermes/actions/workflows/integration-test.yml)
+[![On-Demand Smoke Test](https://github.com/Mythetech/Hermes/actions/workflows/smoke-test.yml/badge.svg)](https://github.com/Mythetech/Hermes/actions/workflows/smoke-test.yml)
 
 ## Overview
 
