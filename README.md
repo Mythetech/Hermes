@@ -19,6 +19,7 @@ Designed for .NET 10 and modern development workflows, Hermes prioritizes AOT co
 - **File Dialogs** Native open, save, and folder selection dialogs with file filters
 - **AOT Compatible**,Designed for Native AOT from day one using `LibraryImport` instead of `DllImport`
 - **Blazor Integration** First-class support for Blazor applications via `Hermes.Blazor`
+- **Blazor Hot Reload** Zero-config CSS and component hot reload via `dotnet watch`, no setup required
 - **Cross-Platform** Single codebase targeting Windows, macOS, and Linux
 - **Minimal Dependencies** Pure C# on Windows; thin native layers only where required
 
