@@ -48,6 +48,7 @@
   <!-- Allow benchmarks to access internal members -->
   <ItemGroup>
     <InternalsVisibleTo Include="Hermes.Benchmarks" />
+    <InternalsVisibleTo Include="Hermes.Tests" />
   </ItemGroup>
 
   <!-- MSBuild targets for static web asset handling (auto-imported by consuming projects) -->
@@ -58,6 +59,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="10.*" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 </Project>

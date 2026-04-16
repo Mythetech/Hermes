@@ -4,6 +4,7 @@ using Hermes.Blazor.Threading;
 using Hermes.Diagnostics;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Hermes.Blazor.DevServer;
 using Microsoft.Extensions.Configuration;
 
 namespace Hermes.Blazor;
@@ -21,6 +22,7 @@ public sealed class HermesBlazorApp : IAsyncDisposable
     private readonly string? _loadingHtml;
     private readonly bool _windowShownDuringBuild;
     private bool _disposed;
+    private readonly HermesDevServer? _devServer;
 
     internal HermesBlazorApp(
         IServiceProvider services,
@@ -29,7 +31,8 @@ public sealed class HermesBlazorApp : IAsyncDisposable
         HermesWebViewManager webViewManager,
         HermesSynchronizationContext syncContext,
         string? loadingHtml = null,
-        bool windowShownDuringBuild = true)
+        bool windowShownDuringBuild = true,
+        HermesDevServer? devServer = null)
     {
         _services = services;
         _configuration = configuration;
@@ -38,6 +41,7 @@ public sealed class HermesBlazorApp : IAsyncDisposable
         _syncContext = syncContext;
         _loadingHtml = loadingHtml;
         _windowShownDuringBuild = windowShownDuringBuild;
+        _devServer = devServer;
 
         RootComponents = new HermesRootComponents(_webViewManager);
     }
@@ -170,6 +174,9 @@ public sealed class HermesBlazorApp : IAsyncDisposable
 
         await _webViewManager.DisposeAsync();
         _window.Dispose();
+
+        if (_devServer is not null)
+            await _devServer.DisposeAsync();
 
         if (_services is IAsyncDisposable asyncDisposable)
             await asyncDisposable.DisposeAsync();
