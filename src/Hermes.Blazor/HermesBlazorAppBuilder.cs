@@ -224,11 +224,6 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             backend.RegisterCustomScheme("app", _ => (null, null));
         }
 
-        // Snapshot the developer's service registrations before we add framework services.
-        // These are the only ones we forward to the dev server to avoid conflicts
-        // between AddBlazorWebView() and AddRazorComponents().
-        var developerServiceCount = _hostBuilder.Services.Count;
-
         _hostBuilder.Services.AddBlazorWebView();
         _hostBuilder.Services.AddSingleton(window);
         _hostBuilder.Services.AddSingleton(backend);
@@ -244,39 +239,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         {
             try
             {
-                // Forward the developer's service registrations to the dev server.
-                // We skip Microsoft.*/System.* types because the HostApplicationBuilder
-                // registers internal hosting descriptors (logging, config, etc.) that
-                // conflict with the dev server's own builder. Only app-level types get copied.
-                var servicesCopy = new Action<IServiceCollection>(devServices =>
-                {
-                    for (int i = 0; i < developerServiceCount; i++)
-                    {
-                        var descriptor = _hostBuilder.Services[i];
-                        var ns = descriptor.ServiceType.Namespace;
-                        if (ns != null && (ns.StartsWith("Microsoft.", StringComparison.Ordinal)
-                            || ns.StartsWith("System.", StringComparison.Ordinal)))
-                            continue;
-                        devServices.Add(descriptor);
-                    }
-                    devServices.AddSingleton(window);
-                    devServices.AddSingleton(backend);
-                    devServices.AddSingleton(syncContext);
-                    devServices.AddSingleton(dispatcher);
-                    devServices.AddSingleton<IConfiguration>(_hostBuilder.Configuration);
-                    devServices.AddSingleton<IHermesPlatformService>(new HermesPlatformService(window));
-                    devServices.AddSingleton<IHermesMenuProvider>(new HermesMenuProvider(window.MenuBar));
-                });
-
-                // The first registered root component is typically the App component,
-                // which MapRazorComponents needs to discover routable pages.
-                var rootComponent = RootComponents.GetComponents().FirstOrDefault();
-                var rootType = rootComponent.Type
-                    ?? throw new InvalidOperationException("No root components registered. Add at least one via RootComponents.Add<App>().");
-
                 devServer = DevServer.HermesDevServer.StartAsync(
-                    rootType,
-                    servicesCopy,
                     _hostPage,
                     wwwrootPath).GetAwaiter().GetResult();
 

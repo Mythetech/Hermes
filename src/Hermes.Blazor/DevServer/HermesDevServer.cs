@@ -1,17 +1,16 @@
 // Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
-using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Components.Endpoints;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 
 namespace Hermes.Blazor.DevServer;
 
 /// <summary>
 /// Internal Kestrel-based dev server for Blazor hot reload support.
-/// Runs only when dotnet watch is detected (or ForceDevServer is set).
+/// Serves static files (HTML, CSS, JS) over HTTP so the webview can load them
+/// with no-cache headers, enabling CSS hot reload. Rendering and interactivity
+/// are handled by the WebViewManager through the native bridge (blazor.webview.js),
+/// not by Blazor Server — this is purely a static file server with an SSE endpoint.
 /// </summary>
 internal sealed class HermesDevServer : IAsyncDisposable
 {
@@ -26,18 +25,13 @@ internal sealed class HermesDevServer : IAsyncDisposable
 
     /// <summary>
     /// The base URL the webview should navigate to (e.g., http://127.0.0.1:54321).
-    /// Available after StartAsync().
     /// </summary>
     internal string BaseUrl { get; private set; } = null!;
 
     /// <summary>
     /// Creates and starts the internal dev server.
     /// </summary>
-    [RequiresDynamicCode("Blazor Server requires dynamic code")]
-    [RequiresUnreferencedCode("Blazor Server uses reflection")]
     internal static async Task<HermesDevServer> StartAsync(
-        Type rootComponentType,
-        Action<IServiceCollection> configureServices,
         string hostPage,
         string wwwrootPath)
     {
@@ -48,7 +42,7 @@ internal sealed class HermesDevServer : IAsyncDisposable
         {
             try
             {
-                return await TryStartAsync(rootComponentType, configureServices, hostPage, wwwrootPath);
+                return await TryStartAsync(hostPage, wwwrootPath);
             }
             catch (Exception ex) when (ex is System.Net.Sockets.SocketException or IOException)
             {
@@ -62,27 +56,19 @@ internal sealed class HermesDevServer : IAsyncDisposable
             lastException);
     }
 
-    [RequiresDynamicCode("Blazor Server requires dynamic code")]
-    [RequiresUnreferencedCode("Blazor Server uses reflection")]
     private static async Task<HermesDevServer> TryStartAsync(
-        Type rootComponentType,
-        Action<IServiceCollection> configureServices,
         string hostPage,
         string wwwrootPath)
     {
-        var builder = WebApplication.CreateBuilder();
-        builder.Environment.EnvironmentName = "Development";
+        // Resolve the source wwwroot directory from the static web assets manifest.
+        // dotnet watch serves static files from source directories, not the build
+        // output. The manifest's ContentRoots[0] is the project's source wwwroot.
+        // We use it for both static file serving and the CSS file watcher so edits
+        // to the source files are detected and served immediately.
+        var sourceWwwroot = ResolveSourceWwwroot(wwwrootPath);
 
-        builder.Services.AddRazorComponents()
-            .AddInteractiveServerComponents();
-
-        configureServices(builder.Services);
-
-        if (Directory.Exists(wwwrootPath))
-        {
-            builder.Environment.WebRootPath = wwwrootPath;
-            builder.Environment.WebRootFileProvider = new PhysicalFileProvider(wwwrootPath);
-        }
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Environment.WebRootPath = sourceWwwroot;
 
         var app = builder.Build();
         app.Urls.Add("http://127.0.0.1:0");
@@ -92,24 +78,32 @@ internal sealed class HermesDevServer : IAsyncDisposable
         var sseLock = new object();
         long cssVersion = 0;
 
-        // Serve dev-only endpoints and rewrite blazor.webview.js → blazor.web.js
+        // Intercept the host page request BEFORE UseStaticFiles to inject the
+        // CSS hot reload script. WebViewManager navigates to /{hostPage} (e.g.,
+        // /index.html), which UseStaticFiles would serve directly from disk
+        // without the script injection.
+        var hostPagePath = Path.Combine(sourceWwwroot, hostPage);
         app.Use(async (context, next) =>
         {
-            if (context.Request.Path.Value == "/_hermes/css-reload.js")
+            var path = context.Request.Path.Value?.TrimStart('/') ?? "";
+            if (path.Equals(hostPage, StringComparison.OrdinalIgnoreCase)
+                || path == string.Empty)
             {
-                context.Response.ContentType = "application/javascript";
-                context.Response.Headers.CacheControl = "no-cache";
-                await context.Response.WriteAsync(CssHotReloadScript);
-                return;
-            }
+                if (File.Exists(hostPagePath))
+                {
+                    var html = await File.ReadAllTextAsync(hostPagePath);
+                    html = html.Replace("</body>", CssHotReloadScriptTag + "\n</body>", StringComparison.OrdinalIgnoreCase);
 
-            if (context.Request.Path.Value?.Contains("blazor.webview.js") == true)
-            {
-                context.Request.Path = context.Request.Path.Value.Replace("blazor.webview.js", "blazor.web.js");
+                    context.Response.ContentType = "text/html";
+                    context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+                    await context.Response.WriteAsync(html);
+                    return;
+                }
             }
             await next();
         });
 
+        // Serve static files from the source wwwroot with no-cache headers
         app.UseStaticFiles(new StaticFileOptions
         {
             OnPrepareResponse = ctx =>
@@ -117,9 +111,23 @@ internal sealed class HermesDevServer : IAsyncDisposable
                 ctx.Context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
             }
         });
-        app.UseAntiforgery();
 
-        MapRazorComponentsReflection(app, rootComponentType);
+        // Serve _framework/ files (blazor.webview.js, blazor.modules.json) from the
+        // static web assets manifest. These live in NuGet package directories, not
+        // wwwroot. Parse the build-time manifest to find the physical path.
+        var frameworkAssetsPath = FindFrameworkAssetsPath();
+        if (frameworkAssetsPath is not null)
+        {
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = new PhysicalFileProvider(frameworkAssetsPath),
+                RequestPath = "/_framework",
+                OnPrepareResponse = ctx =>
+                {
+                    ctx.Context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+                }
+            });
+        }
 
         // SSE endpoint for CSS hot reload notifications
         app.MapGet("/_hermes/css-reload", async (HttpContext ctx) =>
@@ -127,8 +135,6 @@ internal sealed class HermesDevServer : IAsyncDisposable
             ctx.Response.ContentType = "text/event-stream";
             ctx.Response.Headers.CacheControl = "no-cache";
             ctx.Response.Headers.Connection = "keep-alive";
-
-            var lastSeen = Interlocked.Read(ref cssVersion);
 
             while (!ctx.RequestAborted.IsCancellationRequested)
             {
@@ -149,36 +155,16 @@ internal sealed class HermesDevServer : IAsyncDisposable
             }
         });
 
-        // Serve the host page with CSS hot reload script injected.
-        // We use a custom fallback handler instead of MapFallbackToFile so we can
-        // inject the SSE script before </body> in the served HTML.
-        var hostPagePath = Path.Combine(wwwrootPath, hostPage);
-        app.MapFallback(async (HttpContext ctx) =>
-        {
-            if (!File.Exists(hostPagePath))
-            {
-                ctx.Response.StatusCode = 404;
-                return;
-            }
-
-            var html = await File.ReadAllTextAsync(hostPagePath);
-            html = html.Replace("</body>", CssHotReloadScript + "\n</body>", StringComparison.OrdinalIgnoreCase);
-
-            ctx.Response.ContentType = "text/html";
-            ctx.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
-            await ctx.Response.WriteAsync(html);
-        });
-
         await app.StartAsync();
 
         var address = app.Urls.FirstOrDefault()
             ?? throw new InvalidOperationException("Dev server did not bind to any address.");
 
-        // Watch wwwroot for CSS changes and notify SSE clients
+        // Watch the source wwwroot for CSS changes and notify SSE clients
         FileSystemWatcher? watcher = null;
-        if (Directory.Exists(wwwrootPath))
+        if (Directory.Exists(sourceWwwroot))
         {
-            watcher = new FileSystemWatcher(wwwrootPath)
+            watcher = new FileSystemWatcher(sourceWwwroot)
             {
                 IncludeSubdirectories = true,
                 NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName,
@@ -219,32 +205,103 @@ internal sealed class HermesDevServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Calls app.MapRazorComponents&lt;T&gt;().AddInteractiveServerRenderMode() via reflection,
-    /// where T is the root component type known only at runtime.
-    /// This only runs in dev mode, never in AOT/trimmed production builds.
+    /// Resolves the source wwwroot directory from the static web assets manifest.
+    /// The build output wwwroot is a snapshot; dotnet watch serves from source
+    /// directories listed in the manifest. Falls back to the build output path.
     /// </summary>
-    [RequiresDynamicCode("MapRazorComponents requires dynamic code")]
-    [RequiresUnreferencedCode("MapRazorComponents uses reflection")]
-    private static void MapRazorComponentsReflection(WebApplication app, Type rootComponentType)
+    private static string ResolveSourceWwwroot(string buildOutputWwwroot)
     {
-        var mapMethod = typeof(RazorComponentsEndpointRouteBuilderExtensions)
-            .GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .First(m => m.Name == "MapRazorComponents" && m.IsGenericMethod)
-            .MakeGenericMethod(rootComponentType);
+        var entryName = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name;
+        if (entryName is null) return buildOutputWwwroot;
 
-        var conventionBuilder = mapMethod.Invoke(null, [app])!;
+        var manifestPath = Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory,
+            $"{entryName}.staticwebassets.runtime.json");
 
-        var addServerMode = typeof(ServerRazorComponentsEndpointConventionBuilderExtensions)
-            .GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .First(m => m.Name == "AddInteractiveServerRenderMode")
-            .Invoke(null, [conventionBuilder]);
+        if (!File.Exists(manifestPath)) return buildOutputWwwroot;
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(manifestPath));
+            var contentRoots = doc.RootElement.GetProperty("ContentRoots")
+                .EnumerateArray()
+                .Select(e => e.GetString()!)
+                .ToArray();
+
+            // ContentRoots[0] is the project's source wwwroot directory
+            if (contentRoots.Length > 0 && Directory.Exists(contentRoots[0]))
+            {
+                return contentRoots[0].TrimEnd('/');
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Hermes] Warning: Failed to resolve source wwwroot: {ex.Message}");
+        }
+
+        return buildOutputWwwroot;
     }
 
     /// <summary>
-    /// JavaScript that connects to the SSE endpoint and reloads stylesheets
-    /// when CSS files change on disk. Served at /_hermes/css-reload.js.
+    /// Parses the static web assets manifest to find the physical directory that
+    /// serves _framework/ files (blazor.webview.js). The manifest maps virtual paths
+    /// to content roots — _framework children point to the WebView NuGet package.
     /// </summary>
-    private const string CssHotReloadScript = """
+    private static string? FindFrameworkAssetsPath()
+    {
+        var entryName = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name;
+        if (entryName is null) return null;
+
+        var manifestPath = Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory,
+            $"{entryName}.staticwebassets.runtime.json");
+
+        if (!File.Exists(manifestPath)) return null;
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(manifestPath));
+            var contentRoots = doc.RootElement.GetProperty("ContentRoots")
+                .EnumerateArray()
+                .Select(e => e.GetString()!)
+                .ToArray();
+
+            // Find the _framework node and get its first child's content root
+            var root = doc.RootElement.GetProperty("Root");
+            if (root.TryGetProperty("Children", out var children)
+                && children.TryGetProperty("_framework", out var framework)
+                && framework.TryGetProperty("Children", out var fwChildren))
+            {
+                // Get the content root index from any child asset
+                foreach (var child in fwChildren.EnumerateObject())
+                {
+                    if (child.Value.TryGetProperty("Asset", out var asset)
+                        && asset.TryGetProperty("ContentRootIndex", out var indexEl))
+                    {
+                        var idx = indexEl.GetInt32();
+                        if (idx >= 0 && idx < contentRoots.Length && Directory.Exists(contentRoots[idx]))
+                        {
+                            return contentRoots[idx];
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Hermes] Warning: Failed to parse static web assets manifest: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Script tag injected into the host page to enable CSS hot reload via SSE.
+    /// Connects to the /_hermes/css-reload SSE endpoint and cache-busts all
+    /// stylesheet hrefs when a CSS file change is detected.
+    /// </summary>
+    private const string CssHotReloadScriptTag = """
+        <script>
         (function() {
             var es = new EventSource('/_hermes/css-reload');
             es.onmessage = function() {
@@ -255,6 +312,7 @@ internal sealed class HermesDevServer : IAsyncDisposable
                 });
             };
         })();
+        </script>
         """;
 
     public async ValueTask DisposeAsync()
