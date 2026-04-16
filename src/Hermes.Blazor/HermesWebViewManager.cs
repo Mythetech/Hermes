@@ -26,6 +26,8 @@ internal sealed class HermesWebViewManager : WebViewManager
         : "app://localhost/";
 
     private readonly IHermesWindowBackend _backend;
+    private readonly Uri _baseUri;
+    private readonly bool _isDevMode;
     private readonly Channel<string> _messageChannel;
     private readonly Task _messagePumpTask;
     private readonly CancellationTokenSource _cts = new();
@@ -38,9 +40,24 @@ internal sealed class HermesWebViewManager : WebViewManager
         IFileProvider fileProvider,
         JSComponentConfigurationStore jsComponents,
         string hostPageRelativePath)
-        : base(services, dispatcher, new Uri(AppBaseUri), fileProvider, jsComponents, hostPageRelativePath)
+        : this(backend, services, dispatcher, fileProvider, jsComponents, hostPageRelativePath, baseUri: null, isDevMode: false)
+    {
+    }
+
+    internal HermesWebViewManager(
+        IHermesWindowBackend backend,
+        IServiceProvider services,
+        HermesDispatcher dispatcher,
+        IFileProvider fileProvider,
+        JSComponentConfigurationStore jsComponents,
+        string hostPageRelativePath,
+        string? baseUri,
+        bool isDevMode)
+        : base(services, dispatcher, new Uri(baseUri ?? AppBaseUri), fileProvider, jsComponents, hostPageRelativePath)
     {
         _backend = backend;
+        _baseUri = new Uri(baseUri ?? AppBaseUri);
+        _isDevMode = isDevMode;
 
         _messageChannel = Channel.CreateBounded<string>(new BoundedChannelOptions(1024)
         {
@@ -53,8 +70,11 @@ internal sealed class HermesWebViewManager : WebViewManager
         _messagePumpTask = RunMessagePumpAsync(_cts.Token);
         _backend.WebMessageReceived += OnWebMessageReceived;
 
-        var scheme = new Uri(AppBaseUri).Scheme;
-        _backend.RegisterCustomScheme(scheme, HandleWebRequest);
+        if (!_isDevMode)
+        {
+            var scheme = _baseUri.Scheme;
+            _backend.RegisterCustomScheme(scheme, HandleWebRequest);
+        }
     }
 
     protected override void NavigateCore(Uri absoluteUri)
@@ -119,7 +139,7 @@ internal sealed class HermesWebViewManager : WebViewManager
     private void OnWebMessageReceived(string message)
     {
         StartupLog.LogFirstMessage();
-        MessageReceived(new Uri(AppBaseUri), message);
+        MessageReceived(_baseUri, message);
     }
 
     private (Stream? Content, string? ContentType) HandleWebRequest(string url)

@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Blazor hot reload** zero-config dev server for `dotnet watch` support, with CSS hot reload via SSE and automatic environment detection
 - Cross-platform native desktop framework for .NET 10
 - **Window management** with native window creation, sizing, positioning, and state persistence
 - **WebView integration** WebView2 (Windows), WebKit (macOS), WebKitGTK (Linux)

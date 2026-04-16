@@ -257,6 +257,7 @@ bool isEnabled = HermesApplication.AutostartEnabled;
 - [x] Crash reporting callback
 - [x] System tray / status bar support (all platforms)
 - [x] Key-value store (persistent, type-safe, JSON-backed)
+- [x] Blazor hot reload via internal dev server (`dotnet watch` auto-detected, CSS hot reload via SSE)
 
 ---
 

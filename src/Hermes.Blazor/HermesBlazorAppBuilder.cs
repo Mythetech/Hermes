@@ -11,6 +11,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Components.WebView;
+using Hermes.Blazor.DevServer;
 
 namespace Hermes.Blazor;
 
@@ -26,6 +27,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
     private string _hostPage = "index.html";
     private string? _loadingHtml;
     private bool _deferWindowShow;
+    private bool? _forceDevServer;
 
     private HermesBlazorAppBuilder(string[]? args, bool addDefaultConfiguration)
     {
@@ -174,6 +176,16 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
     }
 
     /// <summary>
+    /// Explicitly enables or disables the internal dev server for hot reload.
+    /// When null (default), the builder auto-detects by checking for the DOTNET_WATCH environment variable.
+    /// </summary>
+    public HermesBlazorAppBuilder ForceDevServer(bool enabled)
+    {
+        _forceDevServer = enabled;
+        return this;
+    }
+
+    /// <summary>
     /// Builds the application.
     /// </summary>
     [RequiresDynamicCode("Blazor WebView requires dynamic code for component rendering")]
@@ -188,6 +200,9 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         var appName = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name ?? "App";
         var fileProvider = _fileProvider ?? StaticWebAssetsFileProvider.Create(appName, fallbackProvider);
 
+        var useDevServer = DevServer.DevServerDetector.ShouldUseDevServer(_forceDevServer);
+        DevServer.HermesDevServer? devServer = null;
+
         var window = new HermesWindow();
 
         if (_windowConfiguration is not null)
@@ -201,9 +216,9 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         var syncContext = new HermesSynchronizationContext(backend);
         var dispatcher = new HermesDispatcher(syncContext);
 
-        // Pre-register the app scheme before any code that might trigger backend initialization
-        // (e.g., accessing window.MenuBar). HermesWebViewManager will provide the real handler.
+        // Pre-register the app scheme before any code that might trigger backend initialization.
         // On macOS, custom schemes must be registered before Initialize() is called.
+        // We register even in dev mode (where the scheme isn't used) to satisfy this constraint.
         if (!OperatingSystem.IsWindows())
         {
             backend.RegisterCustomScheme("app", _ => (null, null));
@@ -218,6 +233,26 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         _hostBuilder.Services.AddSingleton<IHermesPlatformService>(new HermesPlatformService(window));
         _hostBuilder.Services.AddSingleton<IHermesMenuProvider>(new HermesMenuProvider(window.MenuBar));
 
+        string? devBaseUri = null;
+
+        if (useDevServer)
+        {
+            try
+            {
+                devServer = DevServer.HermesDevServer.StartAsync(
+                    _hostPage,
+                    wwwrootPath).GetAwaiter().GetResult();
+
+                devBaseUri = devServer.BaseUrl;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Hermes] Dev server failed to start: {ex.Message}");
+                Console.WriteLine("[Hermes] Falling back to release mode.");
+                devServer = null;
+            }
+        }
+
         var serviceProvider = _hostBuilder.Services.BuildServiceProvider();
         var jsComponents = new JSComponentConfigurationStore();
 
@@ -227,19 +262,18 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             dispatcher,
             fileProvider,
             jsComponents,
-            _hostPage);
+            _hostPage,
+            baseUri: devBaseUri,
+            isDevMode: devServer is not null);
 
-        // Set sync context before Show() so WebView2 initialization continuations
-        // are marshaled back to the UI thread via the message loop
         SynchronizationContext.SetSynchronizationContext(syncContext);
 
-        // For fast startup mode, defer showing until Run/RunWithFastStartup is called
         if (!_deferWindowShow)
         {
             window.Show();
         }
 
-        var app = new HermesBlazorApp(serviceProvider, _hostBuilder.Configuration, window, webViewManager, syncContext, _loadingHtml, windowShownDuringBuild: !_deferWindowShow);
+        var app = new HermesBlazorApp(serviceProvider, _hostBuilder.Configuration, window, webViewManager, syncContext, _loadingHtml, windowShownDuringBuild: !_deferWindowShow, devServer: devServer);
 
         foreach (var component in RootComponents.GetComponents())
         {
