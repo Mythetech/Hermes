@@ -1,5 +1,6 @@
 // Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 using Foundation;
+using ObjCRuntime;
 using WebKit;
 
 namespace Hermes.Mobile.WebView;
@@ -8,6 +9,7 @@ namespace Hermes.Mobile.WebView;
 /// Forwards WKWebView → native messages to the WebViewManager's MessageReceived pump.
 /// Name "webwindowinterop" must match the JS side in BlazorInitScript.
 /// </summary>
+[Adopts("WKScriptMessageHandler")]
 internal sealed class ScriptMessageHandler : NSObject, IWKScriptMessageHandler
 {
     public const string Name = "webwindowinterop";
@@ -24,6 +26,7 @@ internal sealed class ScriptMessageHandler : NSObject, IWKScriptMessageHandler
     public void DidReceiveScriptMessage(WKUserContentController userContentController, WKScriptMessage message)
     {
         var body = ((NSString)message.Body).ToString();
+        Console.WriteLine($"[Hermes.Mobile] JS→C# message ({body.Length} chars): {(body.Length > 120 ? body.Substring(0, 120) + "..." : body)}");
         _onMessage(_appOrigin, body);
     }
 }

@@ -15,8 +15,9 @@ namespace Hermes.Mobile;
 public sealed class HermesMobileAppBuilder
 {
     private string _hostPage = "wwwroot/index.html";
-    private const string AppScheme = "app";
-    private const string AppHost = "localhost";
+    private const string AppScheme = "hermes";
+    // WKWebView rejects app://localhost/ as invalid (requestURLIsValid=0). MAUI uses 0.0.0.0.
+    private const string AppHost = "0.0.0.0";
 
     private HermesMobileAppBuilder()
     {

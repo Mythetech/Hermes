@@ -35,17 +35,31 @@ internal sealed class IOSWebViewManager : WebViewManager
 
     protected override void NavigateCore(Uri absoluteUri)
     {
-        using var url = new Foundation.NSUrl(absoluteUri.ToString());
-        using var request = new Foundation.NSUrlRequest(url);
-        _webView.LoadRequest(request);
+        // Custom URL scheme handlers don't fire in current .NET iOS bindings, so we load the
+        // index.html directly from the app bundle via file:// and let Blazor's JS bridge
+        // (window.webkit.messageHandlers) take over from there. Static assets (blazor.webview.js,
+        // _content/Shared.App/*) resolve via relative paths in the HTML.
+        var bundleRoot = Foundation.NSBundle.MainBundle.ResourcePath!;
+        var indexPath = Path.Combine(bundleRoot, "wwwroot", "index.html");
+        var readAccessDir = Path.Combine(bundleRoot, "wwwroot");
+
+        Console.WriteLine($"[Hermes.Mobile] NavigateCore: file={indexPath}, readAccess={readAccessDir}");
+        using var fileUrl = Foundation.NSUrl.FromFilename(indexPath);
+        using var readUrl = Foundation.NSUrl.FromFilename(readAccessDir);
+        _webView.LoadFileUrl(fileUrl, readUrl);
     }
 
     protected override void SendMessage(string message)
     {
         var encoded = JavaScriptEncoder.Default.Encode(message);
+        Console.WriteLine($"[Hermes.Mobile] C#→JS SendMessage ({message.Length} chars)");
         _webView.EvaluateJavaScript(
             $"__dispatchMessageCallback(\"{encoded}\")",
-            (_, _) => { });
+            (result, error) =>
+            {
+                if (error is not null)
+                    Console.WriteLine($"[Hermes.Mobile] C#→JS EvaluateJavaScript error: {error.LocalizedDescription}");
+            });
     }
 
     /// <summary>Public pathway for the ScriptMessageHandler to feed JS→C# messages into the base pump.</summary>

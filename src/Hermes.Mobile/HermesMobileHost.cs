@@ -23,6 +23,13 @@ public sealed class HermesMobileHost : IAsyncDisposable
     private readonly IOSWebViewManager _manager;
     private readonly UIViewController _rootViewController;
     private readonly List<(Type Type, string Selector)> _rootComponents;
+
+    // NSObject-bridged handlers must be rooted for the lifetime of the host; otherwise
+    // the GC will collect them and native callbacks silently stop firing.
+    private readonly AppSchemeHandler _schemeHandler;
+    private readonly ScriptMessageHandler _scriptHandler;
+    private readonly AllowAllNavigationDelegate _navDelegate;
+
     private bool _started;
 
     [RequiresDynamicCode("Blazor WebView requires dynamic code for component rendering")]
@@ -44,30 +51,46 @@ public sealed class HermesMobileHost : IAsyncDisposable
         var dispatcher = new Threading.IOSDispatcher();
         var jsComponents = new JSComponentConfigurationStore();
 
-        _webView = new WKWebView(CGRect.Empty, config) { AutosizesSubviews = true };
-        _webView.ScrollView.Bounces = false;
+        // All scheme handlers, user content controllers, and user scripts MUST be registered
+        // on the config BEFORE creating the WKWebView — WKWebView copies the config at
+        // construction and later mutations are ignored.
 
-        _manager = new IOSWebViewManager(
-            _webView, services, dispatcher, appBaseUri, fileProvider, jsComponents, hostPageRelativePath);
+        // Scheme handler needs to delegate to IOSWebViewManager, which needs the WKWebView
+        // itself (circular). Use a late-bound resolver that captures _manager after assignment.
+        IOSWebViewManager? pendingManager = null;
+        _schemeHandler = new AppSchemeHandler(url =>
+            pendingManager?.ResolveRequest(url) ?? (404, Array.Empty<byte>(), string.Empty));
+        config.SetUrlSchemeHandler(_schemeHandler, urlScheme: appBaseUri.Scheme);
 
-        var schemeHandler = new AppSchemeHandler(_manager.ResolveRequest);
-        config.SetUrlSchemeHandler(schemeHandler, urlScheme: appBaseUri.Scheme);
-
-        // Wire JS→C# bridge. The IOSWebViewManager exposes an internal helper that forwards
-        // to the protected WebViewManager.MessageReceived base method.
-        var scriptHandler = new ScriptMessageHandler(appBaseUri, _manager.MessageReceivedInternal);
-        config.UserContentController.AddScriptMessageHandler(scriptHandler, ScriptMessageHandler.Name);
+        // Script message handler — same late-bind pattern.
+        _scriptHandler = new ScriptMessageHandler(appBaseUri, (uri, msg) =>
+            pendingManager?.MessageReceivedInternal(uri, msg));
+        config.UserContentController.AddScriptMessageHandler(_scriptHandler, ScriptMessageHandler.Name);
 
         using var scriptSource = new NSString(BlazorInitScript.Contents);
         var userScript = new WKUserScript(scriptSource, WKUserScriptInjectionTime.AtDocumentEnd, isForMainFrameOnly: true);
         config.UserContentController.AddUserScript(userScript);
 
-#if DEBUG
+        _webView = new WKWebView(CGRect.Empty, config) { AutosizesSubviews = true };
+        _webView.ScrollView.Bounces = false;
+
+        _navDelegate = new AllowAllNavigationDelegate();
+        _webView.NavigationDelegate = _navDelegate;
+
+        _manager = new IOSWebViewManager(
+            _webView, services, dispatcher, appBaseUri, fileProvider, jsComponents, hostPageRelativePath);
+        pendingManager = _manager;
+
+        // Always-on for PoC. iOS 16.4+ only.
         if (OperatingSystem.IsIOSVersionAtLeast(16, 4))
         {
             _webView.SetValueForKey(NSObject.FromObject(true), (NSString)"inspectable");
+            Console.WriteLine("[Hermes.Mobile] webview inspectable = true");
         }
-#endif
+        else
+        {
+            Console.WriteLine("[Hermes.Mobile] iOS < 16.4; webview not inspectable");
+        }
 
         _rootViewController = new UIViewController();
         var rootView = _rootViewController.View!;

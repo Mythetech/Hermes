@@ -2,6 +2,7 @@
 using System.Globalization;
 using System.Runtime.Versioning;
 using Foundation;
+using ObjCRuntime;
 using WebKit;
 
 namespace Hermes.Mobile.WebView;
@@ -10,12 +11,15 @@ namespace Hermes.Mobile.WebView;
 /// Handles app:// requests by delegating to a resolver that wraps WebViewManager.TryGetResponseContent.
 /// iOS runs scheme handler callbacks on the main thread.
 /// </summary>
+[Register("HermesAppSchemeHandler")]
+[Adopts("WKURLSchemeHandler")]
 internal sealed class AppSchemeHandler : NSObject, IWKUrlSchemeHandler
 {
     private readonly Func<string, (int StatusCode, byte[] Body, string ContentType)> _resolver;
 
     public AppSchemeHandler(Func<string, (int, byte[], string)> resolver)
     {
+        Console.WriteLine("[Hermes.Mobile] AppSchemeHandler constructed");
         _resolver = resolver;
     }
 
@@ -25,9 +29,13 @@ internal sealed class AppSchemeHandler : NSObject, IWKUrlSchemeHandler
     {
         var url = urlSchemeTask.Request.Url?.AbsoluteString;
         if (string.IsNullOrEmpty(url))
+        {
+            Console.WriteLine("[Hermes.Mobile] scheme handler: empty URL, ignoring");
             return;
+        }
 
         var (statusCode, body, contentType) = _resolver(url);
+        Console.WriteLine($"[Hermes.Mobile] scheme handler: {url} → {statusCode} ({contentType}, {body.Length} bytes)");
 
         if (statusCode == 200)
         {
