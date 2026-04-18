@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hermes Web - Hello World</title>
+  </head>
+  <body>
+    <div id="app">
+      <h1>Hermes Web</h1>
+      <p class="subtitle">JavaScript/TypeScript SPA running in a native desktop window</p>
+
+      <div class="card">
+        <input type="text" id="name-input" placeholder="Enter your name" value="World" />
+        <button id="greet-btn">Greet from C#</button>
+        <p id="greet-output" class="output"></p>
+      </div>
+
+      <div class="card">
+        <h2>System Info</h2>
+        <p>Runtime: <span id="runtime-info">Loading...</span></p>
+        <p>Platform: <span id="platform-info">Loading...</span></p>
+        <p>Hermes Bridge: <span id="bridge-status">Checking...</span></p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
