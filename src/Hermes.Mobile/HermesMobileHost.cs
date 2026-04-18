@@ -81,16 +81,13 @@ public sealed class HermesMobileHost : IAsyncDisposable
             _webView, services, dispatcher, appBaseUri, fileProvider, jsComponents, hostPageRelativePath);
         pendingManager = _manager;
 
-        // Always-on for PoC. iOS 16.4+ only.
+        // Enable Safari Web Inspector attachment in Debug. iOS 16.4+ only.
+#if DEBUG
         if (OperatingSystem.IsIOSVersionAtLeast(16, 4))
         {
             _webView.SetValueForKey(NSObject.FromObject(true), (NSString)"inspectable");
-            Console.WriteLine("[Hermes.Mobile] webview inspectable = true");
         }
-        else
-        {
-            Console.WriteLine("[Hermes.Mobile] iOS < 16.4; webview not inspectable");
-        }
+#endif
 
         _rootViewController = new UIViewController();
         var rootView = _rootViewController.View!;

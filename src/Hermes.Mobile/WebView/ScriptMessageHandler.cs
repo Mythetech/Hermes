@@ -14,6 +14,9 @@ internal sealed class ScriptMessageHandler : NSObject, IWKScriptMessageHandler
 {
     public const string Name = "webwindowinterop";
 
+    static ScriptMessageHandler()
+        => ProtocolAdoption.Ensure<ScriptMessageHandler>("WKScriptMessageHandler");
+
     private readonly Action<Uri, string> _onMessage;
     private readonly Uri _appOrigin;
 
@@ -26,7 +29,6 @@ internal sealed class ScriptMessageHandler : NSObject, IWKScriptMessageHandler
     public void DidReceiveScriptMessage(WKUserContentController userContentController, WKScriptMessage message)
     {
         var body = ((NSString)message.Body).ToString();
-        Console.WriteLine($"[Hermes.Mobile] JS→C# message ({body.Length} chars): {(body.Length > 120 ? body.Substring(0, 120) + "..." : body)}");
         _onMessage(_appOrigin, body);
     }
 }

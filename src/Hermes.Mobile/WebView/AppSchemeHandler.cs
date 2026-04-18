@@ -15,11 +15,13 @@ namespace Hermes.Mobile.WebView;
 [Adopts("WKURLSchemeHandler")]
 internal sealed class AppSchemeHandler : NSObject, IWKUrlSchemeHandler
 {
+    static AppSchemeHandler()
+        => ProtocolAdoption.Ensure<AppSchemeHandler>("WKURLSchemeHandler");
+
     private readonly Func<string, (int StatusCode, byte[] Body, string ContentType)> _resolver;
 
     public AppSchemeHandler(Func<string, (int, byte[], string)> resolver)
     {
-        Console.WriteLine("[Hermes.Mobile] AppSchemeHandler constructed");
         _resolver = resolver;
     }
 
@@ -29,13 +31,9 @@ internal sealed class AppSchemeHandler : NSObject, IWKUrlSchemeHandler
     {
         var url = urlSchemeTask.Request.Url?.AbsoluteString;
         if (string.IsNullOrEmpty(url))
-        {
-            Console.WriteLine("[Hermes.Mobile] scheme handler: empty URL, ignoring");
             return;
-        }
 
         var (statusCode, body, contentType) = _resolver(url);
-        Console.WriteLine($"[Hermes.Mobile] scheme handler: {url} → {statusCode} ({contentType}, {body.Length} bytes)");
 
         if (statusCode == 200)
         {

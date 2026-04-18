@@ -13,6 +13,9 @@ namespace Hermes.Mobile.WebView;
 [Adopts("WKNavigationDelegate")]
 internal sealed class AllowAllNavigationDelegate : NSObject, IWKNavigationDelegate
 {
+    static AllowAllNavigationDelegate()
+        => ProtocolAdoption.Ensure<AllowAllNavigationDelegate>("WKNavigationDelegate");
+
     [Export("webView:decidePolicyForNavigationAction:decisionHandler:")]
     public void DecidePolicy(WKWebView webView, WKNavigationAction navigationAction, Action<WKNavigationActionPolicy> decisionHandler)
     {
