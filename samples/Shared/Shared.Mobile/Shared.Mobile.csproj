@@ -25,6 +25,14 @@
     <ProjectReference Include="..\Shared.App\Shared.App.csproj" />
   </ItemGroup>
 
+  <!-- Preserve Blazor component types from trimming — Blazor uses reflection to
+       instantiate components and the iOS linker strips their constructors otherwise. -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="Shared.App" />
+    <TrimmerRootAssembly Include="Hermes.Mobile" />
+    <TrimmerRootAssembly Include="Microsoft.AspNetCore.Components.WebView" />
+  </ItemGroup>
+
   <!-- Microsoft.AspNetCore.Components.WebView ships blazor.webview.js as a static web asset.
        Non-Razor SDK projects don't pick these up automatically, so reference the package
        directly just to resolve $(PkgMicrosoft_AspNetCore_Components_WebView). -->
@@ -36,9 +44,12 @@
     <!-- Host page + any Mobile-specific wwwroot files -->
     <BundleResource Include="Resources\wwwroot\**" />
 
-    <!-- Blazor WebView JS runtime shipped inside the ASP.NET Core WebView package -->
+    <!-- Blazor WebView runtime assets shipped inside the ASP.NET Core WebView package -->
     <BundleResource Include="$(PkgMicrosoft_AspNetCore_Components_WebView)/staticwebassets/blazor.webview.js">
       <LogicalName>wwwroot/_framework/blazor.webview.js</LogicalName>
+    </BundleResource>
+    <BundleResource Include="$(PkgMicrosoft_AspNetCore_Components_WebView)/staticwebassets/blazor.modules.json">
+      <LogicalName>wwwroot/_framework/blazor.modules.json</LogicalName>
     </BundleResource>
 
     <!-- Shared.App RCL wwwroot mounted under the Blazor _content/{PackageId}/ convention -->

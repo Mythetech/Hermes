@@ -4,6 +4,7 @@ using Hermes.Contracts.Plugins;
 using Hermes.Mobile.Plugins;
 using Hermes.Mobile.WebView;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.WebView;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Hermes.Mobile;
@@ -15,13 +16,11 @@ namespace Hermes.Mobile;
 public sealed class HermesMobileAppBuilder
 {
     private string _hostPage = "wwwroot/index.html";
-    private const string AppScheme = "hermes";
-    // WKWebView rejects app://localhost/ as invalid (requestURLIsValid=0). MAUI uses 0.0.0.0.
-    private const string AppHost = "0.0.0.0";
 
     private HermesMobileAppBuilder()
     {
         Services = new ServiceCollection();
+        Services.AddBlazorWebView();
         Services.AddSingleton<IClipboard, IOSClipboard>();
     }
 
@@ -49,13 +48,12 @@ public sealed class HermesMobileAppBuilder
             _hostPage);
 
         var fileProvider = new IOSAssetFileProvider(contentRoot);
-        var appBaseUri = new Uri($"{AppScheme}://{AppHost}/");
 
         var components = RootComponents.GetComponents()
             .Select(c => (c.Type, c.Selector))
             .ToList();
 
-        return new HermesMobileHost(provider, fileProvider, appBaseUri, hostPageRelative, components);
+        return new HermesMobileHost(provider, fileProvider, hostPageRelative, components);
     }
 }
 

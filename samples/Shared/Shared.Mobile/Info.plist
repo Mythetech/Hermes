@@ -19,6 +19,11 @@
         <key>UIColorName</key>
         <string>systemBackgroundColor</string>
     </dict>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
     <key>MinimumOSVersion</key>
     <string>15.0</string>
     <key>UIDeviceFamily</key>

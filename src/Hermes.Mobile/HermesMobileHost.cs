@@ -16,6 +16,12 @@ namespace Hermes.Mobile;
 /// Hosts a Blazor app inside a WKWebView embedded in a UIViewController.
 /// The iOS AppDelegate places the RootViewController into its UIWindow.
 /// </summary>
+/// <remarks>
+/// Asset serving uses an embedded HTTP server on localhost instead of WKURLSchemeHandler.
+/// The scheme handler approach is broken on .NET iOS due to a macios registrar regression
+/// (dotnet/macios#23002). The JS↔C# bridge uses WKScriptMessageHandler which works
+/// correctly with the static registrar + ProtocolAdoption workaround.
+/// </remarks>
 public sealed class HermesMobileHost : IAsyncDisposable
 {
     private readonly IServiceProvider _services;
@@ -23,10 +29,10 @@ public sealed class HermesMobileHost : IAsyncDisposable
     private readonly IOSWebViewManager _manager;
     private readonly UIViewController _rootViewController;
     private readonly List<(Type Type, string Selector)> _rootComponents;
+    private readonly EmbeddedFileServer _fileServer;
 
     // NSObject-bridged handlers must be rooted for the lifetime of the host; otherwise
     // the GC will collect them and native callbacks silently stop firing.
-    private readonly AppSchemeHandler _schemeHandler;
     private readonly ScriptMessageHandler _scriptHandler;
     private readonly AllowAllNavigationDelegate _navDelegate;
 
@@ -37,12 +43,16 @@ public sealed class HermesMobileHost : IAsyncDisposable
     internal HermesMobileHost(
         IServiceProvider services,
         IFileProvider fileProvider,
-        Uri appBaseUri,
         string hostPageRelativePath,
         IReadOnlyList<(Type Type, string Selector)> rootComponents)
     {
         _services = services;
         _rootComponents = new List<(Type, string)>(rootComponents);
+
+        // Start embedded HTTP server to serve Blazor assets from the app bundle.
+        // WKURLSchemeHandler is broken on .NET iOS, so we serve over localhost HTTP.
+        _fileServer = EmbeddedFileServer.Start(fileProvider);
+        var appBaseUri = new Uri($"{_fileServer.BaseUrl}/");
 
         var config = new WKWebViewConfiguration();
         config.AllowsInlineMediaPlayback = true;
@@ -51,18 +61,10 @@ public sealed class HermesMobileHost : IAsyncDisposable
         var dispatcher = new Threading.IOSDispatcher();
         var jsComponents = new JSComponentConfigurationStore();
 
-        // All scheme handlers, user content controllers, and user scripts MUST be registered
-        // on the config BEFORE creating the WKWebView — WKWebView copies the config at
-        // construction and later mutations are ignored.
-
-        // Scheme handler needs to delegate to IOSWebViewManager, which needs the WKWebView
-        // itself (circular). Use a late-bound resolver that captures _manager after assignment.
+        // Script message handler for JS↔C# bridge (Blazor interop).
+        // Late-bind to IOSWebViewManager to break the circular dependency:
+        // handler needs manager, manager needs webview, webview needs config with handler.
         IOSWebViewManager? pendingManager = null;
-        _schemeHandler = new AppSchemeHandler(url =>
-            pendingManager?.ResolveRequest(url) ?? (404, Array.Empty<byte>(), string.Empty));
-        config.SetUrlSchemeHandler(_schemeHandler, urlScheme: appBaseUri.Scheme);
-
-        // Script message handler — same late-bind pattern.
         _scriptHandler = new ScriptMessageHandler(appBaseUri, (uri, msg) =>
             pendingManager?.MessageReceivedInternal(uri, msg));
         config.UserContentController.AddScriptMessageHandler(_scriptHandler, ScriptMessageHandler.Name);
@@ -81,7 +83,6 @@ public sealed class HermesMobileHost : IAsyncDisposable
             _webView, services, dispatcher, appBaseUri, fileProvider, jsComponents, hostPageRelativePath);
         pendingManager = _manager;
 
-        // Enable Safari Web Inspector attachment in Debug. iOS 16.4+ only.
 #if DEBUG
         if (OperatingSystem.IsIOSVersionAtLeast(16, 4))
         {
@@ -121,6 +122,7 @@ public sealed class HermesMobileHost : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await _manager.DisposeAsync();
+        _fileServer.Dispose();
         _webView.Dispose();
     }
 }
