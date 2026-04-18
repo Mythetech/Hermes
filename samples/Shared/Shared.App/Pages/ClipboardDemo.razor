@@ -1,0 +1,23 @@
+@page "/clipboard"
+@inject IClipboard Clipboard
+
+<h1>Clipboard Demo</h1>
+
+<label for="clipboard-input">Text:</label>
+<input id="clipboard-input" @bind="_text" />
+
+<div class="actions">
+    <button class="btn-primary" @onclick="SetAsync">Set clipboard</button>
+    <button class="btn-primary" @onclick="GetAsync">Get clipboard</button>
+</div>
+
+<p>Last read value: <code>@_lastRead</code></p>
+
+@code {
+    private string _text = "hello from hermes";
+    private string? _lastRead;
+
+    private async Task SetAsync() => await Clipboard.SetTextAsync(_text);
+
+    private async Task GetAsync() => _lastRead = await Clipboard.GetTextAsync();
+}
