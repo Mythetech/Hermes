@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//usr/local/**)",
+      "Bash(export PATH=\"$HOME/.dotnet:$PATH:/usr/local/share/dotnet:/usr/local/bin\")",
+      "Bash(export PATH=\"$HOME/.dotnet:$PATH\")",
+      "Read(//Users/tombrewer/.dotnet/**)",
+      "Bash(xcrun simctl *)"
+    ]
+  }
+}
