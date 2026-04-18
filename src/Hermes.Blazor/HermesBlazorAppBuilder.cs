@@ -2,6 +2,8 @@
 using System.Diagnostics.CodeAnalysis;
 using Hermes.Abstractions;
 using Hermes.Blazor.Threading;
+using Hermes.Contracts.Plugins;
+using Hermes.Plugins;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.Configuration;
@@ -232,6 +234,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         _hostBuilder.Services.AddSingleton<IConfiguration>(_hostBuilder.Configuration);
         _hostBuilder.Services.AddSingleton<IHermesPlatformService>(new HermesPlatformService(window));
         _hostBuilder.Services.AddSingleton<IHermesMenuProvider>(new HermesMenuProvider(window.MenuBar));
+        _hostBuilder.Services.AddSingleton<IClipboard, DesktopClipboard>();
 
         string? devBaseUri = null;
 
