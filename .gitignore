@@ -427,3 +427,5 @@ src/Hermes.Native.macOS/lib/
 src/Hermes.Native.Linux/lib/
 src/Hermes.Native.Linux/build/
 **/dist/**
+
+*.claude/
