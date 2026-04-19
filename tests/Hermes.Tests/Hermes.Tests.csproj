@@ -17,6 +17,7 @@
     <ProjectReference Include="..\..\src\Hermes\Hermes.csproj" />
     <ProjectReference Include="..\..\src\Hermes.Testing\Hermes.Testing.csproj" />
     <ProjectReference Include="..\..\src\Hermes.Blazor\Hermes.Blazor.csproj" />
+    <ProjectReference Include="..\..\src\Hermes.Web\Hermes.Web.csproj" />
   </ItemGroup>
 
 </Project>
