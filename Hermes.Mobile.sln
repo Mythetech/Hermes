@@ -25,7 +25,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hermes.Mobile.Android", "sr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared.Android", "samples\Mobile\Shared.Android\Shared.Android.csproj", "{68C2D957-DD59-4FD2-AA60-AD82BF792A77}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hermes.Mobile", "src\Hermes.Mobile.Shared\Hermes.Mobile.csproj", "{E93D2228-2DCF-4A55-9E06-55F1B870DBB2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hermes.Mobile", "src\Hermes.Mobile\Hermes.Mobile.csproj", "{E93D2228-2DCF-4A55-9E06-55F1B870DBB2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

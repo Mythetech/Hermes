@@ -33,6 +33,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Hermes.Mobile.Shared\Hermes.Mobile.csproj" />
+    <ProjectReference Include="..\Hermes.Mobile\Hermes.Mobile.csproj" />
   </ItemGroup>
 </Project>
