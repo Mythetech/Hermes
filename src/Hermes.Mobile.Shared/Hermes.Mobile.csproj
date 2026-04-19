@@ -1,18 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0-ios</TargetFramework>
-    <SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Hermes.Mobile</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
-  <!-- NuGet Package Metadata -->
   <PropertyGroup>
     <PackageId>Mythetech.Hermes.Mobile</PackageId>
     <Authors>Mythetech</Authors>
-    <Description>iOS host for Hermes Blazor apps — hosts a Blazor app in a WKWebView, plugin-compatible with Hermes.Contracts interfaces.</Description>
-    <PackageTags>hermes;mobile;ios;blazor;webview</PackageTags>
+    <Description>Shared abstractions and utilities for Hermes mobile platforms (iOS, Android). Defines IMobileHost, IMobileBuilder, and common WebView helpers.</Description>
+    <PackageTags>hermes;mobile;blazor;webview;abstractions</PackageTags>
     <PackageProjectUrl>https://github.com/Mythetech/Hermes</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Mythetech/Hermes.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -21,6 +20,11 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Hermes.Mobile.iOS" />
+    <InternalsVisibleTo Include="Hermes.Mobile.Android" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Include="../../LICENSE" Pack="true" PackagePath="/" />

@@ -1,9 +1,10 @@
 // Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 using System.Net;
 using System.Net.Sockets;
+using Hermes.Mobile.WebView;
 using Microsoft.Extensions.FileProviders;
 
-namespace Hermes.Mobile.WebView;
+namespace Hermes.Mobile.iOS.WebView;
 
 /// <summary>
 /// Minimal HTTP server that serves static files from an <see cref="IFileProvider"/> on localhost.

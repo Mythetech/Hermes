@@ -3,7 +3,7 @@ using Foundation;
 using ObjCRuntime;
 using WebKit;
 
-namespace Hermes.Mobile.WebView;
+namespace Hermes.Mobile.iOS.WebView;
 
 /// <summary>
 /// Minimal WKNavigationDelegate that allows all navigation. Without an explicit delegate

@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using Foundation;
 using ObjCRuntime;
 
-namespace Hermes.Mobile.WebView;
+namespace Hermes.Mobile.iOS.WebView;
 
 /// <summary>
 /// Registers Obj-C protocol conformance on a managed NSObject subclass by calling

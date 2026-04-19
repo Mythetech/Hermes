@@ -1,7 +1,7 @@
 // Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 namespace Hermes.Mobile.WebView;
 
-internal static class MimeTypeLookup
+public static class MimeTypeLookup
 {
     private static readonly Dictionary<string, string> Map = new(StringComparer.OrdinalIgnoreCase)
     {

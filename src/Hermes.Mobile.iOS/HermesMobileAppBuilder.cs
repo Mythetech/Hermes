@@ -1,19 +1,19 @@
 // Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 using System.Diagnostics.CodeAnalysis;
 using Hermes.Contracts.Plugins;
-using Hermes.Mobile.Plugins;
-using Hermes.Mobile.WebView;
+using Hermes.Mobile.iOS.Plugins;
+using Hermes.Mobile.iOS.WebView;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.WebView;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Hermes.Mobile;
+namespace Hermes.Mobile.iOS;
 
 /// <summary>
 /// Builder for configuring and constructing a <see cref="HermesMobileHost"/>.
 /// Mirrors the shape of HermesBlazorAppBuilder so the mental model transfers between heads.
 /// </summary>
-public sealed class HermesMobileAppBuilder
+public sealed class HermesMobileAppBuilder : IMobileBuilder<HermesMobileHost>
 {
     private string _hostPage = "wwwroot/index.html";
 
@@ -29,6 +29,12 @@ public sealed class HermesMobileAppBuilder
     public IServiceCollection Services { get; }
 
     public RootComponentCollection RootComponents { get; } = new();
+
+    IMobileBuilder<HermesMobileHost> IMobileBuilder<HermesMobileHost>.UseHostPage(string hostPage)
+    {
+        _hostPage = hostPage;
+        return this;
+    }
 
     public HermesMobileAppBuilder UseHostPage(string hostPage)
     {
@@ -55,19 +61,4 @@ public sealed class HermesMobileAppBuilder
 
         return new HermesMobileHost(provider, fileProvider, hostPageRelative, components);
     }
-}
-
-public sealed class RootComponentCollection
-{
-    private readonly List<(Type Type, string Selector)> _components = new();
-
-    public void Add<[DynamicallyAccessedMembers(
-        DynamicallyAccessedMemberTypes.PublicConstructors |
-        DynamicallyAccessedMemberTypes.PublicProperties)] TComponent>(string selector)
-        where TComponent : IComponent
-    {
-        _components.Add((typeof(TComponent), selector));
-    }
-
-    internal IEnumerable<(Type Type, string Selector)> GetComponents() => _components;
 }

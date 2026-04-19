@@ -2,7 +2,7 @@
 using System.Diagnostics.CodeAnalysis;
 using CoreGraphics;
 using Foundation;
-using Hermes.Mobile.WebView;
+using Hermes.Mobile.iOS.WebView;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebView;
@@ -10,7 +10,7 @@ using Microsoft.Extensions.FileProviders;
 using UIKit;
 using WebKit;
 
-namespace Hermes.Mobile;
+namespace Hermes.Mobile.iOS;
 
 /// <summary>
 /// Hosts a Blazor app inside a WKWebView embedded in a UIViewController.
@@ -22,7 +22,7 @@ namespace Hermes.Mobile;
 /// (dotnet/macios#23002). The JS↔C# bridge uses WKScriptMessageHandler which works
 /// correctly with the static registrar + ProtocolAdoption workaround.
 /// </remarks>
-public sealed class HermesMobileHost : IAsyncDisposable
+public sealed class HermesMobileHost : IMobileHost
 {
     private readonly IServiceProvider _services;
     private readonly WKWebView _webView;

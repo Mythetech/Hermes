@@ -4,7 +4,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.FileProviders.Physical;
 using Microsoft.Extensions.Primitives;
 
-namespace Hermes.Mobile.WebView;
+namespace Hermes.Mobile.iOS.WebView;
 
 /// <summary>
 /// Serves static assets from the app bundle's wwwroot folder.

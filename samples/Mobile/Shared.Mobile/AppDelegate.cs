@@ -1,6 +1,6 @@
 // Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 using Foundation;
-using Hermes.Mobile;
+using Hermes.Mobile.iOS;
 using UIKit;
 
 namespace Shared.Mobile;

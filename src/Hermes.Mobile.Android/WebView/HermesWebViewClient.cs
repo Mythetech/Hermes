@@ -1,5 +1,6 @@
 // Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 using Android.Webkit;
+using Hermes.Mobile.WebView;
 
 namespace Hermes.Mobile.Android.WebView;
 
@@ -38,16 +39,16 @@ internal sealed class HermesWebViewClient : WebViewClient
         if (url is null)
             return base.ShouldInterceptRequest(view, request);
 
-        var (statusCode, body, contentType) = _manager.ResolveRequest(url);
-        if (statusCode == 200 && body.Length > 0)
+        var response = _manager.ResolveRequest(url);
+        if (response.StatusCode == 200 && response.Body.Length > 0)
         {
             return new WebResourceResponse(
-                contentType,
+                response.ContentType,
                 "UTF-8",
-                statusCode,
+                response.StatusCode,
                 "OK",
                 new Dictionary<string, string> { ["Cache-Control"] = "no-cache" },
-                new MemoryStream(body));
+                new MemoryStream(response.Body));
         }
 
         return base.ShouldInterceptRequest(view, request);

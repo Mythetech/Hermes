@@ -11,19 +11,21 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hermes", "src\Hermes\Hermes
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hermes.Blazor", "src\Hermes.Blazor\Hermes.Blazor.csproj", "{C37C83EB-4BD7-4FBA-855C-AF016D498C57}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hermes.Mobile", "src\Hermes.Mobile\Hermes.Mobile.csproj", "{16737429-333A-428D-91C3-04067413D953}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hermes.Mobile.iOS", "src\Hermes.Mobile.iOS\Hermes.Mobile.iOS.csproj", "{16737429-333A-428D-91C3-04067413D953}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{5D20AA90-6969-D8BD-9DCD-8634F4692FDA}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Shared", "Shared", "{3177BFE4-54BB-4449-CBD6-550FA3C2F073}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Mobile", "Mobile", "{3177BFE4-54BB-4449-CBD6-550FA3C2F073}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared.App", "samples\Shared\Shared.App\Shared.App.csproj", "{FCB1797B-0AFF-41A0-8C02-02B06E9BE125}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared.App", "samples\Mobile\Shared.App\Shared.App.csproj", "{FCB1797B-0AFF-41A0-8C02-02B06E9BE125}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared.Desktop", "samples\Shared\Shared.Desktop\Shared.Desktop.csproj", "{0CF73C00-BAD5-492A-B6CE-94C484243F7F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared.Desktop", "samples\Mobile\Shared.Desktop\Shared.Desktop.csproj", "{0CF73C00-BAD5-492A-B6CE-94C484243F7F}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hermes.Mobile.Android", "src\Hermes.Mobile.Android\Hermes.Mobile.Android.csproj", "{FC73AC17-2A85-4633-84B1-E8935203778A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared.Android", "samples\Shared\Shared.Android\Shared.Android.csproj", "{68C2D957-DD59-4FD2-AA60-AD82BF792A77}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared.Android", "samples\Mobile\Shared.Android\Shared.Android.csproj", "{68C2D957-DD59-4FD2-AA60-AD82BF792A77}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hermes.Mobile", "src\Hermes.Mobile.Shared\Hermes.Mobile.csproj", "{E93D2228-2DCF-4A55-9E06-55F1B870DBB2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -131,6 +133,18 @@ Global
 		{68C2D957-DD59-4FD2-AA60-AD82BF792A77}.Release|x64.Build.0 = Release|Any CPU
 		{68C2D957-DD59-4FD2-AA60-AD82BF792A77}.Release|x86.ActiveCfg = Release|Any CPU
 		{68C2D957-DD59-4FD2-AA60-AD82BF792A77}.Release|x86.Build.0 = Release|Any CPU
+		{E93D2228-2DCF-4A55-9E06-55F1B870DBB2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E93D2228-2DCF-4A55-9E06-55F1B870DBB2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E93D2228-2DCF-4A55-9E06-55F1B870DBB2}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{E93D2228-2DCF-4A55-9E06-55F1B870DBB2}.Debug|x64.Build.0 = Debug|Any CPU
+		{E93D2228-2DCF-4A55-9E06-55F1B870DBB2}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{E93D2228-2DCF-4A55-9E06-55F1B870DBB2}.Debug|x86.Build.0 = Debug|Any CPU
+		{E93D2228-2DCF-4A55-9E06-55F1B870DBB2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E93D2228-2DCF-4A55-9E06-55F1B870DBB2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E93D2228-2DCF-4A55-9E06-55F1B870DBB2}.Release|x64.ActiveCfg = Release|Any CPU
+		{E93D2228-2DCF-4A55-9E06-55F1B870DBB2}.Release|x64.Build.0 = Release|Any CPU
+		{E93D2228-2DCF-4A55-9E06-55F1B870DBB2}.Release|x86.ActiveCfg = Release|Any CPU
+		{E93D2228-2DCF-4A55-9E06-55F1B870DBB2}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -145,5 +159,6 @@ Global
 		{0CF73C00-BAD5-492A-B6CE-94C484243F7F} = {3177BFE4-54BB-4449-CBD6-550FA3C2F073}
 		{FC73AC17-2A85-4633-84B1-E8935203778A} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{68C2D957-DD59-4FD2-AA60-AD82BF792A77} = {3177BFE4-54BB-4449-CBD6-550FA3C2F073}
+		{E93D2228-2DCF-4A55-9E06-55F1B870DBB2} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

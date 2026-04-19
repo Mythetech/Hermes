@@ -3,7 +3,7 @@ using CoreFoundation;
 using Foundation;
 using Microsoft.AspNetCore.Components;
 
-namespace Hermes.Mobile.Threading;
+namespace Hermes.Mobile.iOS.Threading;
 
 /// <summary>
 /// Marshals Blazor component work onto the iOS main queue (UI thread).

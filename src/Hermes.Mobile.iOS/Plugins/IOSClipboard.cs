@@ -2,7 +2,7 @@
 using Hermes.Contracts.Plugins;
 using UIKit;
 
-namespace Hermes.Mobile.Plugins;
+namespace Hermes.Mobile.iOS.Plugins;
 
 /// <summary>
 /// iOS implementation of <see cref="IClipboard"/> backed by <see cref="UIPasteboard.General"/>.

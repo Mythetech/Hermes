@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0-android</TargetFramework>
-    <SupportedOSPlatformVersion>24</SupportedOSPlatformVersion>
+    <TargetFramework>net10.0-ios</TargetFramework>
+    <SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsAotCompatible>true</IsAotCompatible>
@@ -9,10 +9,10 @@
 
   <!-- NuGet Package Metadata -->
   <PropertyGroup>
-    <PackageId>Mythetech.Hermes.Mobile.Android</PackageId>
+    <PackageId>Mythetech.Hermes.Mobile.iOS</PackageId>
     <Authors>Mythetech</Authors>
-    <Description>Android host for Hermes Blazor apps — hosts a Blazor app in an Android WebView, plugin-compatible with Hermes.Contracts interfaces.</Description>
-    <PackageTags>hermes;mobile;android;blazor;webview</PackageTags>
+    <Description>iOS host for Hermes Blazor apps — hosts a Blazor app in a WKWebView, plugin-compatible with Hermes.Contracts interfaces.</Description>
+    <PackageTags>hermes;mobile;ios;blazor;webview</PackageTags>
     <PackageProjectUrl>https://github.com/Mythetech/Hermes</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Mythetech/Hermes.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

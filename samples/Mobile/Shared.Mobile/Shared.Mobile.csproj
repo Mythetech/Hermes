@@ -21,7 +21,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\Hermes.Mobile\Hermes.Mobile.csproj" />
+    <ProjectReference Include="..\..\..\src\Hermes.Mobile.iOS\Hermes.Mobile.iOS.csproj" />
     <ProjectReference Include="..\Shared.App\Shared.App.csproj" />
   </ItemGroup>
 
@@ -29,7 +29,7 @@
        instantiate components and the iOS linker strips their constructors otherwise. -->
   <ItemGroup>
     <TrimmerRootAssembly Include="Shared.App" />
-    <TrimmerRootAssembly Include="Hermes.Mobile" />
+    <TrimmerRootAssembly Include="Hermes.Mobile.iOS" />
     <TrimmerRootAssembly Include="Microsoft.AspNetCore.Components.WebView" />
   </ItemGroup>
 

@@ -2,10 +2,11 @@
 using System.Globalization;
 using System.Runtime.Versioning;
 using Foundation;
+using Hermes.Mobile.WebView;
 using ObjCRuntime;
 using WebKit;
 
-namespace Hermes.Mobile.WebView;
+namespace Hermes.Mobile.iOS.WebView;
 
 /// <summary>
 /// Handles app:// requests by delegating to a resolver that wraps WebViewManager.TryGetResponseContent.
@@ -18,9 +19,9 @@ internal sealed class AppSchemeHandler : NSObject, IWKUrlSchemeHandler
     static AppSchemeHandler()
         => ProtocolAdoption.Ensure<AppSchemeHandler>("WKURLSchemeHandler");
 
-    private readonly Func<string, (int StatusCode, byte[] Body, string ContentType)> _resolver;
+    private readonly Func<string, WebViewResponse> _resolver;
 
-    public AppSchemeHandler(Func<string, (int, byte[], string)> resolver)
+    public AppSchemeHandler(Func<string, WebViewResponse> resolver)
     {
         _resolver = resolver;
     }
@@ -33,24 +34,24 @@ internal sealed class AppSchemeHandler : NSObject, IWKUrlSchemeHandler
         if (string.IsNullOrEmpty(url))
             return;
 
-        var (statusCode, body, contentType) = _resolver(url);
+        var response = _resolver(url);
 
-        if (statusCode == 200)
+        if (response.StatusCode == 200)
         {
             using var headers = new NSMutableDictionary<NSString, NSString>();
-            headers.Add((NSString)"Content-Length", (NSString)body.Length.ToString(CultureInfo.InvariantCulture));
-            headers.Add((NSString)"Content-Type", (NSString)contentType);
+            headers.Add((NSString)"Content-Length", (NSString)response.Body.Length.ToString(CultureInfo.InvariantCulture));
+            headers.Add((NSString)"Content-Type", (NSString)response.ContentType);
             headers.Add((NSString)"Cache-Control", (NSString)"no-cache, max-age=0, must-revalidate, no-store");
 
-            using var response = new NSHttpUrlResponse(urlSchemeTask.Request.Url!, statusCode, "HTTP/1.1", headers);
-            urlSchemeTask.DidReceiveResponse(response);
-            urlSchemeTask.DidReceiveData(NSData.FromArray(body));
+            using var httpResponse = new NSHttpUrlResponse(urlSchemeTask.Request.Url!, response.StatusCode, "HTTP/1.1", headers);
+            urlSchemeTask.DidReceiveResponse(httpResponse);
+            urlSchemeTask.DidReceiveData(NSData.FromArray(response.Body));
             urlSchemeTask.DidFinish();
         }
         else
         {
-            using var response = new NSHttpUrlResponse(urlSchemeTask.Request.Url!, statusCode, "HTTP/1.1", null);
-            urlSchemeTask.DidReceiveResponse(response);
+            using var httpResponse = new NSHttpUrlResponse(urlSchemeTask.Request.Url!, response.StatusCode, "HTTP/1.1", null);
+            urlSchemeTask.DidReceiveResponse(httpResponse);
             urlSchemeTask.DidFinish();
         }
     }

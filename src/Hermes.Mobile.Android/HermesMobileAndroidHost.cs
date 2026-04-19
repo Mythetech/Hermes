@@ -9,7 +9,7 @@ using Microsoft.Extensions.FileProviders;
 
 namespace Hermes.Mobile.Android;
 
-public sealed class HermesMobileAndroidHost : IAsyncDisposable
+public sealed class HermesMobileAndroidHost : IMobileHost
 {
     private readonly IServiceProvider _services;
     private readonly global::Android.Webkit.WebView _webView;

@@ -3,7 +3,7 @@ using Foundation;
 using ObjCRuntime;
 using WebKit;
 
-namespace Hermes.Mobile.WebView;
+namespace Hermes.Mobile.iOS.WebView;
 
 /// <summary>
 /// Forwards WKWebView → native messages to the WebViewManager's MessageReceived pump.

@@ -1,13 +1,14 @@
 // Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Encodings.Web;
+using Hermes.Mobile.WebView;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebView;
 using Microsoft.Extensions.FileProviders;
 using WebKit;
 
-namespace Hermes.Mobile.WebView;
+namespace Hermes.Mobile.iOS.WebView;
 
 /// <summary>
 /// WebViewManager subclass that binds a WKWebView's navigation + messaging to the Blazor pipeline.
@@ -56,7 +57,7 @@ internal sealed class IOSWebViewManager : WebViewManager
     internal void MessageReceivedInternal(Uri sourceUri, string message)
         => MessageReceived(sourceUri, message);
 
-    internal (int StatusCode, byte[] Body, string ContentType) ResolveRequest(string absoluteUrl)
+    internal WebViewResponse ResolveRequest(string absoluteUrl)
     {
         var allowFallbackOnHostPage = _appBaseUri.IsBaseOf(new Uri(absoluteUrl));
 
@@ -68,17 +69,9 @@ internal sealed class IOSWebViewManager : WebViewManager
                 out var content,
                 out var headers))
         {
-            using var ms = new MemoryStream();
-            content.CopyTo(ms);
-            content.Dispose();
-
-            var contentType = headers.TryGetValue("Content-Type", out var ct)
-                ? ct
-                : MimeTypeLookup.GetContentType(absoluteUrl);
-
-            return (200, ms.ToArray(), contentType);
+            return WebViewResolveHelper.ToResponse(statusCode, content, headers, absoluteUrl);
         }
 
-        return (404, Array.Empty<byte>(), string.Empty);
+        return WebViewResponse.NotFound;
     }
 }

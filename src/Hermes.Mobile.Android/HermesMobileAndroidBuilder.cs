@@ -10,7 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Hermes.Mobile.Android;
 
-public sealed class HermesMobileAndroidBuilder
+public sealed class HermesMobileAndroidBuilder : IMobileBuilder<HermesMobileAndroidHost>
 {
     private readonly Context _context;
     private string _hostPage = "wwwroot/index.html";
@@ -28,6 +28,12 @@ public sealed class HermesMobileAndroidBuilder
     public IServiceCollection Services { get; }
 
     public RootComponentCollection RootComponents { get; } = new();
+
+    IMobileBuilder<HermesMobileAndroidHost> IMobileBuilder<HermesMobileAndroidHost>.UseHostPage(string hostPage)
+    {
+        _hostPage = hostPage;
+        return this;
+    }
 
     public HermesMobileAndroidBuilder UseHostPage(string hostPage)
     {
@@ -54,19 +60,4 @@ public sealed class HermesMobileAndroidBuilder
 
         return new HermesMobileAndroidHost(_context, provider, fileProvider, hostPageRelative, components);
     }
-}
-
-public sealed class RootComponentCollection
-{
-    private readonly List<(Type Type, string Selector)> _components = new();
-
-    public void Add<[DynamicallyAccessedMembers(
-        DynamicallyAccessedMemberTypes.PublicConstructors |
-        DynamicallyAccessedMemberTypes.PublicProperties)] TComponent>(string selector)
-        where TComponent : IComponent
-    {
-        _components.Add((typeof(TComponent), selector));
-    }
-
-    internal IEnumerable<(Type Type, string Selector)> GetComponents() => _components;
 }

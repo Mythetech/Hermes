@@ -1,5 +1,5 @@
 // Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
-namespace Hermes.Mobile.WebView;
+namespace Hermes.Mobile.iOS.WebView;
 
 internal static class BlazorInitScript
 {

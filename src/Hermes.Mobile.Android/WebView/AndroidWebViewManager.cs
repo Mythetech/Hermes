@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebView;
 using Microsoft.Extensions.FileProviders;
 
+using Hermes.Mobile.WebView;
+
 namespace Hermes.Mobile.Android.WebView;
 
 internal sealed class AndroidWebViewManager : WebViewManager
@@ -75,7 +77,7 @@ internal sealed class AndroidWebViewManager : WebViewManager
     internal void MessageReceivedInternal(Uri sourceUri, string message)
         => MessageReceived(sourceUri, message);
 
-    internal (int StatusCode, byte[] Body, string ContentType) ResolveRequest(string absoluteUrl)
+    internal WebViewResponse ResolveRequest(string absoluteUrl)
     {
         var allowFallbackOnHostPage = _appBaseUri.IsBaseOf(new Uri(absoluteUrl));
 
@@ -87,17 +89,9 @@ internal sealed class AndroidWebViewManager : WebViewManager
                 out var content,
                 out var headers))
         {
-            using var ms = new MemoryStream();
-            content.CopyTo(ms);
-            content.Dispose();
-
-            var contentType = headers.TryGetValue("Content-Type", out var ct)
-                ? ct
-                : "application/octet-stream";
-
-            return (statusCode, ms.ToArray(), contentType);
+            return WebViewResolveHelper.ToResponse(statusCode, content, headers, absoluteUrl);
         }
 
-        return (404, Array.Empty<byte>(), string.Empty);
+        return WebViewResponse.NotFound;
     }
 }
