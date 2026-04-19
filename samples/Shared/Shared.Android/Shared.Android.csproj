@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>24</SupportedOSPlatformVersion>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Shared.Android</RootNamespace>
+    <ApplicationId>com.mythetech.hermes.shared.android</ApplicationId>
+    <ApplicationTitle>Shared Android</ApplicationTitle>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+  </PropertyGroup>
+
+  <!-- NativeAOT: opt-in at publish only -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release' AND '$(EnableAot)' == 'true'">
+    <PublishAot>true</PublishAot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Hermes.Mobile.Android\Hermes.Mobile.Android.csproj" />
+    <ProjectReference Include="..\Shared.App\Shared.App.csproj" />
+  </ItemGroup>
+
+  <!-- Preserve Blazor component types from trimming -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="Shared.App" />
+    <TrimmerRootAssembly Include="Hermes.Mobile.Android" />
+    <TrimmerRootAssembly Include="Microsoft.AspNetCore.Components.WebView" />
+  </ItemGroup>
+
+  <!-- Blazor WebView runtime assets -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="10.0.*" GeneratePathProperty="true" />
+  </ItemGroup>
+
+  <!-- Assets: host page, Blazor runtime JS, and Shared.App RCL content.
+       Android uses Link metadata (not LogicalName) to control target path in APK assets/. -->
+  <ItemGroup>
+    <AndroidAsset Include="Resources\wwwroot\**">
+      <Link>wwwroot/%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </AndroidAsset>
+
+    <AndroidAsset Include="$(PkgMicrosoft_AspNetCore_Components_WebView)/staticwebassets/blazor.webview.js">
+      <Link>wwwroot/_framework/blazor.webview.js</Link>
+    </AndroidAsset>
+    <AndroidAsset Include="$(PkgMicrosoft_AspNetCore_Components_WebView)/staticwebassets/blazor.modules.json">
+      <Link>wwwroot/_framework/blazor.modules.json</Link>
+    </AndroidAsset>
+
+    <AndroidAsset Include="..\Shared.App\wwwroot\**\*.*">
+      <Link>wwwroot/_content/Shared.App/%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </AndroidAsset>
+  </ItemGroup>
+</Project>
