@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@hermes/bridge": "file:../../../packages/hermes-bridge",
-    "@hermes/bridge-react": "file:../../../packages/hermes-bridge-react",
+    "@hermes/react": "file:../../../packages/hermes-react",
     "react": "^18.0.0",
     "react-dom": "^18.0.0"
   }

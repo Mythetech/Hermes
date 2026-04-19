@@ -1,5 +1,6 @@
+// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 import { useState } from 'react';
-import { useInvoke } from '@hermes/bridge-react';
+import { useInvoke } from '@hermes/react';
 import './GreetCard.css';
 
 function GreetCard() {

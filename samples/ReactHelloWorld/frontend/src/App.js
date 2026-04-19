@@ -1,4 +1,5 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
 import { bridge } from '@hermes/bridge';
 import GreetCard from './components/GreetCard';
 import SystemInfo from './components/SystemInfo';

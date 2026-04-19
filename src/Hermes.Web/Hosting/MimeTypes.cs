@@ -32,6 +32,7 @@ internal static class MimeTypes
         [".mp3"] = "audio/mpeg",
         [".ogg"] = "audio/ogg",
         [".wav"] = "audio/wav",
+        [".avif"] = "image/avif",
     };
 
     public static string GetContentType(string path)

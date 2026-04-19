@@ -52,9 +52,9 @@ public sealed class InteropBridge
                     break;
             }
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
-            // Not a bridge message, ignore
+            Console.Error.WriteLine($"[Hermes.Web] Ignoring non-bridge message: {ex.Message}");
         }
     }
 

@@ -222,6 +222,10 @@ PublishScripts/
 **/[Pp]ackages/*
 # except build/, which is used as an MSBuild target.
 !**/[Pp]ackages/build/
+# Hermes npm packages (override NuGet packages ignore)
+!packages/hermes-*/
+packages/hermes-*/node_modules/
+packages/hermes-*/dist/
 # Uncomment if necessary however generally it will be regenerated when needed
 #!**/[Pp]ackages/repositories.config
 # NuGet v3's project.json files produces more ignorable files
