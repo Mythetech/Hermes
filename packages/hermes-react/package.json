@@ -1,0 +1,47 @@
+{
+  "name": "@hermes/react",
+  "version": "1.0.0-preview.1",
+  "description": "React hooks for Hermes desktop framework - useInvoke for C# interop",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.cjs.json",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "@hermes/bridge": ">=1.0.0-preview.1",
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@hermes/bridge": "file:../hermes-bridge",
+    "@types/react": "^18.0.0",
+    "react": "^18.0.0",
+    "typescript": "^5.7.0"
+  },
+  "license": "Elastic-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mythetech/Hermes.git",
+    "directory": "packages/hermes-react"
+  },
+  "keywords": [
+    "hermes",
+    "desktop",
+    "react",
+    "hooks",
+    "interop",
+    "bridge"
+  ]
+}

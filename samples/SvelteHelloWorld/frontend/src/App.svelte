@@ -1,3 +1,4 @@
+<!-- Copyright (c) Mythetech. Licensed under the Elastic License 2.0. -->
 <script lang="ts">
   import { hermesConnected } from '@hermes/svelte';
   import GreetCard from './lib/GreetCard.svelte';

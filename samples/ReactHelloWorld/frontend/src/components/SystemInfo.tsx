@@ -1,4 +1,5 @@
-import { useInvoke } from '@hermes/bridge-react';
+// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
+import { useInvoke } from '@hermes/react';
 import './SystemInfo.css';
 
 function SystemInfo() {

@@ -1,0 +1,2 @@
+# TypeScript is the source of truth; ignore transpiled .js artifacts
+*.js
