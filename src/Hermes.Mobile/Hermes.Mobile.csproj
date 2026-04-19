@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Hermes.Mobile</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>Mythetech.Hermes.Mobile</PackageId>
+    <Authors>Mythetech</Authors>
+    <Description>Shared abstractions and utilities for Hermes mobile platforms (iOS, Android). Defines IMobileHost, IMobileBuilder, and common WebView helpers.</Description>
+    <PackageTags>hermes;mobile;blazor;webview;abstractions</PackageTags>
+    <PackageProjectUrl>https://github.com/Mythetech/Hermes</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Mythetech/Hermes.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Hermes.Mobile.iOS" />
+    <InternalsVisibleTo Include="Hermes.Mobile.Android" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../LICENSE" Pack="true" PackagePath="/" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="10.0.*" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.*" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Hermes.Contracts\Hermes.Contracts.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,51 @@
+@page "/clipboard"
+@inject IClipboard Clipboard
+
+<h1>Clipboard Demo</h1>
+
+<label for="clipboard-input">Text:</label>
+<input id="clipboard-input" @bind="_text" />
+
+<div class="actions">
+    <button class="btn-primary" @onclick="SetAsync">Set clipboard</button>
+    <button class="btn-primary" @onclick="GetAsync">Get clipboard</button>
+</div>
+
+<p>Last read value: <code>@_lastRead</code></p>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <pre style="color: red; white-space: pre-wrap;">@_error</pre>
+}
+
+@code {
+    private string _text = "hello from hermes";
+    private string? _lastRead;
+    private string? _error;
+
+    private async Task SetAsync()
+    {
+        _error = null;
+        try
+        {
+            await Clipboard.SetTextAsync(_text);
+        }
+        catch (Exception ex)
+        {
+            _error = $"SetTextAsync failed: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}";
+        }
+    }
+
+    private async Task GetAsync()
+    {
+        _error = null;
+        try
+        {
+            _lastRead = await Clipboard.GetTextAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"GetTextAsync failed: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}";
+        }
+    }
+}
