@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-ios</TargetFramework>
+    <SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Shared.Mobile</RootNamespace>
+    <ApplicationId>com.mythetech.hermes.shared.mobile</ApplicationId>
+    <ApplicationTitle>Shared Mobile</ApplicationTitle>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+    <!-- Force static Obj-C class/protocol metadata emission. Default dynamic registrar
+         skips [Adopts] conformance, causing WKScriptMessageHandler/WKURLSchemeHandler silence. -->
+    <Registrar>static</Registrar>
+  </PropertyGroup>
+
+  <!-- NativeAOT: opt-in at publish only (not every debug build) -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release' AND '$(EnableAot)' == 'true'">
+    <PublishAot>true</PublishAot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Hermes.Mobile.iOS\Hermes.Mobile.iOS.csproj" />
+    <ProjectReference Include="..\Shared.App\Shared.App.csproj" />
+  </ItemGroup>
+
+  <!-- Preserve Blazor component types from trimming — Blazor uses reflection to
+       instantiate components and the iOS linker strips their constructors otherwise. -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="Shared.App" />
+    <TrimmerRootAssembly Include="Hermes.Mobile.iOS" />
+    <TrimmerRootAssembly Include="Microsoft.AspNetCore.Components.WebView" />
+  </ItemGroup>
+
+  <!-- Microsoft.AspNetCore.Components.WebView ships blazor.webview.js as a static web asset.
+       Non-Razor SDK projects don't pick these up automatically, so reference the package
+       directly just to resolve $(PkgMicrosoft_AspNetCore_Components_WebView). -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="10.0.*" GeneratePathProperty="true" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Host page + any Mobile-specific wwwroot files -->
+    <BundleResource Include="Resources\wwwroot\**" />
+
+    <!-- Blazor WebView runtime assets shipped inside the ASP.NET Core WebView package -->
+    <BundleResource Include="$(PkgMicrosoft_AspNetCore_Components_WebView)/staticwebassets/blazor.webview.js">
+      <LogicalName>wwwroot/_framework/blazor.webview.js</LogicalName>
+    </BundleResource>
+    <BundleResource Include="$(PkgMicrosoft_AspNetCore_Components_WebView)/staticwebassets/blazor.modules.json">
+      <LogicalName>wwwroot/_framework/blazor.modules.json</LogicalName>
+    </BundleResource>
+
+    <!-- Shared.App RCL wwwroot mounted under the Blazor _content/{PackageId}/ convention -->
+    <BundleResource Include="..\Shared.App\wwwroot\**\*.*">
+      <LogicalName>wwwroot/_content/Shared.App/%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
+    </BundleResource>
+  </ItemGroup>
+</Project>

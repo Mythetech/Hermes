@@ -33,6 +33,24 @@ Designed for .NET 10 and modern development workflows, Hermes prioritizes AOT co
 | Windows 10/11 | .NET 10 | WebView2 | Supported |
 | macOS 12+ | .NET 10 | WKWebView | Supported |
 | Linux (x64) | .NET 10 | WebKitGTK 4.x | Supported |
+| iOS 15+ | .NET 10 | WKWebView | Preview |
+
+### iOS Preview
+
+`Hermes.Mobile` brings Blazor apps to iOS using the same component library and plugin interfaces as desktop. A single Razor Class Library targets both heads, with platform-specific plugin implementations (e.g., `IClipboard` backed by `UIPasteboard` on iOS, native clipboard on desktop).
+
+The iOS host inverts the desktop lifecycle: instead of C# owning the process, the iOS `UIApplicationDelegate` owns the app and Hermes becomes a library hosting Blazor inside a `WKWebView`. See `samples/Shared/` for a working example with desktop and iOS heads sharing the same `Shared.App` RCL.
+
+**Prerequisites:** .NET 10 iOS workload (`dotnet workload install ios`), Xcode with iOS Simulator runtime.
+
+```shell
+# Run on iOS Simulator
+cd samples/Hermes-mobile-ios-poc
+dotnet build samples/Shared/Shared.Mobile/Shared.Mobile.csproj
+dotnet build samples/Shared/Shared.Mobile/Shared.Mobile.csproj -t:Run
+```
+
+> **Note:** iOS support requires `<Registrar>static</Registrar>` in the app's csproj due to a .NET iOS registrar regression (dotnet/macios#23002). Asset serving uses an embedded HTTP server on localhost as a workaround for WKURLSchemeHandler not being invoked by the current .NET iOS runtime. These workarounds will be revisited as upstream fixes land.
 
 ## Getting Started
 
