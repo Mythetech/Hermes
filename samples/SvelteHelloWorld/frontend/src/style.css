@@ -1,0 +1,159 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #1a1a2e;
+  background-color: #fafafa;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #e0e0e0;
+    background-color: #0f0f23;
+  }
+}
+
+body {
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+#app {
+  max-width: 640px;
+  padding: 2rem;
+  text-align: center;
+  width: 100%;
+}
+
+h1 {
+  font-size: 2.5em;
+  margin-bottom: 0.25em;
+  color: #ff3e00;
+}
+
+.subtitle {
+  color: #666;
+  margin-top: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .subtitle {
+    color: #999;
+  }
+}
+
+.card {
+  padding: 1.5em;
+  margin: 1em 0;
+  border-radius: 8px;
+  background: #f0f0f0;
+  text-align: left;
+}
+
+@media (prefers-color-scheme: dark) {
+  .card {
+    background: #1a1a3e;
+  }
+}
+
+.card h2 {
+  margin-top: 0;
+  font-size: 1.1em;
+}
+
+input[type="text"] {
+  padding: 0.5em 0.75em;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1em;
+  margin-right: 0.5em;
+  background: white;
+  color: #1a1a2e;
+}
+
+@media (prefers-color-scheme: dark) {
+  input[type="text"] {
+    background: #16163a;
+    border-color: #555;
+    color: #e0e0e0;
+  }
+}
+
+button {
+  padding: 0.5em 1em;
+  border: none;
+  border-radius: 4px;
+  background: #ff3e00;
+  color: white;
+  font-size: 1em;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+button:hover {
+  background: #e03500;
+}
+
+.output {
+  margin-top: 0.75em;
+  padding: 0.5em;
+  border-radius: 4px;
+  background: #fff3e0;
+  color: #e65100;
+  min-height: 1.5em;
+}
+
+@media (prefers-color-scheme: dark) {
+  .output {
+    background: #2a1a00;
+    color: #ffab40;
+  }
+}
+
+.output:empty {
+  display: none;
+}
+
+.status {
+  display: inline-block;
+  padding: 0.15em 0.5em;
+  border-radius: 3px;
+  font-size: 0.85em;
+  font-weight: 500;
+}
+
+.status.connected {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.status.disconnected {
+  background: #fce4ec;
+  color: #c62828;
+}
+
+@media (prefers-color-scheme: dark) {
+  .status.connected {
+    background: #1b3a1b;
+    color: #81c784;
+  }
+
+  .status.disconnected {
+    background: #3a1b1b;
+    color: #e57373;
+  }
+}
+
+.ticker {
+  font-size: 2em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #ff3e00;
+}
+
+.loading {
+  color: #999;
+  font-style: italic;
+}

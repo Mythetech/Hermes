@@ -29,6 +29,13 @@ internal sealed class InteropEnvelope
 [JsonSerializable(typeof(ResultEnvelope))]
 [JsonSerializable(typeof(ErrorEnvelope))]
 [JsonSerializable(typeof(EventEnvelope))]
+[JsonSerializable(typeof(string))]
+[JsonSerializable(typeof(int))]
+[JsonSerializable(typeof(long))]
+[JsonSerializable(typeof(double))]
+[JsonSerializable(typeof(float))]
+[JsonSerializable(typeof(bool))]
+[JsonSerializable(typeof(object))]
 internal partial class InteropJsonContext : JsonSerializerContext
 {
 }
