@@ -28,11 +28,11 @@ Designed for .NET 10 and modern development workflows, Hermes prioritizes AOT co
 
 ## Platform Support
 
-| Platform | Runtime | WebView | Status |
-|----------|---------|---------|--------|
-| Windows 10/11 | .NET 10 | WebView2 | Supported |
-| macOS 12+ | .NET 10 | WKWebView | Supported |
-| Linux (x64) | .NET 10 | WebKitGTK 4.x | Supported |
+| Platform      | Runtime | WebView       | Status    |
+| ------------- | ------- | ------------- | --------- |
+| Windows 10/11 | .NET 10 | WebView2      | Supported |
+| macOS 12+     | .NET 10 | WKWebView     | Supported |
+| Linux (x64)   | .NET 10 | WebKitGTK 4.x | Supported |
 
 ## Getting Started
 
@@ -131,13 +131,14 @@ Accelerators automatically translate between platforms, `Ctrl+S` on Windows/Linu
 
 Hermes minimizes native code by leveraging platform-specific .NET capabilities:
 
-| Platform | Approach | Native Code |
-|----------|----------|-------------|
-| Windows | CsWin32 source generators + WebView2 NuGet | None |
-| macOS | Thin Objective-C shim with `LibraryImport` | ~3,100 LOC |
-| Linux | Thin C shim with `LibraryImport` | ~1,800 LOC |
+| Platform | Approach                                   |
+| -------- | ------------------------------------------ |
+| Windows  | CsWin32 source generators + WebView2 NuGet |
+| macOS    | Thin Objective-C shim with `LibraryImport` |
+| Linux    | Thin C shim with `LibraryImport`           |
 
 This architecture provides:
+
 - **Easier maintenance**, Most logic lives in C#, not platform-specific native code
 - **AOT compatibility**, `LibraryImport` generates marshalling code at compile time
 - **Reduced build complexity**, No C++ toolchain required on Windows
@@ -146,9 +147,9 @@ For detailed technical information, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Packages
 
-| Package | Description |
-|---------|-------------|
-| [Mythetech.Hermes](https://www.nuget.org/packages/Mythetech.Hermes) | Core framework |
+| Package                                                                           | Description        |
+| --------------------------------------------------------------------------------- | ------------------ |
+| [Mythetech.Hermes](https://www.nuget.org/packages/Mythetech.Hermes)               | Core framework     |
 | [Mythetech.Hermes.Blazor](https://www.nuget.org/packages/Mythetech.Hermes.Blazor) | Blazor integration |
 
 ## Documentation
