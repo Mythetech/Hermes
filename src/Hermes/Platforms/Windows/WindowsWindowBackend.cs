@@ -816,6 +816,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         // App is responsible for rendering titlebar in HTML when CustomTitleBar is enabled
         _webViewController.Bounds = new System.Drawing.Rectangle(
             0, 0, rect.right - rect.left, rect.bottom - rect.top);
+        _webViewController.NotifyParentWindowPositionChanged();
     }
 
     private void RunMessageLoop()
