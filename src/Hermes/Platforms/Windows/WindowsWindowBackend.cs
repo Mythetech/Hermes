@@ -682,6 +682,11 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
             RefitContent();
 
+            // Force WM_NCCALCSIZE + WM_SIZE through the WndProc to trigger a full relayout.
+            PInvoke.SetWindowPos(_hwnd, HWND.Null, 0, 0, 0, 0,
+                SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE |
+                SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_FRAMECHANGED);
+
             if (!string.IsNullOrEmpty(_options.StartUrl))
             {
                 if (isSmokeTest) Console.WriteLine($"WEBVIEW_INIT:navigating_to:{_options.StartUrl}");
@@ -816,7 +821,6 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         // App is responsible for rendering titlebar in HTML when CustomTitleBar is enabled
         _webViewController.Bounds = new System.Drawing.Rectangle(
             0, 0, rect.right - rect.left, rect.bottom - rect.top);
-        _webViewController.NotifyParentWindowPositionChanged();
     }
 
     private void RunMessageLoop()
