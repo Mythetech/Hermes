@@ -132,7 +132,7 @@
 
 @if (_openMenu is not null)
 {
-    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999;"
+    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999; -webkit-app-region: no-drag; app-region: no-drag;"
          @onclick="CloseMenu" @onclick:stopPropagation="true"></div>
 }
 

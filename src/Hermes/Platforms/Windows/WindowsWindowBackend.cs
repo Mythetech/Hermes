@@ -162,14 +162,19 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
     public void WaitForClose()
     {
+        ThrowIfNotInitialized();
         var isSmokeTest = Environment.GetEnvironmentVariable("HERMES_SMOKE_TEST") == "1";
 
-        Show();
+        // Initialize WebView while window is still hidden so the controller exists
+        // before ShowWindow triggers WM_SIZE
+        if (!_webViewInitialized)
+        {
+            _webViewInitialized = true;
+            _ = InitializeWebViewAsync();
+        }
 
         if (isSmokeTest) Console.WriteLine($"WAITFORCLOSE:entered,webViewReady={_webViewReady is not null}");
 
-        // Pump messages until WebView is initialized
-        // This allows async continuations from InitializeWebViewAsync to run
         if (_webViewReady is not null)
         {
             if (isSmokeTest) Console.WriteLine("WAITFORCLOSE:pumping_messages");
@@ -187,6 +192,8 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
             }
             if (isSmokeTest) Console.WriteLine("WAITFORCLOSE:webview_ready");
         }
+
+        Show();
 
         if (isSmokeTest) Console.WriteLine("WAITFORCLOSE:entering_main_loop");
         RunMessageLoop();
@@ -682,11 +689,6 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
             RefitContent();
 
-            // Force WM_NCCALCSIZE + WM_SIZE through the WndProc to trigger a full relayout.
-            PInvoke.SetWindowPos(_hwnd, HWND.Null, 0, 0, 0, 0,
-                SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE |
-                SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_FRAMECHANGED);
-
             if (!string.IsNullOrEmpty(_options.StartUrl))
             {
                 if (isSmokeTest) Console.WriteLine($"WEBVIEW_INIT:navigating_to:{_options.StartUrl}");
@@ -924,15 +926,20 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     /// </summary>
     private static string GetDragDetectionScript() => """
         (function() {
+            var interactiveTags = {BUTTON:1, A:1, INPUT:1, SELECT:1, TEXTAREA:1, LABEL:1};
+
             // Check if element or any ancestor has app-region: drag (and isn't blocked by no-drag)
+            // Interactive elements (buttons, inputs, links) are never treated as drag regions
             function __hermesIsDragRegion(el) {
                 while (el) {
+                    if (interactiveTags[el.tagName]) return false;
+                    if (el.getAttribute && el.getAttribute('role') === 'button') return false;
+
                     var style = window.getComputedStyle(el);
                     var region = style.getPropertyValue('-webkit-app-region') ||
                                  style.getPropertyValue('app-region');
                     if (region === 'no-drag') return false;
                     if (region === 'drag') return true;
-                    // Also check for hermes-specific classes/attributes
                     if (el.classList && el.classList.contains('hermes-no-drag')) return false;
                     if (el.hasAttribute && el.hasAttribute('data-hermes-drag')) return true;
                     el = el.parentElement;
