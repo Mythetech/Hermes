@@ -14,6 +14,9 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Components.WebView;
 using Hermes.Blazor.DevServer;
+using Hermes.Blazor.Licensing;
+using Hermes.Licensing;
+using System.Reflection;
 
 namespace Hermes.Blazor;
 
@@ -282,6 +285,15 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         {
             app.RootComponents.Add(component.Type, component.Selector, component.Parameters);
         }
+
+        var licenseKey = LicenseKeyResolver.Resolve(_hostBuilder.Configuration);
+        var entryAssemblyName = Assembly.GetEntryAssembly()?.GetName().Name ?? "";
+        var licenseResult = LicenseTokenValidator.Validate(licenseKey, entryAssemblyName, HermesVersionInfo.ReleaseDate);
+
+        if (licenseResult.Status == LicenseStatus.NoKey)
+            LicenseNotice.PrintUnlicensedWarning();
+        else if (licenseResult.Status != LicenseStatus.Valid)
+            LicenseNotice.PrintValidationWarning(licenseResult);
 
         return app;
     }
