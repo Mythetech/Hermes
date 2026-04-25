@@ -162,19 +162,14 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
     public void WaitForClose()
     {
-        ThrowIfNotInitialized();
         var isSmokeTest = Environment.GetEnvironmentVariable("HERMES_SMOKE_TEST") == "1";
 
-        // Initialize WebView while window is still hidden so the controller exists
-        // before ShowWindow triggers WM_SIZE
-        if (!_webViewInitialized)
-        {
-            _webViewInitialized = true;
-            _ = InitializeWebViewAsync();
-        }
+        Show();
 
         if (isSmokeTest) Console.WriteLine($"WAITFORCLOSE:entered,webViewReady={_webViewReady is not null}");
 
+        // Pump messages until WebView is initialized
+        // This allows async continuations from InitializeWebViewAsync to run
         if (_webViewReady is not null)
         {
             if (isSmokeTest) Console.WriteLine("WAITFORCLOSE:pumping_messages");
@@ -192,8 +187,6 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
             }
             if (isSmokeTest) Console.WriteLine("WAITFORCLOSE:webview_ready");
         }
-
-        Show();
 
         if (isSmokeTest) Console.WriteLine("WAITFORCLOSE:entering_main_loop");
         RunMessageLoop();
@@ -817,12 +810,17 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     {
         if (_webViewController is null || _hwnd.IsNull) return;
 
+        // Async continuations may run on threadpool threads that lack the window's
+        // DPI context, causing GetClientRect to return virtualized (logical) coordinates.
+        var prevContext = PInvoke.SetThreadDpiAwarenessContext(
+            new DPI_AWARENESS_CONTEXT((nint)(-4)));
+
         PInvoke.GetClientRect(_hwnd, out var rect);
 
-        // WebView fills entire client area
-        // App is responsible for rendering titlebar in HTML when CustomTitleBar is enabled
         _webViewController.Bounds = new System.Drawing.Rectangle(
             0, 0, rect.right - rect.left, rect.bottom - rect.top);
+
+        PInvoke.SetThreadDpiAwarenessContext(prevContext);
     }
 
     private void RunMessageLoop()
