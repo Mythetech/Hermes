@@ -49,9 +49,10 @@ void Hermes_App_Quit(void) {
 static gboolean on_window_delete(GtkWidget* widget, GdkEvent* event, gpointer user_data) {
     HermesWindow* hw = (HermesWindow*)user_data;
     if (hw->onClosing) {
-        hw->onClosing();
+        bool shouldClose = hw->onClosing();
+        return shouldClose ? FALSE : TRUE;
     }
-    return FALSE; // Allow close to proceed
+    return FALSE;
 }
 
 static gboolean on_window_configure(GtkWidget* widget, GdkEventConfigure* event, gpointer user_data) {

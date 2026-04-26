@@ -6,11 +6,21 @@
 
 <button class="btn-primary" @onclick="IncrementCount">Click me</button>
 
+@if (currentCount > 0)
+{
+    <p class="dirty-notice">You have unsaved changes (count: @currentCount)</p>
+}
+
 @code {
     private int currentCount = 0;
+
+    [CascadingParameter]
+    private MainLayoutState? LayoutState { get; set; }
 
     private void IncrementCount()
     {
         currentCount++;
+        if (LayoutState is not null)
+            LayoutState.IsDirty = true;
     }
 }

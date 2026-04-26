@@ -382,6 +382,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     public event Action? Restored;
     internal event Action? PageLoaded;
 
+    public Func<bool>? CloseRequestedHandler { get; set; }
+
     #endregion
 
     #region Factory Methods
@@ -477,9 +479,16 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         parameters.OnPageLoaded = Marshal.GetFunctionPointerForDelegate(pageLoadedDelegate);
     }
 
-    private void OnNativeClosing()
+    private bool OnNativeClosing()
     {
+        if (CloseRequestedHandler is not null)
+        {
+            var shouldClose = CloseRequestedHandler();
+            if (!shouldClose) return false;
+        }
+
         Closing?.Invoke();
+        return true;
     }
 
     private void OnNativeResized(int width, int height)
