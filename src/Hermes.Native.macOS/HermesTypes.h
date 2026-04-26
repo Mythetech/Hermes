@@ -6,7 +6,7 @@
 #include <stdint.h>
 
 // Callback function pointer types
-typedef void (*ClosingCallback)(void);
+typedef bool (*ClosingCallback)(void);
 typedef void (*ResizedCallback)(int width, int height);
 typedef void (*MovedCallback)(int x, int y);
 typedef void (*FocusCallback)(void);

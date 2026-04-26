@@ -1,12 +1,70 @@
 @inherits LayoutComponentBase
+@inject HermesWindow Window
+@implements IDisposable
 
-<TitleBar />
+<CascadingValue Value="_layoutState">
+    <TitleBar />
 
-<div class="layout">
-    <nav class="sidebar">
-        <NavMenu />
-    </nav>
-    <main class="content">
-        @Body
-    </main>
-</div>
+    <div class="layout">
+        <nav class="sidebar">
+            <NavMenu />
+        </nav>
+        <main class="content">
+            @Body
+        </main>
+    </div>
+
+    @if (_showCloseDialog)
+    {
+        <div class="close-dialog-overlay">
+            <div class="close-dialog">
+                <h3>Unsaved Changes</h3>
+                <p>You have unsaved changes. Are you sure you want to close?</p>
+                <div class="close-dialog-actions">
+                    <button class="btn-primary" @onclick="ConfirmClose">Close Anyway</button>
+                    <button class="btn-secondary" @onclick="CancelClose">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+</CascadingValue>
+
+@code {
+    private readonly MainLayoutState _layoutState = new();
+    private bool _showCloseDialog;
+    private TaskCompletionSource<bool>? _closeDecision;
+
+    protected override void OnInitialized()
+    {
+        Window.OnCloseRequested(OnCloseRequestedAsync);
+    }
+
+    private async Task<bool> OnCloseRequestedAsync()
+    {
+        if (!_layoutState.IsDirty) return true;
+
+        _closeDecision = new TaskCompletionSource<bool>();
+        _showCloseDialog = true;
+        await InvokeAsync(StateHasChanged);
+
+        return await _closeDecision.Task;
+    }
+
+    private void ConfirmClose()
+    {
+        _showCloseDialog = false;
+        _closeDecision?.TrySetResult(true);
+    }
+
+    private void CancelClose()
+    {
+        _showCloseDialog = false;
+        _closeDecision?.TrySetResult(false);
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        _closeDecision?.TrySetResult(true);
+    }
+}

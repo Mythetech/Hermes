@@ -371,6 +371,8 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
     public event Action? Maximized;
     public event Action? Restored;
 
+    public Func<bool>? CloseRequestedHandler { get; set; }
+
     #endregion
 
     #region Factory Methods
@@ -442,9 +444,16 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
         parameters.OnWebViewCrash = Marshal.GetFunctionPointerForDelegate(webViewCrashDelegate);
     }
 
-    private void OnNativeClosing()
+    private bool OnNativeClosing()
     {
+        if (CloseRequestedHandler is not null)
+        {
+            var shouldClose = CloseRequestedHandler();
+            if (!shouldClose) return false;
+        }
+
         Closing?.Invoke();
+        return true;
     }
 
     private void OnNativeResized(int width, int height)

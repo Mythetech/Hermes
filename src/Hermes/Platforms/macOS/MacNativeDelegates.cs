@@ -16,7 +16,8 @@ internal static class MacNativeDelegates
     /// Called when the window is about to close.
     /// </summary>
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    internal delegate void ClosingCallback();
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal delegate bool ClosingCallback();
 
     /// <summary>
     /// Called when the window is resized.

@@ -209,6 +209,16 @@ public sealed class TestableHermesWindow : IDisposable
         return this;
     }
 
+    /// <summary>
+    /// Register an async handler that is called before the window closes.
+    /// Return true to allow close, false to cancel.
+    /// </summary>
+    public TestableHermesWindow OnCloseRequested(Func<Task<bool>> handler)
+    {
+        _window.OnCloseRequested(handler);
+        return this;
+    }
+
     #endregion
 
     #region Lifecycle

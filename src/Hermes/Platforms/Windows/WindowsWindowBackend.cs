@@ -54,6 +54,8 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     public event Action? Maximized;
     public event Action? Restored;
 
+    public Func<bool>? CloseRequestedHandler { get; set; }
+
     public void Initialize(HermesWindowOptions options)
     {
         if (_isInitialized)
@@ -503,6 +505,12 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
     private LRESULT HandleClose()
     {
+        if (CloseRequestedHandler is not null)
+        {
+            var shouldClose = CloseRequestedHandler();
+            if (!shouldClose) return new LRESULT(0);
+        }
+
         Closing?.Invoke();
         PInvoke.DestroyWindow(_hwnd);
         return new LRESULT(0);

@@ -144,6 +144,13 @@ public interface IHermesWindowBackend : IDisposable
     #region Events
 
     /// <summary>
+    /// Optional handler that is called when the window is asked to close.
+    /// Return true to allow the close, false to cancel it.
+    /// When null, close proceeds immediately (default behavior).
+    /// </summary>
+    Func<bool>? CloseRequestedHandler { get; set; }
+
+    /// <summary>
     /// Raised when the window is about to close.
     /// </summary>
     event Action? Closing;

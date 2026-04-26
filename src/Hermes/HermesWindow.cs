@@ -19,6 +19,9 @@ public sealed class HermesWindow : IDisposable
     private string? _windowStateKey;
     private bool _initialized;
     private bool _disposed;
+    private Func<Task<bool>>? _closeRequestedHandler;
+    private bool _closeRequestBypassed;
+    private Task? _pendingCloseRequest;
 
     private const int MinPersistableSize = 10;
 
@@ -293,6 +296,19 @@ public sealed class HermesWindow : IDisposable
     public HermesWindow OnClosing(Action handler)
     {
         _backend.Closing += handler;
+        return this;
+    }
+
+    /// <summary>
+    /// Register an async handler that is called before the window closes.
+    /// Return true to allow close, false to cancel.
+    /// Only one handler at a time; calling again replaces the previous one.
+    /// Register from MainLayout or a root component with the same lifetime as the window.
+    /// </summary>
+    public HermesWindow OnCloseRequested(Func<Task<bool>> handler)
+    {
+        _closeRequestedHandler = handler;
+        _backend.CloseRequestedHandler = HandleCloseRequested;
         return this;
     }
 
@@ -830,6 +846,33 @@ public sealed class HermesWindow : IDisposable
     {
         // After restore, save current (now normal) state
         SaveWindowState();
+    }
+
+    private bool HandleCloseRequested()
+    {
+        if (_closeRequestBypassed) return true;
+
+        _pendingCloseRequest = RunCloseRequestedAsync();
+        return false;
+    }
+
+    private async Task RunCloseRequestedAsync()
+    {
+        try
+        {
+            var allowed = await _closeRequestedHandler!();
+            if (allowed)
+            {
+                _closeRequestBypassed = true;
+                Close();
+            }
+        }
+        catch (Exception ex)
+        {
+            HermesLogger.Error("CloseRequested handler threw, allowing close", ex);
+            _closeRequestBypassed = true;
+            Close();
+        }
     }
 
     private void ThrowIfInitialized()

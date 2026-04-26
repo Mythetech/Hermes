@@ -87,6 +87,7 @@ internal sealed class MockHermesWindowBackend : IHermesWindowBackend
     public bool IsMinimized { get; set; }
     public HermesPlatform Platform => HermesPlatform.macOS;
     public bool IsCustomTitleBarActive => false;
+    public Func<bool>? CloseRequestedHandler { get; set; }
 
     public void Initialize(HermesWindowOptions options) { }
     public void Show() { }

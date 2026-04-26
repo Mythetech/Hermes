@@ -174,6 +174,13 @@ public sealed class RecordingWindowBackend : IHermesWindowBackend
     public void Close()
     {
         Recording.RecordMethodCall(nameof(Close));
+
+        if (CloseRequestedHandler is not null)
+        {
+            var shouldClose = CloseRequestedHandler();
+            if (!shouldClose) return;
+        }
+
         Recording.RecordEvent(nameof(Closing));
         Closing?.Invoke();
         _isClosed = true;
@@ -256,6 +263,8 @@ public sealed class RecordingWindowBackend : IHermesWindowBackend
     #endregion
 
     #region Events
+
+    public Func<bool>? CloseRequestedHandler { get; set; }
 
     public event Action? Closing;
     public event Action<int, int>? Resized;

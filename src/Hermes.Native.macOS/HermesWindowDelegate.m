@@ -35,14 +35,14 @@
 - (void)windowWillClose:(NSNotification*)notification {
     if (_hermesWindow) {
         _hermesWindow.isRunning = NO;
-        if (_hermesWindow.onClosing) {
-            _hermesWindow.onClosing();
-        }
     }
 }
 
 - (BOOL)windowShouldClose:(NSWindow*)sender {
-    // Allow close by default
+    if (_hermesWindow && _hermesWindow.onClosing) {
+        bool shouldClose = _hermesWindow.onClosing();
+        return shouldClose ? YES : NO;
+    }
     return YES;
 }
 
