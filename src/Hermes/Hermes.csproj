@@ -125,4 +125,17 @@
   <ItemGroup Condition="!$([MSBuild]::IsOSPlatform('OSX'))">
     <Compile Remove="Platforms/macOS/**/*.cs" />
   </ItemGroup>
+
+  <!-- Embed release date at Hermes build time for perpetual license rights -->
+  <Target Name="EmbedHermesReleaseDate" BeforeTargets="GetAssemblyAttributes">
+    <PropertyGroup>
+      <_HermesReleaseDate Condition="'$(_HermesReleaseDate)' == ''">$([System.DateTime]::UtcNow.ToString('yyyy-MM-dd'))</_HermesReleaseDate>
+    </PropertyGroup>
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>HermesReleaseDate</_Parameter1>
+        <_Parameter2>$(_HermesReleaseDate)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
 </Project>
