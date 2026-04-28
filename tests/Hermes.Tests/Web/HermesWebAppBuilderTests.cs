@@ -15,11 +15,12 @@ public sealed class HermesWebAppBuilderTests
     }
 
     [Fact]
-    public void Create_WithArgs_ReturnsNonNullBuilder()
+    public void Create_ReturnsDistinctInstances()
     {
-        var builder = HermesWebAppBuilder.Create(["--dev"]);
+        var builder1 = HermesWebAppBuilder.Create();
+        var builder2 = HermesWebAppBuilder.Create();
 
-        Assert.NotNull(builder);
+        Assert.NotSame(builder1, builder2);
     }
 
     [Fact]
