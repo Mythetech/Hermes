@@ -8,11 +8,11 @@ This document describes the security architecture of Hermes and provides guidanc
 
 Hermes delegates all web content rendering and JavaScript execution to platform-native WebView engines:
 
-| Platform | WebView Engine | Sandbox |
-|----------|----------------|---------|
-| Windows | WebView2 (Chromium/Edge) | Chromium multi-process sandbox |
-| macOS | WKWebView | WebKit process isolation |
-| Linux | WebKit2GTK | WebKit process isolation |
+| Platform | WebView Engine           | Sandbox                        |
+| -------- | ------------------------ | ------------------------------ |
+| Windows  | WebView2 (Chromium/Edge) | Chromium multi-process sandbox |
+| macOS    | WKWebView                | WebKit process isolation       |
+| Linux    | WebKit2GTK               | WebKit process isolation       |
 
 The framework does not implement custom JavaScript engines, parsers, or network stacks. Security updates to WebView engines are delivered through OS updates.
 
@@ -39,6 +39,7 @@ The framework does not implement custom JavaScript engines, parsers, or network 
 ```
 
 **Key boundaries:**
+
 - JavaScript ↔ .NET: Messages passed as strings via `window.external.sendMessage()` / `WebMessageReceived`
 - Custom Schemes: HTTP-like requests intercepted by .NET handler, responses returned as streams
 - Native P/Invoke: Platform backends communicate with native libraries for window management
@@ -46,6 +47,7 @@ The framework does not implement custom JavaScript engines, parsers, or network 
 ### What Hermes Does NOT Do
 
 The framework intentionally excludes:
+
 - **Direct network requests** - All HTTP/WebSocket handled by WebView engine
 - **Credential storage** - Applications must implement their own secure storage
 - **Process spawning** - No `Process.Start()` or shell execution in the core library
@@ -58,6 +60,7 @@ The framework intentionally excludes:
 Developer tools are **disabled by default** (`DevToolsEnabled = false`). This prevents end users from inspecting application internals, modifying DOM, or executing arbitrary JavaScript.
 
 If you explicitly enable DevTools for debugging:
+
 ```csharp
 window.SetDevToolsEnabled(true); // Only for development
 ```
@@ -119,6 +122,7 @@ Static web assets are resolved from a compile-time manifest. The manifest paths 
 ### Window State Persistence
 
 Window position and size are stored in plaintext JSON at platform-specific locations:
+
 - Windows: `%LOCALAPPDATA%\Hermes\WindowState\`
 - macOS: `~/Library/Application Support/Hermes/WindowState/`
 - Linux: `~/.local/share/Hermes/WindowState/`
@@ -130,6 +134,7 @@ This data reveals application usage patterns but contains no credentials or sens
 ### Secrets Management
 
 **Never** store secrets in `appsettings.json` or embed them in source code. Use:
+
 - Environment variables for deployment secrets
 - Platform-specific secure storage (Windows Credential Manager, macOS Keychain, etc.)
 - User-prompted credentials stored in memory only
@@ -162,8 +167,10 @@ backend.WebMessageReceived += (message) => {
 Add CSP headers to your HTML to restrict script execution:
 
 ```html
-<meta http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline';">
+<meta
+  http-equiv="Content-Security-Policy"
+  content="default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline';"
+/>
 ```
 
 For Blazor applications, `'unsafe-eval'` is required for WebAssembly.
@@ -175,7 +182,7 @@ On Windows, ensure the WebView2 Runtime is updated. Hermes uses the Evergreen di
 ## Supported Versions
 
 | Version | Supported |
-|---------|-----------|
+| ------- | --------- |
 | 1.x     | Yes       |
 
 ## Reporting a Vulnerability
@@ -193,11 +200,9 @@ Please do not open public issues for security vulnerabilities.
 
 Hermes relies on these security-relevant dependencies:
 
-| Dependency | Purpose | Updates |
-|------------|---------|---------|
+| Dependency         | Purpose        | Updates                |
+| ------------------ | -------------- | ---------------------- |
 | WebView2 (Windows) | Browser engine | Microsoft auto-updates |
-| WKWebView (macOS) | Browser engine | Apple OS updates |
-| WebKit2GTK (Linux) | Browser engine | Distribution packages |
-| System.Text.Json | JSON parsing | .NET runtime updates |
-
-See [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES/) for full license information.
+| WKWebView (macOS)  | Browser engine | Apple OS updates       |
+| WebKit2GTK (Linux) | Browser engine | Distribution packages  |
+| System.Text.Json   | JSON parsing   | .NET runtime updates   |
