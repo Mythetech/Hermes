@@ -4,7 +4,7 @@ using Hermes.Web;
 
 HermesWindow.Prewarm();
 
-var builder = HermesWebAppBuilder.Create(args);
+var builder = HermesWebAppBuilder.Create();
 
 builder.ConfigureWindow(opts =>
 {

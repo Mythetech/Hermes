@@ -112,13 +112,7 @@ internal sealed class HermesMenuProvider : IHermesMenuProvider
 
     public void InvokeItemClick(string itemId)
     {
-        // Invoke the ItemClicked event on NativeMenuBar
-        // Events can only be invoked from within the declaring class,
-        // so we use reflection to access the backing field
-        var eventField = typeof(NativeMenuBar).GetField(nameof(NativeMenuBar.ItemClicked),
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        var itemClickedDelegate = eventField?.GetValue(_menuBar) as Action<string>;
-        itemClickedDelegate?.Invoke(itemId);
+        _menuBar.InvokeItemClicked(itemId);
     }
 
     /// <summary>
@@ -134,21 +128,12 @@ internal sealed class HermesMenuProvider : IHermesMenuProvider
     {
         var result = new List<MenuData>();
 
-        // Access the internal _menus dictionary via reflection
-        // This is necessary because NativeMenuBar doesn't expose a public enumeration
-        var menusField = typeof(NativeMenuBar).GetField("_menus",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-        if (menusField?.GetValue(_menuBar) is Dictionary<string, NativeMenu> menus)
+        foreach (var kvp in _menuBar.GetMenus())
         {
-            foreach (var kvp in menus)
-            {
-                // Skip the app menu (it's handled differently)
-                if (kvp.Key == NativeMenuBar.AppMenuLabel)
-                    continue;
+            if (kvp.Key == NativeMenuBar.AppMenuLabel)
+                continue;
 
-                result.Add(ConvertMenu(kvp.Value));
-            }
+            result.Add(ConvertMenu(kvp.Value));
         }
 
         return result;

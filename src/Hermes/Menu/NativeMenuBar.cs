@@ -173,6 +173,13 @@ public sealed class NativeMenuBar
         _itemsById.Remove(itemId);
     }
 
+    internal IReadOnlyDictionary<string, NativeMenu> GetMenus() => _menus;
+
+    internal void InvokeItemClicked(string itemId)
+    {
+        ItemClicked?.Invoke(itemId);
+    }
+
     private void OnMenuItemClicked(string itemId)
     {
         ItemClicked?.Invoke(itemId);

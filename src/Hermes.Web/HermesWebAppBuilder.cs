@@ -16,7 +16,7 @@ public sealed class HermesWebAppBuilder
     {
     }
 
-    public static HermesWebAppBuilder Create(string[]? args = null)
+    public static HermesWebAppBuilder Create()
     {
         return new HermesWebAppBuilder();
     }
@@ -120,39 +120,6 @@ public sealed class HermesWebAppBuilder
         return new HermesWebApp(window, bridge);
     }
 
-    private static void ApplyOptions(HermesWindow window, HermesWindowOptions options)
-    {
-        window.SetTitle(options.Title);
-        window.SetSize(options.Width, options.Height);
-
-        if (options.X.HasValue && options.Y.HasValue)
-            window.SetPosition(options.X.Value, options.Y.Value);
-
-        if (options.CenterOnScreen)
-            window.Center();
-
-        window.SetResizable(options.Resizable);
-        window.SetChromeless(options.Chromeless);
-        window.SetTopMost(options.TopMost);
-        window.SetDevToolsEnabled(options.DevToolsEnabled);
-        window.SetContextMenuEnabled(options.ContextMenuEnabled);
-        window.SetCustomTitleBar(options.CustomTitleBar);
-
-        if (options.Maximized)
-            window.Maximize();
-        if (options.Minimized)
-            window.Minimize();
-
-        if (!string.IsNullOrEmpty(options.IconPath))
-            window.SetIcon(options.IconPath);
-
-        if (options.MinWidth.HasValue || options.MinHeight.HasValue)
-            window.SetMinSize(options.MinWidth ?? 0, options.MinHeight ?? 0);
-
-        if (options.MaxWidth.HasValue || options.MaxHeight.HasValue)
-            window.SetMaxSize(options.MaxWidth ?? int.MaxValue, options.MaxHeight ?? int.MaxValue);
-
-        if (options.WindowStateKey is not null)
-            window.RememberWindowState(string.IsNullOrEmpty(options.WindowStateKey) ? null : options.WindowStateKey);
-    }
+    private static void ApplyOptions(HermesWindow window, HermesWindowOptions options) =>
+        HermesWindowOptions.ApplyTo(window, options);
 }
