@@ -191,6 +191,18 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
     }
 
     /// <summary>
+    /// Sets the Hermes license key directly in code.
+    /// This takes the same precedence as configuration; the HERMES_LICENSE environment
+    /// variable will still override this value if set.
+    /// </summary>
+    /// <param name="licenseKey">The license key token.</param>
+    public HermesBlazorAppBuilder WithLicenseKey(string licenseKey)
+    {
+        _hostBuilder.Configuration[LicenseKeyResolver.ConfigKey] = licenseKey;
+        return this;
+    }
+
+    /// <summary>
     /// Builds the application.
     /// </summary>
     [RequiresDynamicCode("Blazor WebView requires dynamic code for component rendering")]

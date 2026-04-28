@@ -6,7 +6,7 @@ namespace Hermes.Blazor.Licensing;
 internal static class LicenseKeyResolver
 {
     private const string EnvVarName = "HERMES_LICENSE";
-    private const string ConfigKey = "Hermes:License";
+    internal const string ConfigKey = "Hermes:License";
 
     internal static string? Resolve(IConfiguration configuration)
         => Resolve(configuration, Environment.GetEnvironmentVariable);
