@@ -11,6 +11,11 @@
 #include <gdk/gdkwayland.h>
 #endif
 
+#ifdef GDK_WINDOWING_X11
+#include <gdk/gdkx.h>
+#include <X11/Xatom.h>
+#endif
+
 #define HERMES_RESIZE_BORDER 6
 
 // Thread ID for the UI thread
@@ -40,6 +45,66 @@ void Hermes_App_Run(void) {
 
 void Hermes_App_Quit(void) {
     gtk_main_quit();
+}
+
+void Hermes_App_ActivateProcessWindow(int pid) {
+#ifdef GDK_WINDOWING_X11
+    GdkDisplay* gdkDisplay = gdk_display_get_default();
+    if (!gdkDisplay || !GDK_IS_X11_DISPLAY(gdkDisplay)) return;
+
+    Display* display = gdk_x11_display_get_xdisplay(gdkDisplay);
+    Window root = gdk_x11_get_default_root_xwindow();
+
+    Atom clientListAtom = XInternAtom(display, "_NET_CLIENT_LIST", False);
+    Atom pidAtom = XInternAtom(display, "_NET_WM_PID", False);
+    Atom activeAtom = XInternAtom(display, "_NET_ACTIVE_WINDOW", False);
+
+    Atom actualType;
+    int actualFormat;
+    unsigned long numItems, bytesAfter;
+    unsigned char* data = NULL;
+
+    if (XGetWindowProperty(display, root, clientListAtom, 0, ~0L, False,
+                           XA_WINDOW, &actualType, &actualFormat,
+                           &numItems, &bytesAfter, &data) != Success || !data) {
+        return;
+    }
+
+    Window* windows = (Window*)data;
+    for (unsigned long i = 0; i < numItems; i++) {
+        unsigned char* pidData = NULL;
+        Atom pidType;
+        int pidFormat;
+        unsigned long pidItems, pidBytesAfter;
+
+        if (XGetWindowProperty(display, windows[i], pidAtom, 0, 1, False,
+                               XA_CARDINAL, &pidType, &pidFormat,
+                               &pidItems, &pidBytesAfter, &pidData) == Success && pidData) {
+            unsigned long windowPid = *(unsigned long*)pidData;
+            XFree(pidData);
+
+            if ((int)windowPid == pid) {
+                XEvent event = {0};
+                event.xclient.type = ClientMessage;
+                event.xclient.window = windows[i];
+                event.xclient.message_type = activeAtom;
+                event.xclient.format = 32;
+                event.xclient.data.l[0] = 2;
+                event.xclient.data.l[1] = CurrentTime;
+                event.xclient.data.l[2] = 0;
+
+                XSendEvent(display, root, False,
+                           SubstructureNotifyMask | SubstructureRedirectMask, &event);
+                XFlush(display);
+                break;
+            }
+        }
+    }
+
+    XFree(data);
+#else
+    (void)pid;
+#endif
 }
 
 // ============================================================================

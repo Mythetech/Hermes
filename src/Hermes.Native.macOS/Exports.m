@@ -92,6 +92,16 @@ void Hermes_App_SetAccessoryMode(void) {
     }
 }
 
+void Hermes_App_ActivateProcessWindow(int pid) {
+    @autoreleasepool {
+        NSRunningApplication* app = [NSRunningApplication
+            runningApplicationWithProcessIdentifier:(pid_t)pid];
+        if (app) {
+            [app activateWithOptions:NSApplicationActivateIgnoringOtherApps];
+        }
+    }
+}
+
 #pragma mark - Window Lifecycle
 
 void* Hermes_Window_Create(const HermesWindowParams* params) {

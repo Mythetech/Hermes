@@ -190,6 +190,10 @@ WM_RBUTTONUP
 // Foreground / Cursor
 SetForegroundWindow
 GetCursorPos
+EnumWindows
+GetWindowThreadProcessId
+IsWindowVisible
+AllowSetForegroundWindow
 
 // Icon loading
 LoadIcon

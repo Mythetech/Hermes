@@ -48,6 +48,37 @@ public sealed class HermesWindow : IDisposable
     }
 
     /// <summary>
+    /// Activate the main window of another process, bringing it to the foreground.
+    /// Fails silently if the process has no visible window or no longer exists.
+    /// On Linux/Wayland, this is a no-op.
+    /// </summary>
+    /// <param name="processId">The OS process ID of the target application.</param>
+    public static void ActivateProcessWindow(int processId)
+    {
+#if WINDOWS
+        if (OperatingSystem.IsWindows())
+        {
+            Platforms.Windows.WindowActivation.ActivateProcessWindow(processId);
+            return;
+        }
+#endif
+#if MACOS
+        if (OperatingSystem.IsMacOS())
+        {
+            Platforms.macOS.MacNative.AppActivateProcessWindow(processId);
+            return;
+        }
+#endif
+#if LINUX
+        if (OperatingSystem.IsLinux())
+        {
+            Platforms.Linux.LinuxNative.AppActivateProcessWindow(processId);
+            return;
+        }
+#endif
+    }
+
+    /// <summary>
     /// Create a new Hermes window for the current platform.
     /// </summary>
     public HermesWindow()
