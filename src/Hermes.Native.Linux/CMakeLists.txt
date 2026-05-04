@@ -23,6 +23,12 @@ if(GDK_WAYLAND_FOUND)
     message(STATUS "GDK Wayland backend found — enabling Wayland-aware resize")
 endif()
 
+# Optional X11 support for cross-process window activation
+pkg_check_modules(GDK_X11 gdk-x11-3.0)
+if(GDK_X11_FOUND)
+    message(STATUS "GDK X11 backend found — enabling cross-process window activation")
+endif()
+
 # Source files
 set(SOURCES
     HermesWindow.c
@@ -58,6 +64,11 @@ if(GDK_WAYLAND_FOUND)
     target_include_directories(Hermes.Native.Linux PRIVATE ${GDK_WAYLAND_INCLUDE_DIRS})
 endif()
 
+if(GDK_X11_FOUND)
+    target_compile_definitions(Hermes.Native.Linux PRIVATE GDK_WINDOWING_X11)
+    target_include_directories(Hermes.Native.Linux PRIVATE ${GDK_X11_INCLUDE_DIRS})
+endif()
+
 # Link libraries
 target_link_libraries(Hermes.Native.Linux PRIVATE
     ${GTK3_LIBRARIES}
@@ -67,6 +78,10 @@ target_link_libraries(Hermes.Native.Linux PRIVATE
 
 if(APPINDICATOR_FOUND)
     target_link_libraries(Hermes.Native.Linux PRIVATE ${APPINDICATOR_LIBRARIES})
+endif()
+
+if(GDK_X11_FOUND)
+    target_link_libraries(Hermes.Native.Linux PRIVATE ${GDK_X11_LIBRARIES})
 endif()
 
 # Compiler flags

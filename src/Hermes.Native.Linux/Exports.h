@@ -24,6 +24,9 @@ void Hermes_App_Quit(void);
 /// Set the application to accessory mode (skip taskbar for all windows)
 void Hermes_App_SetAccessoryMode(void);
 
+/// Activate (bring to front) the main window of another process by its PID
+void Hermes_App_ActivateProcessWindow(int pid);
+
 // ============================================================================
 // Window Lifecycle
 // ============================================================================

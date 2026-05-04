@@ -27,6 +27,9 @@ internal static partial class LinuxNative
     [LibraryImport(LibraryName, EntryPoint = "Hermes_App_SetAccessoryMode")]
     internal static partial void AppSetAccessoryMode();
 
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_App_ActivateProcessWindow")]
+    internal static partial void AppActivateProcessWindow(int pid);
+
     #endregion
 
     #region Window Lifecycle
