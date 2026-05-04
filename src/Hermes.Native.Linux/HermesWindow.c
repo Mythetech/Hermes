@@ -468,6 +468,7 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
     hw->onWebViewCrash = params->OnWebViewCrash;
     hw->onPageLoaded = params->OnPageLoaded;
     hw->customTitleBar = params->CustomTitleBar;
+    hw->transparent = params->Transparent;
     hw->uiThreadId = (int64_t)pthread_self();
 
     // Store custom schemes
@@ -520,6 +521,17 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
                 G_CALLBACK(on_edge_motion), hw);
             g_signal_connect(hw->window, "button-press-event",
                 G_CALLBACK(on_edge_button_press), hw);
+        }
+    }
+
+    // Transparent window support (when not already set up by chromeless block)
+    if (params->Transparent && !hw->hasRoundedCorners) {
+        GdkScreen* screen = gtk_widget_get_screen(hw->window);
+        GdkVisual* rgba_visual = gdk_screen_get_rgba_visual(screen);
+        if (rgba_visual) {
+            gtk_widget_set_visual(hw->window, rgba_visual);
+            gtk_widget_set_app_paintable(hw->window, TRUE);
+            g_signal_connect(hw->window, "screen-changed", G_CALLBACK(on_screen_changed), hw);
         }
     }
 
@@ -611,10 +623,10 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
     webkit_settings_set_enable_javascript(settings, TRUE);
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
 
-    // Transparent WebView background for rounded corners
-    if (hw->hasRoundedCorners) {
-        GdkRGBA transparent = { 0.0, 0.0, 0.0, 0.0 };
-        webkit_web_view_set_background_color(WEBKIT_WEB_VIEW(hw->webView), &transparent);
+    // Transparent WebView background for rounded corners or transparent windows
+    if (hw->hasRoundedCorners || hw->transparent) {
+        GdkRGBA transparent_bg = { 0.0, 0.0, 0.0, 0.0 };
+        webkit_web_view_set_background_color(WEBKIT_WEB_VIEW(hw->webView), &transparent_bg);
     }
 
     // Disable context menu if requested

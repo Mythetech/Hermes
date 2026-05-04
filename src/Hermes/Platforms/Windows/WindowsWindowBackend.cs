@@ -640,6 +640,11 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
             _webViewController = await _webViewEnvironment.CreateCoreWebView2ControllerAsync(_hwnd);
             _webView = _webViewController.CoreWebView2;
 
+            if (_options.Transparent)
+            {
+                _webViewController.DefaultBackgroundColor = System.Drawing.Color.Transparent;
+            }
+
             if (isSmokeTest) Console.WriteLine("WEBVIEW_INIT:controller_ready");
 
             var settings = _webView.Settings;

@@ -7,7 +7,7 @@
 
   <!-- NuGet Package Metadata -->
   <PropertyGroup>
-    <VersionPrefix>1.0.2</VersionPrefix>
+    <VersionPrefix>1.0.3</VersionPrefix>
     <PackageId>Mythetech.Hermes.Testing</PackageId>
     <Authors>Mythetech</Authors>
     <Description>Test infrastructure for Hermes desktop applications. Provides mock backends, recording capabilities, and assertions for testing native/web boundary interactions.</Description>

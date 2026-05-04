@@ -27,7 +27,7 @@
 
   <!-- NuGet Package Metadata -->
   <PropertyGroup>
-    <VersionPrefix>1.0.2</VersionPrefix>
+    <VersionPrefix>1.0.3</VersionPrefix>
     <PackageId>Mythetech.Hermes</PackageId>
     <Authors>Mythetech</Authors>
     <Description>Cross-platform native desktop framework for .NET</Description>

@@ -112,10 +112,13 @@ Native drag and drop support for files and data.
 
 ### Window Transparency
 
-**Status:** Not started
+**Status:** Complete
 **Platforms:** All
 
-Transparent and translucent window backgrounds for overlay/HUD applications.
+Transparent window backgrounds for overlay/HUD applications. Set `Transparent = true` in
+`HermesWindowOptions` or call `SetTransparent(true)`. Use CSS `backdrop-filter: blur()` for
+glass effects. macOS uses `underPageBackgroundColor` + `drawsBackground` KVO, Windows uses
+WebView2 `DefaultBackgroundColor`, Linux uses RGBA visual + WebKitGTK background color.
 
 ---
 

@@ -69,7 +69,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
             Minimized = options.Minimized,
             DevToolsEnabled = options.DevToolsEnabled,
             ContextMenuEnabled = options.ContextMenuEnabled,
-            CustomTitleBar = options.CustomTitleBar
+            CustomTitleBar = options.CustomTitleBar,
+            Transparent = options.Transparent
         };
 
         // Marshal strings
