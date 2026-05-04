@@ -59,15 +59,17 @@ internal struct HermesWindowParams
     [MarshalAs(UnmanagedType.U1)]
     public bool CustomTitleBar;
 
+    [MarshalAs(UnmanagedType.U1)]
+    public bool Transparent;
+
     // Explicit padding to align to 8-byte boundary for next pointer field
     // C compiler adds this automatically; C# Sequential layout does not
-    // 10 bools = 10 bytes, need 6 more to reach 16 bytes (multiple of 8)
+    // 11 bools = 11 bytes, need 5 more to reach 16 bytes (multiple of 8)
     private byte _pad0;
     private byte _pad1;
     private byte _pad2;
     private byte _pad3;
     private byte _pad4;
-    private byte _pad5;
 
     // Callback function pointers
     public IntPtr OnClosing;

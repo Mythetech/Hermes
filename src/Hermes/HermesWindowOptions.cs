@@ -124,6 +124,14 @@ public sealed class HermesWindowOptions
     public bool CustomTitleBar { get; set; }
 
     /// <summary>
+    /// Make the window background transparent, allowing the desktop or other windows
+    /// to show through areas where the WebView content has no opaque background.
+    /// Typically combined with <see cref="Chromeless"/> for frameless transparent overlays,
+    /// or with CSS backdrop effects for glass/translucent UI.
+    /// </summary>
+    public bool Transparent { get; set; }
+
+    /// <summary>
     /// Key used to persist window state. If set to non-null, window position, size, and
     /// maximized state are saved on close and restored on next launch.
     /// Use empty string to auto-derive key from window title.
@@ -147,6 +155,7 @@ public sealed class HermesWindowOptions
         window.SetDevToolsEnabled(options.DevToolsEnabled);
         window.SetContextMenuEnabled(options.ContextMenuEnabled);
         window.SetCustomTitleBar(options.CustomTitleBar);
+        window.SetTransparent(options.Transparent);
 
         if (options.Maximized)
             window.Maximize();

@@ -258,6 +258,18 @@ public sealed class HermesWindow : IDisposable
     }
 
     /// <summary>
+    /// Enable transparent window background. The window and WebView backgrounds
+    /// become transparent, allowing content behind the window to show through
+    /// wherever the web content does not paint an opaque background.
+    /// </summary>
+    public HermesWindow SetTransparent(bool transparent)
+    {
+        ThrowIfInitialized();
+        _options.Transparent = transparent;
+        return this;
+    }
+
+    /// <summary>
     /// Enable window state persistence. Window position, size, and maximized state
     /// will be saved on close and restored on next launch.
     /// </summary>
@@ -487,6 +499,39 @@ public sealed class HermesWindow : IDisposable
         </html>
         """;
 
+    private const string TransparentLoadingHtml = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {
+                    margin: 0;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    background: transparent;
+                    color: #333;
+                }
+                @media (prefers-color-scheme: dark) {
+                    body { background: transparent; color: #e0e0e0; }
+                }
+                .loader {
+                    width: 24px;
+                    height: 24px;
+                    border: 3px solid #ddd;
+                    border-top-color: #3498db;
+                    border-radius: 50%;
+                    animation: spin 1s linear infinite;
+                }
+                @keyframes spin { to { transform: rotate(360deg); } }
+            </style>
+        </head>
+        <body><div class="loader"></div></body>
+        </html>
+        """;
+
     /// <summary>
     /// Show the window immediately with loading content, then return.
     /// Use this for faster perceived startup when Blazor initialization can happen after the window is visible.
@@ -494,8 +539,7 @@ public sealed class HermesWindow : IDisposable
     /// <param name="loadingHtml">Optional custom HTML to display while loading. Defaults to a simple spinner.</param>
     public void ShowWithLoadingState(string? loadingHtml = null)
     {
-        // Set the initial content to the loading HTML
-        _options.StartHtml = loadingHtml ?? DefaultLoadingHtml;
+        _options.StartHtml = loadingHtml ?? (_options.Transparent ? TransparentLoadingHtml : DefaultLoadingHtml);
         _options.StartUrl = null;
 
         EnsureInitialized();

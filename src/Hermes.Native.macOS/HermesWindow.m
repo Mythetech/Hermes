@@ -74,6 +74,12 @@
             });
         }
 
+        _transparent = params->Transparent;
+        if (_transparent) {
+            [_window setOpaque:NO];
+            [_window setBackgroundColor:[NSColor clearColor]];
+        }
+
         if (params->UsePosition) {
             CGFloat y = [self convertYFromTopLeft:params->Y height:params->Height];
             [_window setFrameOrigin:NSMakePoint(params->X, y)];
@@ -243,6 +249,17 @@
     if (_devToolsEnabled) {
         if (@available(macOS 13.3, *)) {
             _webView.inspectable = YES;
+        }
+    }
+
+    if (_transparent) {
+        if (@available(macOS 12.0, *)) {
+            _webView.underPageBackgroundColor = [NSColor clearColor];
+        }
+        @try {
+            [_webView setValue:@NO forKey:@"drawsBackground"];
+        } @catch (NSException *e) {
+            NSLog(@"[Hermes] drawsBackground KVO not available: %@", [e reason]);
         }
     }
 

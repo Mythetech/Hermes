@@ -46,6 +46,7 @@ typedef struct {
     bool DevToolsEnabled;
     bool ContextMenuEnabled;
     bool CustomTitleBar;
+    bool Transparent;
 
     // Event callbacks
     ClosingCallback OnClosing;

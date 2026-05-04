@@ -111,6 +111,15 @@ public sealed class TestableHermesWindow : IDisposable
     }
 
     /// <summary>
+    /// Enable transparent window background.
+    /// </summary>
+    public TestableHermesWindow SetTransparent(bool transparent)
+    {
+        _window.SetTransparent(transparent);
+        return this;
+    }
+
+    /// <summary>
     /// Enable window state persistence.
     /// </summary>
     public TestableHermesWindow RememberWindowState(string? key = null)

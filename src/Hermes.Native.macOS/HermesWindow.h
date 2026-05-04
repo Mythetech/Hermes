@@ -40,6 +40,7 @@
 @property (nonatomic, assign) NSRect premaximizedFrame;
 @property (nonatomic, assign) BOOL devToolsEnabled;
 @property (nonatomic, assign) BOOL customTitleBar;
+@property (nonatomic, assign) BOOL transparent;
 
 // Drag tracking (hybrid approach - JS informs about no-drag regions)
 @property (nonatomic, strong) id mouseDownMonitor;
