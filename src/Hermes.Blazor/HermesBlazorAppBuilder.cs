@@ -14,9 +14,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Components.WebView;
 using Hermes.Blazor.DevServer;
-using Hermes.Blazor.Licensing;
-using Hermes.Licensing;
-using System.Reflection;
 
 namespace Hermes.Blazor;
 
@@ -191,18 +188,6 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
     }
 
     /// <summary>
-    /// Sets the Hermes license key directly in code.
-    /// This takes the same precedence as configuration; the HERMES_LICENSE environment
-    /// variable will still override this value if set.
-    /// </summary>
-    /// <param name="licenseKey">The license key token.</param>
-    public HermesBlazorAppBuilder WithLicenseKey(string licenseKey)
-    {
-        _hostBuilder.Configuration[LicenseKeyResolver.ConfigKey] = licenseKey;
-        return this;
-    }
-
-    /// <summary>
     /// Builds the application.
     /// </summary>
     [RequiresDynamicCode("Blazor WebView requires dynamic code for component rendering")]
@@ -297,15 +282,6 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         {
             app.RootComponents.Add(component.Type, component.Selector, component.Parameters);
         }
-
-        var licenseKey = LicenseKeyResolver.Resolve(_hostBuilder.Configuration);
-        var entryAssemblyName = Assembly.GetEntryAssembly()?.GetName().Name ?? "";
-        var licenseResult = LicenseTokenValidator.Validate(licenseKey, entryAssemblyName, HermesVersionInfo.ReleaseDate);
-
-        if (licenseResult.Status == LicenseStatus.NoKey)
-            LicenseNotice.PrintUnlicensedWarning();
-        else if (licenseResult.Status != LicenseStatus.Valid)
-            LicenseNotice.PrintValidationWarning(licenseResult);
 
         return app;
     }
