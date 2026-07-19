@@ -1,4 +1,4 @@
-// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
+// Copyright (c) Mythetech. Licensed under the MIT License.
 using Hermes.Abstractions;
 
 namespace Hermes.Blazor.Threading;

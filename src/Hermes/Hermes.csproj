@@ -35,7 +35,7 @@
     <PackageProjectUrl>https://github.com/Mythetech/Hermes</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Mythetech/Hermes.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
@@ -102,7 +102,7 @@
   <!-- Windows dependencies and source files -->
   <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3240.44" />
-    <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.*" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.275" PrivateAssets="all" />
     <!-- Include NativeMethods.txt from Platforms/Windows subfolder for CsWin32 -->
     <AdditionalFiles Include="Platforms/Windows/NativeMethods.txt" />
     <AdditionalFiles Include="Platforms/Windows/NativeMethods.json" />
@@ -127,16 +127,4 @@
     <Compile Remove="Platforms/macOS/**/*.cs" />
   </ItemGroup>
 
-  <!-- Embed release date at Hermes build time for perpetual license rights -->
-  <Target Name="EmbedHermesReleaseDate" BeforeTargets="GetAssemblyAttributes">
-    <PropertyGroup>
-      <_HermesReleaseDate Condition="'$(_HermesReleaseDate)' == ''">$([System.DateTime]::UtcNow.ToString('yyyy-MM-dd'))</_HermesReleaseDate>
-    </PropertyGroup>
-    <ItemGroup>
-      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
-        <_Parameter1>HermesReleaseDate</_Parameter1>
-        <_Parameter2>$(_HermesReleaseDate)</_Parameter2>
-      </AssemblyAttribute>
-    </ItemGroup>
-  </Target>
 </Project>

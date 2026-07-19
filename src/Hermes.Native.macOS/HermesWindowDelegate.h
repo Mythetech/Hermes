@@ -1,4 +1,4 @@
-// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
+// Copyright (c) Mythetech. Licensed under the MIT License.
 #ifndef HERMES_WINDOW_DELEGATE_H
 #define HERMES_WINDOW_DELEGATE_H
 
