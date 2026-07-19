@@ -24,7 +24,7 @@
     <PackageProjectUrl>https://github.com/Mythetech/Hermes</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Mythetech/Hermes.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>

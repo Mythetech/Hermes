@@ -1,4 +1,4 @@
-// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
+// Copyright (c) Mythetech. Licensed under the MIT License.
 namespace PokedexTray;
 
 public record PokemonInfo(string Name, string SpriteUrl, string[] Types);

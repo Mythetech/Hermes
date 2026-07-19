@@ -3,7 +3,7 @@
 A modern, AOT-compatible native desktop framework for .NET 10.
 
 [![NuGet](https://img.shields.io/nuget/v/Mythetech.Hermes)](https://www.nuget.org/packages/Mythetech.Hermes)
-[![License](https://img.shields.io/badge/license-Elastic%20License%202.0-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Build and Publish NuGet](https://github.com/Mythetech/Hermes/actions/workflows/nuget-publish.yml/badge.svg)](https://github.com/Mythetech/Hermes/actions/workflows/nuget-publish.yml)
 [![Integration Tests](https://github.com/Mythetech/Hermes/actions/workflows/integration-test.yml/badge.svg)](https://github.com/Mythetech/Hermes/actions/workflows/integration-test.yml)
 [![On-Demand Smoke Test](https://github.com/Mythetech/Hermes/actions/workflows/smoke-test.yml/badge.svg)](https://github.com/Mythetech/Hermes/actions/workflows/smoke-test.yml)
@@ -160,6 +160,4 @@ For detailed technical information, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## License
 
-Hermes is source-available under the [Elastic License 2.0](LICENSE).
-
-**Free for:** non-commercial use, educational use, open source projects, and commercial use under $1M annual revenue. See [COMMERCIAL.md](COMMERCIAL.md) for details.
+Hermes is open source under the [MIT License](LICENSE).
