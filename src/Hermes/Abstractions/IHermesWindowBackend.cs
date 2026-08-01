@@ -20,6 +20,18 @@ public interface IHermesWindowBackend : IDisposable
     #region Lifecycle
 
     /// <summary>
+    /// Perform process-wide native application initialization (for example
+    /// NSApplication registration on macOS). Idempotent and cheap when the
+    /// application is already initialized. Must be called on the UI thread.
+    /// Initialize() paths trigger this implicitly; it is exposed so hosts can
+    /// pay this cost deliberately while other startup work proceeds on
+    /// background threads.
+    /// </summary>
+    void InitializeApplication()
+    {
+    }
+
+    /// <summary>
     /// Initialize the native window with the specified options.
     /// Must be called before Show() or WaitForClose().
     /// </summary>
