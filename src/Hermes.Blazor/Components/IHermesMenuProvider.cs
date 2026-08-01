@@ -88,13 +88,19 @@ public sealed class MenuItemData
 /// </summary>
 internal sealed class HermesMenuProvider : IHermesMenuProvider
 {
-    private readonly NativeMenuBar _menuBar;
+    private readonly Func<NativeMenuBar> _menuBarFactory;
+    private NativeMenuBar? _menuBar;
     private List<MenuData>? _cachedMenus;
 
-    public HermesMenuProvider(NativeMenuBar menuBar)
+    public HermesMenuProvider(Func<NativeMenuBar> menuBarFactory)
     {
-        _menuBar = menuBar;
+        _menuBarFactory = menuBarFactory;
     }
+
+    // Resolving the menu bar creates the native menu backend, which on macOS
+    // pays NSApplication initialization. Deferring it keeps that cost out of
+    // service registration during Build().
+    private NativeMenuBar MenuBar => _menuBar ??= _menuBarFactory();
 
     public IReadOnlyList<MenuData> Menus
     {
@@ -112,7 +118,7 @@ internal sealed class HermesMenuProvider : IHermesMenuProvider
 
     public void InvokeItemClick(string itemId)
     {
-        _menuBar.InvokeItemClicked(itemId);
+        MenuBar.InvokeItemClicked(itemId);
     }
 
     /// <summary>
@@ -128,7 +134,7 @@ internal sealed class HermesMenuProvider : IHermesMenuProvider
     {
         var result = new List<MenuData>();
 
-        foreach (var kvp in _menuBar.GetMenus())
+        foreach (var kvp in MenuBar.GetMenus())
         {
             if (kvp.Key == NativeMenuBar.AppMenuLabel)
                 continue;
