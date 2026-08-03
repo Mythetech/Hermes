@@ -224,11 +224,19 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
 
         // Managed composition runs on a worker while this (UI) thread pays for
         // native application and window initialization. The worker touches no
-        // native state and no synchronization context is installed yet, so the
-        // blocking join below cannot deadlock.
+        // native state and never posts to the UI synchronization context, and
+        // this thread blocks only on the worker, so the join below cannot
+        // deadlock.
         var compositionTask = Task.Run(() => ComposeServices(
             window, backend, syncContext, dispatcher, useDevServer, _hostPage,
             _fileProvider, _hostBuilder));
+
+        // The synchronization context must be installed before Show(). On
+        // Windows, Show() starts async WebView2 initialization whose await
+        // continuations capture the current context; without it they resume on
+        // thread pool (MTA) threads and every controller call fails COM
+        // apartment marshaling (ICoreWebView2Controller QueryInterface error).
+        SynchronizationContext.SetSynchronizationContext(syncContext);
 
         backend.InitializeApplication();
 
@@ -251,8 +259,6 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             baseUri: composition.DevBaseUri,
             isDevMode: composition.DevServer is not null,
             deferredHandler: deferredHandler);
-
-        SynchronizationContext.SetSynchronizationContext(syncContext);
 
         var app = new HermesBlazorApp(composition.ServiceProvider, _hostBuilder.Configuration, window, webViewManager, syncContext, _loadingHtml, windowShownDuringBuild: !_deferWindowShow, devServer: composition.DevServer);
 
