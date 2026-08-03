@@ -321,6 +321,11 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
 
         var serviceProvider = hostBuilder.Services.BuildServiceProvider();
 
+        // Still on the worker thread, and the WebView is spawning its content
+        // process concurrently: spend the wait pre-JITting the renderer stack
+        // so the first real render after attach is cheap.
+        RendererWarmup.Run(serviceProvider);
+
         return new BuildComposition(serviceProvider, fileProvider, devServer, devBaseUri);
     }
 
