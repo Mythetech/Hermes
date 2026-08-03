@@ -177,10 +177,45 @@ internal sealed class HermesWebViewManager : WebViewManager
                 StartupLog.Log("WebView", "Serving blazor.webview.js");
 
             headers.TryGetValue("Content-Type", out var contentType);
+
+            if (contentType is not null && contentType.StartsWith("text/html", StringComparison.OrdinalIgnoreCase))
+                return (ServeHtmlWithInlinedScript(cleanUrl, content), contentType);
+
             return (content, contentType);
         }
 
         return (null, null);
+    }
+
+    private string? _inlinedPageUrl;
+    private byte[]? _inlinedPageBytes;
+
+    private Stream ServeHtmlWithInlinedScript(string cleanUrl, Stream content)
+    {
+        if (_inlinedPageUrl != cleanUrl)
+        {
+            using var reader = new StreamReader(content);
+            var html = reader.ReadToEnd();
+
+            var inlined = HostPageInliner.Inline(html, asset =>
+            {
+                if (!TryGetResponseContent(_baseUri + asset, allowFallbackOnHostPage: false,
+                    out _, out _, out var assetContent, out _))
+                    return null;
+
+                using var assetReader = new StreamReader(assetContent);
+                return assetReader.ReadToEnd();
+            });
+
+            _inlinedPageBytes = System.Text.Encoding.UTF8.GetBytes(inlined);
+            _inlinedPageUrl = cleanUrl;
+        }
+        else
+        {
+            content.Dispose();
+        }
+
+        return new MemoryStream(_inlinedPageBytes!);
     }
 
     protected override ValueTask DisposeAsyncCore()
