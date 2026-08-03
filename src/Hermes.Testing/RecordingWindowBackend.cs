@@ -136,6 +136,11 @@ public sealed class RecordingWindowBackend : IHermesWindowBackend
         }
     }
 
+    public void InitializeApplication()
+    {
+        Recording.RecordMethodCall(nameof(InitializeApplication));
+    }
+
     public void Initialize(HermesWindowOptions options)
     {
         Recording.RecordMethodCall(nameof(Initialize), options);

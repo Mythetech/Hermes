@@ -184,6 +184,16 @@ public class RecordingWindowBackendTests
     }
 
     [Fact]
+    public void InitializeApplication_IsRecorded()
+    {
+        var backend = new RecordingWindowBackend();
+
+        backend.InitializeApplication();
+
+        Assert.Contains(backend.Recording.MethodCalls, c => c.MethodName == "InitializeApplication");
+    }
+
+    [Fact]
     public void Recording_Clear_RemovesAllRecordedData()
     {
         var backend = new RecordingWindowBackend();

@@ -29,7 +29,30 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
     private int _pendingWidth = 800;
     private int _pendingHeight = 600;
 
+    private static bool _applicationInitialized;
+    private static readonly object _applicationInitLock = new();
+
     #region Lifecycle
+
+    /// <summary>
+    /// Registers NSApplication ([NSApplication sharedApplication] plus activation policy).
+    /// This is the single most expensive native startup call (about 100ms cold), so hosts
+    /// invoke it deliberately while managed composition proceeds on a worker thread.
+    /// Accessory-mode apps call HermesApplication.SetAccessoryMode() before any window
+    /// exists, which registers the app with the Accessory policy first; the guard here
+    /// makes the later call from Build() a no-op in that case at the native level
+    /// because AppRegister is itself idempotent.
+    /// </summary>
+    public void InitializeApplication()
+    {
+        lock (_applicationInitLock)
+        {
+            if (_applicationInitialized)
+                return;
+            MacNative.AppRegister();
+            _applicationInitialized = true;
+        }
+    }
 
     public void Initialize(HermesWindowOptions options)
     {

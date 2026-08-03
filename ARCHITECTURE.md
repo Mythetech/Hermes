@@ -145,6 +145,38 @@ public interface IMenuBackend
 
 ---
 
+## Startup Sequence
+
+Startup is structured as two concurrent tracks to minimize time to first render:
+
+1. **UI thread (native track)**: registers custom scheme names, pays native
+   application initialization explicitly via `IHermesWindowBackend.InitializeApplication()`
+   (NSApplication registration on macOS, about 100ms cold), then creates and
+   shows the window. All native, COM, AppKit, and GTK calls stay on this thread,
+   which preserves the Windows STA apartment model.
+2. **Worker thread (managed track)**: service registration, `BuildServiceProvider`,
+   dev server startup, and license validation run concurrently via `Task.Run`
+   inside `HermesBlazorAppBuilder.Build()`. The worker touches no native state,
+   and no synchronization context is installed until after the join, so the
+   blocking join cannot deadlock.
+
+A `DeferredSchemeHandler` bridges the gap between early window creation and the
+`HermesWebViewManager` existing: scheme requests that arrive before the manager
+is constructed block briefly and then delegate once the real handler is
+installed. On Windows this is unnecessary because handlers resolve per request
+from a dictionary.
+
+`Run()` navigates synchronously before entering the message loop (issuing the
+native load request early lets the WebView kick off its content process spawn),
+while root component initialization rides the loop through posted continuations.
+The initialization task is stored and observed in `DisposeAsync`, never
+fire-and-forget.
+
+Threading contract for contributors: native object creation and access belong
+on the UI thread only; pure managed composition may run on workers.
+
+---
+
 ## Implementation Phases
 
 ### Phase 1: Project Scaffolding

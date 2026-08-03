@@ -52,7 +52,8 @@ internal sealed class HermesWebViewManager : WebViewManager
         JSComponentConfigurationStore jsComponents,
         string hostPageRelativePath,
         string? baseUri,
-        bool isDevMode)
+        bool isDevMode,
+        DeferredSchemeHandler? deferredHandler = null)
         : base(services, dispatcher, new Uri(baseUri ?? AppBaseUri), fileProvider, jsComponents, hostPageRelativePath)
     {
         _backend = backend;
@@ -72,8 +73,18 @@ internal sealed class HermesWebViewManager : WebViewManager
 
         if (!_isDevMode)
         {
-            var scheme = _baseUri.Scheme;
-            _backend.RegisterCustomScheme(scheme, HandleWebRequest);
+            // When the builder registered a deferred handler before showing the
+            // window, fulfill it; requests that arrived early unblock here.
+            // Otherwise register directly (Windows, or direct construction).
+            if (deferredHandler is not null)
+            {
+                deferredHandler.SetInner(HandleWebRequest);
+            }
+            else
+            {
+                var scheme = _baseUri.Scheme;
+                _backend.RegisterCustomScheme(scheme, HandleWebRequest);
+            }
         }
     }
 

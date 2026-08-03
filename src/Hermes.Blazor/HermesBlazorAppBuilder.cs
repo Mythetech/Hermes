@@ -194,17 +194,6 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
     [RequiresUnreferencedCode("Blazor WebView uses reflection for component instantiation")]
     public HermesBlazorApp Build()
     {
-        var wwwrootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
-        var fallbackProvider = Directory.Exists(wwwrootPath)
-            ? new PhysicalFileProvider(wwwrootPath)
-            : (IFileProvider)new NullFileProvider();
-
-        var appName = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name ?? "App";
-        var fileProvider = _fileProvider ?? StaticWebAssetsFileProvider.Create(appName, fallbackProvider);
-
-        var useDevServer = DevServer.DevServerDetector.ShouldUseDevServer(_forceDevServer);
-        DevServer.HermesDevServer? devServer = null;
-
         var window = new HermesWindow();
 
         if (_windowConfiguration is not null)
@@ -218,24 +207,88 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         var syncContext = new HermesSynchronizationContext(backend);
         var dispatcher = new HermesDispatcher(syncContext);
 
-        // Pre-register the app scheme before any code that might trigger backend initialization.
-        // On macOS, custom schemes must be registered before Initialize() is called.
-        // We register even in dev mode (where the scheme isn't used) to satisfy this constraint.
+        var useDevServer = DevServer.DevServerDetector.ShouldUseDevServer(_forceDevServer);
+
+        // Custom schemes must be registered by name before Initialize() on macOS and
+        // Linux. The deferred handler lets the window show and the WebView start up
+        // before the WebViewManager exists; any request that races the manager blocks
+        // inside Handle() until SetInner() is called. Windows resolves handlers per
+        // request from a dictionary (see WindowsWindowBackend.RegisterCustomScheme),
+        // so the manager registers directly there and no deferred handler is needed.
+        DeferredSchemeHandler? deferredHandler = null;
         if (!OperatingSystem.IsWindows())
         {
-            backend.RegisterCustomScheme("app", _ => (null, null));
+            deferredHandler = new DeferredSchemeHandler(TimeSpan.FromSeconds(5));
+            backend.RegisterCustomScheme("app", deferredHandler.Handle);
         }
 
-        _hostBuilder.Services.AddBlazorWebView();
-        _hostBuilder.Services.AddSingleton(window);
-        _hostBuilder.Services.AddSingleton(backend);
-        _hostBuilder.Services.AddSingleton(syncContext);
-        _hostBuilder.Services.AddSingleton(dispatcher);
-        _hostBuilder.Services.AddSingleton<IConfiguration>(_hostBuilder.Configuration);
-        _hostBuilder.Services.AddSingleton<IHermesPlatformService>(new HermesPlatformService(window));
-        _hostBuilder.Services.AddSingleton<IHermesMenuProvider>(new HermesMenuProvider(window.MenuBar));
-        _hostBuilder.Services.AddSingleton<IClipboard, DesktopClipboard>();
+        // Managed composition runs on a worker while this (UI) thread pays for
+        // native application and window initialization. The worker touches no
+        // native state and never posts to the UI synchronization context, and
+        // this thread blocks only on the worker, so the join below cannot
+        // deadlock.
+        var compositionTask = Task.Run(() => ComposeServices(
+            window, backend, syncContext, dispatcher, useDevServer, _hostPage,
+            _fileProvider, _hostBuilder));
 
+        // The synchronization context must be installed before Show(). On
+        // Windows, Show() starts async WebView2 initialization whose await
+        // continuations capture the current context; without it they resume on
+        // thread pool (MTA) threads and every controller call fails COM
+        // apartment marshaling (ICoreWebView2Controller QueryInterface error).
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+
+        backend.InitializeApplication();
+
+        if (!_deferWindowShow)
+        {
+            window.Show();
+        }
+
+        var composition = compositionTask.GetAwaiter().GetResult();
+
+        var jsComponents = new JSComponentConfigurationStore();
+
+        var webViewManager = new HermesWebViewManager(
+            backend,
+            composition.ServiceProvider,
+            dispatcher,
+            composition.FileProvider,
+            jsComponents,
+            _hostPage,
+            baseUri: composition.DevBaseUri,
+            isDevMode: composition.DevServer is not null,
+            deferredHandler: deferredHandler);
+
+        var app = new HermesBlazorApp(composition.ServiceProvider, _hostBuilder.Configuration, window, webViewManager, syncContext, _loadingHtml, windowShownDuringBuild: !_deferWindowShow, devServer: composition.DevServer);
+
+        foreach (var component in RootComponents.GetComponents())
+        {
+            app.RootComponents.Add(component.Type, component.Selector, component.Parameters);
+        }
+
+        return app;
+    }
+
+    private static BuildComposition ComposeServices(
+        HermesWindow window,
+        IHermesWindowBackend backend,
+        HermesSynchronizationContext syncContext,
+        HermesDispatcher dispatcher,
+        bool useDevServer,
+        string hostPage,
+        IFileProvider? explicitFileProvider,
+        HostApplicationBuilder hostBuilder)
+    {
+        var wwwrootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
+        var fallbackProvider = Directory.Exists(wwwrootPath)
+            ? new PhysicalFileProvider(wwwrootPath)
+            : (IFileProvider)new NullFileProvider();
+
+        var appName = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name ?? "App";
+        var fileProvider = explicitFileProvider ?? StaticWebAssetsFileProvider.Create(appName, fallbackProvider);
+
+        DevServer.HermesDevServer? devServer = null;
         string? devBaseUri = null;
 
         if (useDevServer)
@@ -243,7 +296,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             try
             {
                 devServer = DevServer.HermesDevServer.StartAsync(
-                    _hostPage,
+                    hostPage,
                     wwwrootPath).GetAwaiter().GetResult();
 
                 devBaseUri = devServer.BaseUrl;
@@ -256,35 +309,40 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             }
         }
 
-        var serviceProvider = _hostBuilder.Services.BuildServiceProvider();
-        var jsComponents = new JSComponentConfigurationStore();
+        hostBuilder.Services.AddBlazorWebView();
+        hostBuilder.Services.AddSingleton(window);
+        hostBuilder.Services.AddSingleton(backend);
+        hostBuilder.Services.AddSingleton(syncContext);
+        hostBuilder.Services.AddSingleton(dispatcher);
+        hostBuilder.Services.AddSingleton<IConfiguration>(hostBuilder.Configuration);
+        hostBuilder.Services.AddSingleton<IHermesPlatformService>(new HermesPlatformService(window));
+        hostBuilder.Services.AddSingleton<IHermesMenuProvider>(new HermesMenuProvider(() => window.MenuBar));
+        hostBuilder.Services.AddSingleton<IClipboard, DesktopClipboard>();
 
-        var webViewManager = new HermesWebViewManager(
-            backend,
-            serviceProvider,
-            dispatcher,
-            fileProvider,
-            jsComponents,
-            _hostPage,
-            baseUri: devBaseUri,
-            isDevMode: devServer is not null);
+        var serviceProvider = hostBuilder.Services.BuildServiceProvider();
 
-        SynchronizationContext.SetSynchronizationContext(syncContext);
-
-        if (!_deferWindowShow)
-        {
-            window.Show();
-        }
-
-        var app = new HermesBlazorApp(serviceProvider, _hostBuilder.Configuration, window, webViewManager, syncContext, _loadingHtml, windowShownDuringBuild: !_deferWindowShow, devServer: devServer);
-
-        foreach (var component in RootComponents.GetComponents())
-        {
-            app.RootComponents.Add(component.Type, component.Selector, component.Parameters);
-        }
-
-        return app;
+        return new BuildComposition(serviceProvider, fileProvider, devServer, devBaseUri);
     }
+
+    internal static BuildComposition ComposeForTest(HermesBlazorAppBuilder builder, IHermesWindowBackend backend)
+    {
+        var window = new HermesWindow(backend);
+        var syncContext = new HermesSynchronizationContext(backend);
+        var dispatcher = new HermesDispatcher(syncContext);
+
+        return ComposeServices(
+            window, backend, syncContext, dispatcher,
+            useDevServer: false,
+            hostPage: builder._hostPage,
+            explicitFileProvider: builder._fileProvider,
+            hostBuilder: builder._hostBuilder);
+    }
+
+    internal sealed record BuildComposition(
+        IServiceProvider ServiceProvider,
+        IFileProvider FileProvider,
+        DevServer.HermesDevServer? DevServer,
+        string? DevBaseUri);
 
     private static void ApplyOptions(HermesWindow window, HermesWindowOptions options) =>
         HermesWindowOptions.ApplyTo(window, options);
