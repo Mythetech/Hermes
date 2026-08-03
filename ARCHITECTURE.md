@@ -155,16 +155,30 @@ Startup is structured as two concurrent tracks to minimize time to first render:
    shows the window. All native, COM, AppKit, and GTK calls stay on this thread,
    which preserves the Windows STA apartment model.
 2. **Worker thread (managed track)**: service registration, `BuildServiceProvider`,
-   dev server startup, and license validation run concurrently via `Task.Run`
-   inside `HermesBlazorAppBuilder.Build()`. The worker touches no native state,
-   and no synchronization context is installed until after the join, so the
-   blocking join cannot deadlock.
+   and dev server startup run concurrently via `Task.Run` inside
+   `HermesBlazorAppBuilder.Build()`. The worker then pre-JITs the Blazor
+   renderer stack (`RendererWarmup`) while the WebView spawns its content
+   process. The worker touches no native state and never posts to the UI
+   synchronization context, and the UI thread blocks only on the worker, so
+   the join cannot deadlock.
+
+The synchronization context is installed on the UI thread before `Show()`:
+on Windows, WebView2 initialization continuations capture it, and without it
+they resume on thread pool threads and controller calls fail COM apartment
+marshaling.
 
 A `DeferredSchemeHandler` bridges the gap between early window creation and the
 `HermesWebViewManager` existing: scheme requests that arrive before the manager
 is constructed block briefly and then delegate once the real handler is
 installed. On Windows this is unnecessary because handlers resolve per request
-from a dictionary.
+from a dictionary. When serving the host page, `HostPageInliner` embeds
+blazor.webview.js directly into the HTML, removing scheme round trips.
+
+Orderings that look tempting but measured slower, do not revisit without new
+evidence: deferring navigation into the message loop (about 65ms slower,
+WebKit needs the early native load request), and creating the WKWebView before
+NSApplication initialization (32ms slower in a standalone spike, WebKit's
+process spawn only progresses while the run loop is serviced).
 
 `Run()` navigates synchronously before entering the message loop (issuing the
 native load request early lets the WebView kick off its content process spawn),
