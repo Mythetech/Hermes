@@ -27,7 +27,6 @@ All notable changes to this project will be documented in this file.
 - **Crash reporting hooks** with exception context, platform info, and session tracking
 - **Session management** with unique session IDs and metadata
 - **Window close cancellation** with async confirmation support
-- **Licensing** with Ed25519 signature validation (Elastic License 2.0)
 - **AOT compilation** support from day one
 - **Native Linux library** (C/GTK) for menus, dialogs, and window management
 - **Native macOS library** (Objective-C) for menus, dialogs, dock menus, and window management

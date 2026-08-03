@@ -1,4 +1,4 @@
-// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
+// Copyright (c) Mythetech. Licensed under the MIT License.
 #ifndef HERMES_CONTEXT_MENU_H
 #define HERMES_CONTEXT_MENU_H
 

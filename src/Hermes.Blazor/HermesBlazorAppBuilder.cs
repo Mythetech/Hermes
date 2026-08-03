@@ -1,4 +1,4 @@
-// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
+// Copyright (c) Mythetech. Licensed under the MIT License.
 using System.Diagnostics.CodeAnalysis;
 using Hermes.Abstractions;
 using Hermes.Blazor.Threading;
@@ -14,9 +14,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Components.WebView;
 using Hermes.Blazor.DevServer;
-using Hermes.Blazor.Licensing;
-using Hermes.Licensing;
-using System.Reflection;
 
 namespace Hermes.Blazor;
 
@@ -191,18 +188,6 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
     }
 
     /// <summary>
-    /// Sets the Hermes license key directly in code.
-    /// This takes the same precedence as configuration; the HERMES_LICENSE environment
-    /// variable will still override this value if set.
-    /// </summary>
-    /// <param name="licenseKey">The license key token.</param>
-    public HermesBlazorAppBuilder WithLicenseKey(string licenseKey)
-    {
-        _hostBuilder.Configuration[LicenseKeyResolver.ConfigKey] = licenseKey;
-        return this;
-    }
-
-    /// <summary>
     /// Builds the application.
     /// </summary>
     [RequiresDynamicCode("Blazor WebView requires dynamic code for component rendering")]
@@ -276,8 +261,6 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             app.RootComponents.Add(component.Type, component.Selector, component.Parameters);
         }
 
-        ReportLicenseStatus(composition.LicenseResult);
-
         return app;
     }
 
@@ -296,7 +279,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             ? new PhysicalFileProvider(wwwrootPath)
             : (IFileProvider)new NullFileProvider();
 
-        var appName = Assembly.GetEntryAssembly()?.GetName().Name ?? "App";
+        var appName = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name ?? "App";
         var fileProvider = explicitFileProvider ?? StaticWebAssetsFileProvider.Create(appName, fallbackProvider);
 
         DevServer.HermesDevServer? devServer = null;
@@ -332,19 +315,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
 
         var serviceProvider = hostBuilder.Services.BuildServiceProvider();
 
-        var licenseKey = LicenseKeyResolver.Resolve(hostBuilder.Configuration);
-        var entryAssemblyName = Assembly.GetEntryAssembly()?.GetName().Name ?? "";
-        var licenseResult = LicenseTokenValidator.Validate(licenseKey, entryAssemblyName, HermesVersionInfo.ReleaseDate);
-
-        return new BuildComposition(serviceProvider, fileProvider, devServer, devBaseUri, licenseResult);
-    }
-
-    private static void ReportLicenseStatus(LicenseValidationResult licenseResult)
-    {
-        if (licenseResult.Status == LicenseStatus.NoKey)
-            LicenseNotice.PrintUnlicensedWarning();
-        else if (licenseResult.Status != LicenseStatus.Valid)
-            LicenseNotice.PrintValidationWarning(licenseResult);
+        return new BuildComposition(serviceProvider, fileProvider, devServer, devBaseUri);
     }
 
     internal static BuildComposition ComposeForTest(HermesBlazorAppBuilder builder, IHermesWindowBackend backend)
@@ -365,8 +336,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         IServiceProvider ServiceProvider,
         IFileProvider FileProvider,
         DevServer.HermesDevServer? DevServer,
-        string? DevBaseUri,
-        LicenseValidationResult LicenseResult);
+        string? DevBaseUri);
 
     private static void ApplyOptions(HermesWindow window, HermesWindowOptions options) =>
         HermesWindowOptions.ApplyTo(window, options);

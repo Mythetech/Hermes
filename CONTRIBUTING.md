@@ -74,4 +74,4 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for an overview of the project structure 
 
 ## License
 
-By contributing to Hermes, you agree that your contributions will be licensed under the [Elastic License 2.0](LICENSE).
+By contributing to Hermes, you agree that your contributions will be licensed under the [MIT License](LICENSE).

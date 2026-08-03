@@ -1,4 +1,4 @@
-// Copyright (c) Mythetech. Licensed under the Elastic License 2.0.
+// Copyright (c) Mythetech. Licensed under the MIT License.
 using Hermes.Blazor;
 using Hermes.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,7 +19,6 @@ public class HermesBlazorAppBuilderTests
         Assert.NotNull(composition.ServiceProvider);
         Assert.NotNull(composition.FileProvider);
         Assert.NotNull(composition.ServiceProvider.GetService<IServiceProvider>());
-        Assert.NotNull(composition.LicenseResult);
     }
 
     [Fact]
