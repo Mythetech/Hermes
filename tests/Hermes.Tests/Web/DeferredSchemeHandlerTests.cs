@@ -31,19 +31,23 @@ public class DeferredSchemeHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WaitsForInner_WhenSetConcurrently()
+    public void Handle_WaitsForInner_WhenSetConcurrently()
     {
-        var handler = new DeferredSchemeHandler(TimeSpan.FromSeconds(5));
-        var setTask = Task.Run(async () =>
+        // A dedicated thread keeps this test independent of thread pool
+        // saturation on loaded CI runners; Task.Run here starved past the
+        // handler timeout and flaked.
+        var handler = new DeferredSchemeHandler(TimeSpan.FromSeconds(30));
+        var setThread = new Thread(() =>
         {
-            await Task.Delay(50);
+            Thread.Sleep(50);
             handler.SetInner(_ => (null, "application/json"));
         });
+        setThread.Start();
 
         var result = handler.Handle("app://localhost/data.json");
 
         Assert.Equal("application/json", result.ContentType);
-        await setTask;
+        setThread.Join();
     }
 
     [Fact]
