@@ -172,7 +172,10 @@ public sealed class SingleInstanceGuardTests
             second.NotifyFirstInstance([$"batch-{i}"]);
         }
 
-        Assert.True(allReceived.Wait(TimeSpan.FromSeconds(10)), "Timed out waiting for all notifications");
+        // The pipe server loop is scheduled on the thread pool; on loaded 2-core
+        // CI runners delivery has measured over 8 seconds while still correct,
+        // so the wait needs generous headroom to stay load-insensitive.
+        Assert.True(allReceived.Wait(TimeSpan.FromSeconds(30)), "Timed out waiting for all notifications");
         Assert.Equal(3, receivedCount);
     }
 }
