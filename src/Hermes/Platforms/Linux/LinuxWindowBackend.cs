@@ -354,9 +354,9 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
             {
                 action();
             }
-            catch
+            catch (Exception ex)
             {
-                // Swallow exceptions in async invoke
+                HermesApplication.RaiseDispatcherUnhandledException(ex);
             }
             finally
             {

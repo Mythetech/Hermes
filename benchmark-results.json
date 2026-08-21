@@ -1,72 +1,73 @@
 {
-  "Timestamp": "2026-01-30T15:11:39.719486Z",
+  "Timestamp": "2026-07-28T21:27:00.778997Z",
   "Environment": {
-    "OS": "Unix 15.7.4",
+    "OS": "Unix 26.3.2",
     "Runtime": ".NET 10.0.1",
-    "ProcessorCount": 10,
-    "MachineName": "Toms-MacBook-Pro"
+    "ProcessorCount": 18,
+    "MachineName": "MacBook-Pro"
   },
   "Hermes": {
     "Name": "Hermes",
     "StartupTimeMs": {
-      "Mean": 514.8566666666667,
-      "Median": 519.51,
-      "Min": 409.52,
-      "Max": 805.46,
-      "StdDev": 69.03584707678465,
-      "P95": 599.5,
+      "Mean": 466.68033333333335,
+      "Median": 465.61,
+      "Min": 436.64,
+      "Max": 539.85,
+      "StdDev": 22.202312629362602,
+      "P95": 502.9,
       "SampleCount": 30
     },
     "PeakMemoryMB": {
-      "Mean": 81.45,
-      "Median": 79.75,
-      "Min": 53.703125,
-      "Max": 106.609375,
-      "StdDev": 8.626350195728982,
-      "P95": 103.9375,
+      "Mean": 163.81197916666667,
+      "Median": 163.84375,
+      "Min": 163.03125,
+      "Max": 164.59375,
+      "StdDev": 0.40165428000974124,
+      "P95": 164.53125,
       "SampleCount": 30
     }
   },
   "Photino": {
     "Name": "Photino",
     "StartupTimeMs": {
-      "Mean": 609.4283333333333,
-      "Median": 588.85,
-      "Min": 514.01,
-      "Max": 1299.52,
-      "StdDev": 135.2828324374488,
-      "P95": 657.47,
+      "Mean": 472.9923333333334,
+      "Median": 464.66,
+      "Min": 441,
+      "Max": 619.31,
+      "StdDev": 33.068861244726705,
+      "P95": 532.48,
       "SampleCount": 30
     },
     "PeakMemoryMB": {
-      "Mean": 80.44947916666666,
-      "Median": 81.6875,
-      "Min": 34.140625,
-      "Max": 88.046875,
-      "StdDev": 8.990021823017035,
-      "P95": 85.3125,
+      "Mean": 170.51197916666666,
+      "Median": 169.46875,
+      "Min": 168.640625,
+      "Max": 174.078125,
+      "StdDev": 1.9430307398259978,
+      "P95": 173.921875,
       "SampleCount": 30
     }
   },
-  "Tauri": {
-    "Name": "Tauri",
+  "PhotinoX": {
+    "Name": "PhotinoX",
     "StartupTimeMs": {
-      "Mean": 483.26666666666665,
-      "Median": 481,
-      "Min": 431,
-      "Max": 578,
-      "StdDev": 31.96650545906399,
-      "P95": 530,
+      "Mean": 463.97833333333335,
+      "Median": 457.65,
+      "Min": 402.02,
+      "Max": 599.6,
+      "StdDev": 37.51169758551492,
+      "P95": 545.92,
       "SampleCount": 30
     },
     "PeakMemoryMB": {
-      "Mean": 54.53541666666667,
-      "Median": 54.578125,
-      "Min": 33.453125,
-      "Max": 64.375,
-      "StdDev": 4.4881870461875915,
-      "P95": 60.265625,
+      "Mean": 160.88697916666666,
+      "Median": 161.921875,
+      "Min": 106.234375,
+      "Max": 166.203125,
+      "StdDev": 10.645961893406607,
+      "P95": 165.875,
       "SampleCount": 30
     }
-  }
+  },
+  "Tauri": null
 }
