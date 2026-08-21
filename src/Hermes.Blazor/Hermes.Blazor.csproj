@@ -17,7 +17,7 @@
 
   <!-- NuGet Package Metadata -->
   <PropertyGroup>
-    <VersionPrefix>1.0.2</VersionPrefix>
+    <VersionPrefix>1.1.0</VersionPrefix>
     <PackageId>Mythetech.Hermes.Blazor</PackageId>
     <Authors>Mythetech</Authors>
     <Description>Blazor integration for Hermes desktop framework</Description>
@@ -59,7 +59,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="10.0.10" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="10.0.11" />
   </ItemGroup>
 
   <ItemGroup>
