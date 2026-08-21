@@ -169,8 +169,10 @@ public class Program
                 }
             });
 
+        // Plain Console.WriteLine: AnsiConsole wraps long lines at the console
+        // width, which mangles stack traces in redirected CI logs
         foreach (var line in failureLog)
-            AnsiConsole.WriteLine(line);
+            Console.WriteLine(line);
 
         results.FailedIterations = failures;
         results.FirstFailure = firstFailure;
@@ -229,8 +231,8 @@ public class Program
             return new IterationResult(null, null, false, null, ["process failed to start"], []);
 
         var readySignal = new TaskCompletionSource<double>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var stdoutTail = new TailBuffer(20);
-        var stderrTail = new TailBuffer(20);
+        var stdoutTail = new OutputBuffer(8, 12);
+        var stderrTail = new OutputBuffer(8, 12);
 
         process.OutputDataReceived += (_, e) =>
         {
@@ -349,9 +351,11 @@ public class Program
             ? $"no ready signal within {ReadyTimeout.TotalSeconds:F0}s (process still running)"
             : $"process exited with code {iteration.ExitCode} before ready";
 
-        var output = string.Join(" | ", iteration.StdErrTail.TakeLast(3));
+        // Head lines, not tail: for .NET crashes the first stderr lines carry
+        // the exception type and message, the tail is just stack frames
+        var output = string.Join(" | ", iteration.StdErrTail.Take(3));
         if (output.Length == 0)
-            output = string.Join(" | ", iteration.StdOutTail.TakeLast(3));
+            output = string.Join(" | ", iteration.StdOutTail.Take(3));
 
         var detail = output.Length == 0 ? reason : $"{reason}; output: {output}";
         return detail.Length <= 500 ? detail : detail[..500];
@@ -519,27 +523,41 @@ internal sealed record IterationResult(
     IReadOnlyList<string> StdErrTail,
     IReadOnlyList<string> StdOutTail);
 
-// Bounded ring of recent output lines; the stdout/stderr event handlers that
-// feed it fire on thread pool threads, so access is locked
-internal sealed class TailBuffer
+// Keeps the first lines and a ring of the most recent lines: .NET crash dumps
+// put "Unhandled exception. Type: message" first, so the head is the part that
+// identifies a failure. The stdout/stderr event handlers that feed it fire on
+// thread pool threads, so access is locked.
+internal sealed class OutputBuffer
 {
-    private readonly int _capacity;
-    private readonly Queue<string> _lines;
+    private readonly int _headCapacity;
+    private readonly int _tailCapacity;
+    private readonly List<string> _head = new();
+    private readonly Queue<string> _tail = new();
     private readonly object _lock = new();
+    private bool _truncated;
 
-    public TailBuffer(int capacity)
+    public OutputBuffer(int headCapacity, int tailCapacity)
     {
-        _capacity = capacity;
-        _lines = new Queue<string>(capacity);
+        _headCapacity = headCapacity;
+        _tailCapacity = tailCapacity;
     }
 
     public void Add(string line)
     {
         lock (_lock)
         {
-            if (_lines.Count == _capacity)
-                _lines.Dequeue();
-            _lines.Enqueue(line);
+            if (_head.Count < _headCapacity)
+            {
+                _head.Add(line);
+                return;
+            }
+
+            if (_tail.Count == _tailCapacity)
+            {
+                _tail.Dequeue();
+                _truncated = true;
+            }
+            _tail.Enqueue(line);
         }
     }
 
@@ -547,7 +565,11 @@ internal sealed class TailBuffer
     {
         lock (_lock)
         {
-            return _lines.ToArray();
+            var result = new List<string>(_head);
+            if (_truncated)
+                result.Add("...");
+            result.AddRange(_tail);
+            return result;
         }
     }
 }
