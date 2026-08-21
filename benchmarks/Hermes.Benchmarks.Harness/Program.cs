@@ -107,6 +107,32 @@ public class Program
         var results = new AppBenchmarkResults { Name = app.Name };
         var startupTimes = new List<double>();
         var memoryReadings = new List<long>();
+        var failures = 0;
+        string? firstFailure = null;
+
+        // Buffered instead of written live because writing through AnsiConsole
+        // while a Status display is active garbles the output
+        var failureLog = new List<string>();
+        const int MaxDetailedFailures = 3;
+
+        void RecordFailure(string label, IterationResult iteration, bool includeDetail)
+        {
+            var reason = iteration.TimedOut
+                ? "no ready signal within timeout (process still running)"
+                : $"process exited with code {iteration.ExitCode} before ready";
+            failureLog.Add($"{app.Name} {label} failed: {reason}");
+
+            if (!includeDetail)
+                return;
+
+            foreach (var line in iteration.StdErrTail)
+                failureLog.Add($"  stderr> {line}");
+            if (iteration.StdErrTail.Count == 0)
+            {
+                foreach (var line in iteration.StdOutTail)
+                    failureLog.Add($"  stdout> {line}");
+            }
+        }
 
         await AnsiConsole.Status()
             .StartAsync($"Running {app.Name} benchmarks...", async ctx =>
@@ -115,7 +141,9 @@ public class Program
                 ctx.Status($"[yellow]Warming up {app.Name}...[/]");
                 for (int i = 0; i < warmupIterations; i++)
                 {
-                    await RunSingleIteration(app);
+                    var warmup = await RunSingleIteration(app);
+                    if (!warmup.StartupTimeMs.HasValue)
+                        RecordFailure($"warmup {i + 1}", warmup, includeDetail: true);
                 }
 
                 // Actual benchmark runs
@@ -123,14 +151,29 @@ public class Program
                 {
                     ctx.Status($"[{app.Color}]{app.Name}[/] iteration {i + 1}/{iterations}");
 
-                    var (startupTime, peakMemory) = await RunSingleIteration(app);
+                    var iteration = await RunSingleIteration(app);
 
-                    if (startupTime.HasValue)
-                        startupTimes.Add(startupTime.Value);
-                    if (peakMemory.HasValue)
-                        memoryReadings.Add(peakMemory.Value);
+                    if (iteration.StartupTimeMs.HasValue)
+                    {
+                        startupTimes.Add(iteration.StartupTimeMs.Value);
+                    }
+                    else
+                    {
+                        failures++;
+                        firstFailure ??= DescribeFailure(iteration);
+                        RecordFailure($"iteration {i + 1}", iteration, includeDetail: failures <= MaxDetailedFailures);
+                    }
+
+                    if (iteration.PeakMemoryBytes.HasValue)
+                        memoryReadings.Add(iteration.PeakMemoryBytes.Value);
                 }
             });
+
+        foreach (var line in failureLog)
+            AnsiConsole.WriteLine(line);
+
+        results.FailedIterations = failures;
+        results.FirstFailure = firstFailure;
 
         // Raw samples stay in iteration order so exported results show distribution
         // shape and whether fast runs cluster after warmup or scatter randomly
@@ -170,7 +213,7 @@ public class Program
         return results;
     }
 
-    private static async Task<(double? StartupTime, long? PeakMemory)> RunSingleIteration(AppDefinition app)
+    private static async Task<IterationResult> RunSingleIteration(AppDefinition app)
     {
         var psi = new ProcessStartInfo(app.Path)
         {
@@ -182,66 +225,72 @@ public class Program
         };
 
         using var process = Process.Start(psi);
-        if (process == null) return (null, null);
+        if (process == null)
+            return new IterationResult(null, null, false, null, ["process failed to start"], []);
 
         var readySignal = new TaskCompletionSource<double>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stdoutTail = new TailBuffer(20);
+        var stderrTail = new TailBuffer(20);
 
         process.OutputDataReceived += (_, e) =>
         {
-            if (e.Data != null && e.Data.StartsWith("BENCHMARK_READY:"))
+            if (e.Data == null)
+                return;
+
+            if (e.Data.StartsWith("BENCHMARK_READY:"))
             {
                 var timeStr = e.Data.Substring("BENCHMARK_READY:".Length).Trim();
                 if (double.TryParse(timeStr, out var time))
                     readySignal.TrySetResult(time);
             }
+            else
+            {
+                stdoutTail.Add(e.Data);
+            }
         };
-        process.ErrorDataReceived += (_, _) => { };
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data != null)
+                stderrTail.Add(e.Data);
+        };
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
         double? startupTime = null;
-        var completed = await Task.WhenAny(readySignal.Task, Task.Delay(ReadyTimeout));
-        if (completed == readySignal.Task)
+        long? peakMemory = null;
+        var timedOut = false;
+        int? exitCode = null;
+
+        // Waiting on exit too means a crashing app fails the iteration immediately
+        // instead of burning the full ready timeout
+        var exitTask = process.WaitForExitAsync();
+        var completed = await Task.WhenAny(readySignal.Task, exitTask, Task.Delay(ReadyTimeout));
+
+        if (completed == exitTask && !readySignal.Task.IsCompleted)
+        {
+            // Give the redirected pipes a moment to drain so the tails capture the crash
+            await Task.Delay(250);
+        }
+
+        if (readySignal.Task.IsCompleted)
         {
             startupTime = await readySignal.Task;
             await Task.Delay(MemorySettleDelay);
+
+            if (!process.HasExited)
+                peakMemory = await SampleMemoryAsync(process);
+        }
+        else if (process.HasExited)
+        {
+            exitCode = process.ExitCode;
+        }
+        else
+        {
+            timedOut = true;
         }
 
-        long? peakMemory = null;
         if (!process.HasExited)
         {
-            try
-            {
-                process.Refresh();
-                // PeakWorkingSet64 doesn't work well on macOS, try multiple approaches
-                peakMemory = process.PeakWorkingSet64;
-                if (peakMemory == 0)
-                    peakMemory = process.WorkingSet64;
-
-                // On macOS, use ps as fallback
-                if (peakMemory == 0 && OperatingSystem.IsMacOS())
-                {
-                    try
-                    {
-                        var psInfo = new ProcessStartInfo("ps", $"-o rss= -p {process.Id}")
-                        {
-                            RedirectStandardOutput = true,
-                            UseShellExecute = false
-                        };
-                        using var psProc = Process.Start(psInfo);
-                        if (psProc != null)
-                        {
-                            var rss = await psProc.StandardOutput.ReadToEndAsync();
-                            if (long.TryParse(rss.Trim(), out var rssKb))
-                                peakMemory = rssKb * 1024; // Convert KB to bytes
-                        }
-                    }
-                    catch { }
-                }
-            }
-            catch { }
-
-            // Kill the process after measuring
             try { process.Kill(); } catch { }
         }
 
@@ -252,7 +301,60 @@ public class Program
         }
         catch (OperationCanceledException) { }
 
-        return (startupTime, peakMemory);
+        return new IterationResult(startupTime, peakMemory, timedOut, exitCode, stderrTail.Snapshot(), stdoutTail.Snapshot());
+    }
+
+    private static async Task<long?> SampleMemoryAsync(Process process)
+    {
+        try
+        {
+            process.Refresh();
+            // PeakWorkingSet64 doesn't work well on macOS, try multiple approaches
+            long peakMemory = process.PeakWorkingSet64;
+            if (peakMemory == 0)
+                peakMemory = process.WorkingSet64;
+
+            // On macOS, use ps as fallback
+            if (peakMemory == 0 && OperatingSystem.IsMacOS())
+            {
+                try
+                {
+                    var psInfo = new ProcessStartInfo("ps", $"-o rss= -p {process.Id}")
+                    {
+                        RedirectStandardOutput = true,
+                        UseShellExecute = false
+                    };
+                    using var psProc = Process.Start(psInfo);
+                    if (psProc != null)
+                    {
+                        var rss = await psProc.StandardOutput.ReadToEndAsync();
+                        if (long.TryParse(rss.Trim(), out var rssKb))
+                            peakMemory = rssKb * 1024; // Convert KB to bytes
+                    }
+                }
+                catch { }
+            }
+
+            return peakMemory > 0 ? peakMemory : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string DescribeFailure(IterationResult iteration)
+    {
+        var reason = iteration.TimedOut
+            ? $"no ready signal within {ReadyTimeout.TotalSeconds:F0}s (process still running)"
+            : $"process exited with code {iteration.ExitCode} before ready";
+
+        var output = string.Join(" | ", iteration.StdErrTail.TakeLast(3));
+        if (output.Length == 0)
+            output = string.Join(" | ", iteration.StdOutTail.TakeLast(3));
+
+        var detail = output.Length == 0 ? reason : $"{reason}; output: {output}";
+        return detail.Length <= 500 ? detail : detail[..500];
     }
 
     private static void DisplayResults(List<AppDefinition> apps, List<AppBenchmarkResults> results)
@@ -409,6 +511,47 @@ public class Program
 
 public record AppDefinition(string Name, string Path, string Color, string BuildHint, string? Args = null);
 
+internal sealed record IterationResult(
+    double? StartupTimeMs,
+    long? PeakMemoryBytes,
+    bool TimedOut,
+    int? ExitCode,
+    IReadOnlyList<string> StdErrTail,
+    IReadOnlyList<string> StdOutTail);
+
+// Bounded ring of recent output lines; the stdout/stderr event handlers that
+// feed it fire on thread pool threads, so access is locked
+internal sealed class TailBuffer
+{
+    private readonly int _capacity;
+    private readonly Queue<string> _lines;
+    private readonly object _lock = new();
+
+    public TailBuffer(int capacity)
+    {
+        _capacity = capacity;
+        _lines = new Queue<string>(capacity);
+    }
+
+    public void Add(string line)
+    {
+        lock (_lock)
+        {
+            if (_lines.Count == _capacity)
+                _lines.Dequeue();
+            _lines.Enqueue(line);
+        }
+    }
+
+    public IReadOnlyList<string> Snapshot()
+    {
+        lock (_lock)
+        {
+            return _lines.ToArray();
+        }
+    }
+}
+
 // Data classes for results
 public class BenchmarkResults
 {
@@ -436,6 +579,8 @@ public class AppBenchmarkResults
     public Statistics? PeakMemoryMB { get; set; }
     public List<double>? StartupSamplesMs { get; set; }
     public List<double>? MemorySamplesMB { get; set; }
+    public int FailedIterations { get; set; }
+    public string? FirstFailure { get; set; }
 }
 
 public class Statistics
