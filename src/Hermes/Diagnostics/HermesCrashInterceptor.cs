@@ -133,11 +133,11 @@ public static class HermesCrashInterceptor
         var result = new List<HermesStackFrame>(frames.Length);
         foreach (var frame in frames)
         {
-            var method = frame.GetMethod();
+            var method = DiagnosticMethodInfo.Create(frame);
             result.Add(new HermesStackFrame(
                 FileName: frame.GetFileName(),
                 MethodName: method?.Name,
-                TypeName: method?.DeclaringType?.FullName,
+                TypeName: method?.DeclaringTypeName,
                 LineNumber: frame.GetFileLineNumber() is > 0 and var line ? line : null,
                 ColumnNumber: frame.GetFileColumnNumber() is > 0 and var col ? col : null));
         }

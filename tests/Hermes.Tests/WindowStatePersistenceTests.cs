@@ -86,6 +86,36 @@ public class WindowStatePersistenceTests
     }
 
     /// <summary>
+    /// Pins the on-disk JSON shape: PascalCase properties and indented output.
+    /// Existing user files must keep deserializing if the serializer implementation changes.
+    /// </summary>
+    [Fact]
+    public void SaveState_PersistsIndentedPascalCaseJson()
+    {
+        var key = $"test-json-shape-{Guid.NewGuid():N}";
+
+        WindowStateStore.Instance.SaveState(key, new WindowState
+        {
+            X = 10, Y = 20, Width = 800, Height = 600, IsMaximized = true
+        });
+
+        var appName = AppDataDirectories.GetApplicationName();
+        var filePath = Path.Combine(AppDataDirectories.GetUserDataPath("WindowState"), $"{appName}.json");
+        var json = File.ReadAllText(filePath);
+
+        Assert.Contains(Environment.NewLine, json);
+
+        var parsed = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, WindowState>>(json);
+        Assert.NotNull(parsed);
+        var state = parsed![key];
+        Assert.Equal(10, state.X);
+        Assert.Equal(20, state.Y);
+        Assert.Equal(800, state.Width);
+        Assert.Equal(600, state.Height);
+        Assert.True(state.IsMaximized);
+    }
+
+    /// <summary>
     /// Valid saved state should restore correctly.
     /// </summary>
     [Fact]

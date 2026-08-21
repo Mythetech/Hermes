@@ -161,6 +161,32 @@ public sealed class CrashInterceptorTests
     }
 
     [Fact]
+    public void BuildContext_ThrownException_PopulatesFrameMethodAndTypeNames()
+    {
+        Exception thrown;
+        try
+        {
+            ThrowForStackCapture();
+            throw new Exception("unreachable");
+        }
+        catch (InvalidOperationException ex)
+        {
+            thrown = ex;
+        }
+
+        var context = HermesCrashInterceptor.BuildCrashContext(thrown, CrashSource.UnhandledException);
+
+        var frame = context.Exception.StackTrace
+            .FirstOrDefault(f => f.MethodName == nameof(ThrowForStackCapture));
+        Assert.NotNull(frame);
+        Assert.Equal(typeof(CrashInterceptorTests).FullName, frame!.TypeName);
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void ThrowForStackCapture()
+        => throw new InvalidOperationException("stack capture");
+
+    [Fact]
     public void BuildContext_NullStackTrace_ReturnsEmptyList()
     {
         var ex = new Exception("no stack");

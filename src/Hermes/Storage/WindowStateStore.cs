@@ -22,11 +22,6 @@ public sealed class WindowStateStore
     private Dictionary<string, WindowState>? _cache;
     private string? _filePath;
 
-    private static readonly JsonSerializerOptions s_jsonOptions = new()
-    {
-        WriteIndented = true
-    };
-
     private WindowStateStore()
     {
     }
@@ -95,7 +90,7 @@ public sealed class WindowStateStore
             }
 
             var json = File.ReadAllText(_filePath);
-            var result = JsonSerializer.Deserialize<Dictionary<string, WindowState>>(json);
+            var result = JsonSerializer.Deserialize(json, WindowStateJsonContext.Default.DictionaryStringWindowState);
             return result ?? new Dictionary<string, WindowState>();
         }
         catch (Exception ex)
@@ -118,7 +113,7 @@ public sealed class WindowStateStore
                 Directory.CreateDirectory(directory);
             }
 
-            var json = JsonSerializer.Serialize(_cache, s_jsonOptions);
+            var json = JsonSerializer.Serialize(_cache, WindowStateJsonContext.Default.DictionaryStringWindowState);
 
             // Write atomically using temp file + rename
             var tempPath = _filePath + ".tmp";
