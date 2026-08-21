@@ -6,6 +6,10 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Hermes.Blazor.DevServer;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+using ApplicationLifetime = Microsoft.Extensions.Hosting.Internal.ApplicationLifetime;
 
 namespace Hermes.Blazor;
 
@@ -23,6 +27,10 @@ public sealed class HermesBlazorApp : IAsyncDisposable
     private readonly bool _windowShownDuringBuild;
     private bool _disposed;
     private readonly HermesDevServer? _devServer;
+    private readonly IHost? _host;
+    private readonly IHostApplicationLifetime? _applicationLifetime;
+    private readonly CancellationTokenSource _hostStartCancellation = new();
+    private Task? _hostStartTask;
 
     internal HermesBlazorApp(
         IServiceProvider services,
@@ -32,7 +40,8 @@ public sealed class HermesBlazorApp : IAsyncDisposable
         HermesSynchronizationContext syncContext,
         string? loadingHtml = null,
         bool windowShownDuringBuild = true,
-        HermesDevServer? devServer = null)
+        HermesDevServer? devServer = null,
+        IHost? host = null)
     {
         _services = services;
         _configuration = configuration;
@@ -42,6 +51,15 @@ public sealed class HermesBlazorApp : IAsyncDisposable
         _loadingHtml = loadingHtml;
         _windowShownDuringBuild = windowShownDuringBuild;
         _devServer = devServer;
+        _host = host;
+        _applicationLifetime = host?.Services.GetService<IHostApplicationLifetime>();
+
+        if (_applicationLifetime is not null)
+        {
+            // ApplicationStopping ties to the beginning of window close, not to
+            // disposal, so services can react while the window still exists.
+            _window.Backend.Closing += NotifyApplicationStopping;
+        }
 
         RootComponents = new HermesRootComponents(_webViewManager);
     }
@@ -94,6 +112,8 @@ public sealed class HermesBlazorApp : IAsyncDisposable
         // measured about 65ms slower to first render on macOS.
         _webViewManager.Navigate("/");
 
+        BeginHostStart();
+
         _window.WaitForClose();
     }
 
@@ -119,9 +139,49 @@ public sealed class HermesBlazorApp : IAsyncDisposable
         // The task is observed in DisposeAsync.
         _initializationTask = InitializeAndNavigateAsync();
 
+        BeginHostStart();
+
         // Phase 3: Enter message loop (required for async continuations)
         _window.WaitForClose();
     }
+
+    private void BeginHostStart()
+    {
+        if (_host is null || _hostStartTask is not null)
+            return;
+
+        // Hosted services start on the thread pool so a slow StartAsync can
+        // never delay first paint or the message loop. The task observes its
+        // own exceptions and is joined in DisposeAsync, so it is not
+        // fire-and-forget.
+        _hostStartTask = Task.Run(() => StartHostAsync(_hostStartCancellation.Token));
+    }
+
+    private async Task StartHostAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            // The window is already visible, which is the honest "started"
+            // signal for a desktop app. Fire ApplicationStarted now instead of
+            // after every hosted service finishes starting; the host's own
+            // NotifyStarted call later is an idempotent no-op.
+            if (_applicationLifetime is ApplicationLifetime applicationLifetime)
+                applicationLifetime.NotifyStarted();
+
+            await _host!.StartAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // Shutdown began before hosted services finished starting.
+        }
+        catch (Exception ex)
+        {
+            HermesLogger.Error($"Hosted services failed to start: {ex}");
+            HermesApplication.RaiseDispatcherUnhandledException(ex);
+        }
+    }
+
+    private void NotifyApplicationStopping() => _applicationLifetime!.StopApplication();
 
     private async Task InitializeAndNavigateAsync()
     {
@@ -198,17 +258,62 @@ public sealed class HermesBlazorApp : IAsyncDisposable
             }
         }
 
+        if (_host is not null)
+            StopHost();
+
         await _webViewManager.DisposeAsync();
         _window.Dispose();
 
         if (_devServer is not null)
             await _devServer.DisposeAsync();
 
-        if (_services is IAsyncDisposable asyncDisposable)
+        if (_host is not null)
+        {
+            // Disposing the host also disposes the service provider it built.
+            if (_host is IAsyncDisposable hostAsyncDisposable)
+                await hostAsyncDisposable.DisposeAsync();
+            else
+                _host.Dispose();
+        }
+        else if (_services is IAsyncDisposable asyncDisposable)
             await asyncDisposable.DisposeAsync();
         else if (_services is IDisposable disposable)
             disposable.Dispose();
+
+        _hostStartCancellation.Dispose();
     }
+
+    private void StopHost()
+    {
+        if (_applicationLifetime is not null)
+            _window.Backend.Closing -= NotifyApplicationStopping;
+
+        _hostStartCancellation.Cancel();
+
+        // Blocking joins, deliberately: the message loop has already exited by
+        // the time the app is disposed, so await continuations posted through
+        // the synchronization context would land in a queue nothing drains.
+        // The start task runs entirely on the thread pool and observes its own
+        // exceptions, so these waits complete without the pump.
+        if (_hostStartTask is not null && !_hostStartTask.Wait(ShutdownTimeout))
+        {
+            HermesLogger.Error(
+                "Hosted services did not finish starting within the shutdown timeout; continuing teardown.");
+        }
+
+        try
+        {
+            _host!.StopAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            HermesLogger.Error($"Hosted services failed to stop cleanly: {ex}");
+        }
+    }
+
+    private TimeSpan ShutdownTimeout =>
+        _host!.Services.GetService<IOptions<HostOptions>>()?.Value.ShutdownTimeout
+            ?? TimeSpan.FromSeconds(5);
 }
 
 /// <summary>

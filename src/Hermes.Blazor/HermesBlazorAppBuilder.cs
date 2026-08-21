@@ -47,6 +47,19 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
                 .AddEnvironmentVariables()
                 .AddCommandLine(args ?? []);
         }
+
+        // The window loop owns process lifetime; the default ConsoleLifetime
+        // would install console signal handling that fights the native loop.
+        _hostBuilder.Services.AddSingleton<IHostLifetime, WindowHostLifetime>();
+
+        // Hosted services start after first paint, so one slow StartAsync must
+        // not serialize the rest, and window close should not hang on a long
+        // shutdown. Both stay user-overridable via Configure<HostOptions>.
+        _hostBuilder.Services.Configure<HostOptions>(options =>
+        {
+            options.ServicesStartConcurrently = true;
+            options.ShutdownTimeout = TimeSpan.FromSeconds(5);
+        });
     }
 
     /// <summary>
@@ -260,7 +273,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             isDevMode: composition.DevServer is not null,
             deferredHandler: deferredHandler);
 
-        var app = new HermesBlazorApp(composition.ServiceProvider, _hostBuilder.Configuration, window, webViewManager, syncContext, _loadingHtml, windowShownDuringBuild: !_deferWindowShow, devServer: composition.DevServer);
+        var app = new HermesBlazorApp(composition.ServiceProvider, _hostBuilder.Configuration, window, webViewManager, syncContext, _loadingHtml, windowShownDuringBuild: !_deferWindowShow, devServer: composition.DevServer, host: composition.Host);
 
         foreach (var component in RootComponents.GetComponents())
         {
@@ -319,14 +332,18 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         hostBuilder.Services.AddSingleton<IHermesMenuProvider>(new HermesMenuProvider(() => window.MenuBar));
         hostBuilder.Services.AddSingleton<IClipboard, DesktopClipboard>();
 
-        var serviceProvider = hostBuilder.Services.BuildServiceProvider();
+        // Build the real IHost rather than a bare provider so AddHostedService
+        // registrations actually start and stop. Same container, same
+        // registrations; the host is started after first paint from the run path.
+        var host = hostBuilder.Build();
+        var serviceProvider = host.Services;
 
         // Still on the worker thread, and the WebView is spawning its content
         // process concurrently: spend the wait pre-JITting the renderer stack
         // so the first real render after attach is cheap.
         RendererWarmup.Run(serviceProvider);
 
-        return new BuildComposition(serviceProvider, fileProvider, devServer, devBaseUri);
+        return new BuildComposition(host, serviceProvider, fileProvider, devServer, devBaseUri);
     }
 
     internal static BuildComposition ComposeForTest(HermesBlazorAppBuilder builder, IHermesWindowBackend backend)
@@ -344,6 +361,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
     }
 
     internal sealed record BuildComposition(
+        IHost Host,
         IServiceProvider ServiceProvider,
         IFileProvider FileProvider,
         DevServer.HermesDevServer? DevServer,
