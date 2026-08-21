@@ -46,6 +46,8 @@ public class Program
         {
             new("Hermes", GetDotnetAppPath(basePath, "HermesTestApp"), "blue",
                 "dotnet build -c Release benchmarks/Hermes.Benchmarks.Apps/HermesTestApp"),
+            new("HermesFast", GetDotnetAppPath(basePath, "HermesTestApp"), "cyan1",
+                "dotnet build -c Release benchmarks/Hermes.Benchmarks.Apps/HermesTestApp", "--fast"),
             new("Photino", GetDotnetAppPath(basePath, "PhotinoTestApp"), "green",
                 "dotnet build -c Release benchmarks/Hermes.Benchmarks.Apps/PhotinoTestApp"),
             new("PhotinoX", GetDotnetAppPath(basePath, "PhotinoXTestApp"), "mediumpurple2",
@@ -89,6 +91,7 @@ public class Program
             Timestamp = DateTime.UtcNow,
             Environment = GetEnvironmentInfo(),
             Hermes = appResults.FirstOrDefault(r => r.Name == "Hermes"),
+            HermesFast = appResults.FirstOrDefault(r => r.Name == "HermesFast"),
             Photino = appResults.FirstOrDefault(r => r.Name == "Photino"),
             PhotinoX = appResults.FirstOrDefault(r => r.Name == "PhotinoX"),
             Tauri = appResults.FirstOrDefault(r => r.Name == "Tauri")
@@ -112,7 +115,7 @@ public class Program
                 ctx.Status($"[yellow]Warming up {app.Name}...[/]");
                 for (int i = 0; i < warmupIterations; i++)
                 {
-                    await RunSingleIteration(app.Path);
+                    await RunSingleIteration(app);
                 }
 
                 // Actual benchmark runs
@@ -120,7 +123,7 @@ public class Program
                 {
                     ctx.Status($"[{app.Color}]{app.Name}[/] iteration {i + 1}/{iterations}");
 
-                    var (startupTime, peakMemory) = await RunSingleIteration(app.Path);
+                    var (startupTime, peakMemory) = await RunSingleIteration(app);
 
                     if (startupTime.HasValue)
                         startupTimes.Add(startupTime.Value);
@@ -129,44 +132,49 @@ public class Program
                 }
             });
 
-        // Calculate statistics
+        // Raw samples stay in iteration order so exported results show distribution
+        // shape and whether fast runs cluster after warmup or scatter randomly
+        results.StartupSamplesMs = startupTimes.ToList();
+        results.MemorySamplesMB = memoryReadings.Select(m => m / (1024.0 * 1024.0)).ToList();
+
         if (startupTimes.Count > 0)
         {
-            startupTimes.Sort();
+            var sortedStartupTimes = startupTimes.OrderBy(t => t).ToList();
             results.StartupTimeMs = new Statistics
             {
-                Mean = startupTimes.Average(),
-                Median = startupTimes[startupTimes.Count / 2],
-                Min = startupTimes.Min(),
-                Max = startupTimes.Max(),
-                StdDev = CalculateStdDev(startupTimes),
-                P95 = startupTimes[(int)(startupTimes.Count * 0.95)],
-                SampleCount = startupTimes.Count
+                Mean = sortedStartupTimes.Average(),
+                Median = sortedStartupTimes[sortedStartupTimes.Count / 2],
+                Min = sortedStartupTimes.Min(),
+                Max = sortedStartupTimes.Max(),
+                StdDev = CalculateStdDev(sortedStartupTimes),
+                P95 = sortedStartupTimes[(int)(sortedStartupTimes.Count * 0.95)],
+                SampleCount = sortedStartupTimes.Count
             };
         }
 
         if (memoryReadings.Count > 0)
         {
-            memoryReadings.Sort();
+            var sortedMemoryReadings = memoryReadings.OrderBy(m => m).ToList();
             results.PeakMemoryMB = new Statistics
             {
-                Mean = memoryReadings.Average() / (1024.0 * 1024.0),
-                Median = memoryReadings[memoryReadings.Count / 2] / (1024.0 * 1024.0),
-                Min = memoryReadings.Min() / (1024.0 * 1024.0),
-                Max = memoryReadings.Max() / (1024.0 * 1024.0),
-                StdDev = CalculateStdDev(memoryReadings.Select(m => (double)m).ToList()) / (1024.0 * 1024.0),
-                P95 = memoryReadings[(int)(memoryReadings.Count * 0.95)] / (1024.0 * 1024.0),
-                SampleCount = memoryReadings.Count
+                Mean = sortedMemoryReadings.Average() / (1024.0 * 1024.0),
+                Median = sortedMemoryReadings[sortedMemoryReadings.Count / 2] / (1024.0 * 1024.0),
+                Min = sortedMemoryReadings.Min() / (1024.0 * 1024.0),
+                Max = sortedMemoryReadings.Max() / (1024.0 * 1024.0),
+                StdDev = CalculateStdDev(sortedMemoryReadings.Select(m => (double)m).ToList()) / (1024.0 * 1024.0),
+                P95 = sortedMemoryReadings[(int)(sortedMemoryReadings.Count * 0.95)] / (1024.0 * 1024.0),
+                SampleCount = sortedMemoryReadings.Count
             };
         }
 
         return results;
     }
 
-    private static async Task<(double? StartupTime, long? PeakMemory)> RunSingleIteration(string appPath)
+    private static async Task<(double? StartupTime, long? PeakMemory)> RunSingleIteration(AppDefinition app)
     {
-        var psi = new ProcessStartInfo(appPath)
+        var psi = new ProcessStartInfo(app.Path)
         {
+            Arguments = app.Args ?? string.Empty,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -399,7 +407,7 @@ public class Program
     }
 }
 
-public record AppDefinition(string Name, string Path, string Color, string BuildHint);
+public record AppDefinition(string Name, string Path, string Color, string BuildHint, string? Args = null);
 
 // Data classes for results
 public class BenchmarkResults
@@ -407,6 +415,7 @@ public class BenchmarkResults
     public DateTime Timestamp { get; set; }
     public EnvironmentInfo? Environment { get; set; }
     public AppBenchmarkResults? Hermes { get; set; }
+    public AppBenchmarkResults? HermesFast { get; set; }
     public AppBenchmarkResults? Photino { get; set; }
     public AppBenchmarkResults? PhotinoX { get; set; }
     public AppBenchmarkResults? Tauri { get; set; }
@@ -425,6 +434,8 @@ public class AppBenchmarkResults
     public string? Name { get; set; }
     public Statistics? StartupTimeMs { get; set; }
     public Statistics? PeakMemoryMB { get; set; }
+    public List<double>? StartupSamplesMs { get; set; }
+    public List<double>? MemorySamplesMB { get; set; }
 }
 
 public class Statistics

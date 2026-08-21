@@ -114,7 +114,7 @@ jobs:
         run: |
           jq -r '
             def fmt: if . == null then "-" else (. * 100 | round / 100) end;
-            ([.Hermes, .Photino, .PhotinoX, .Tauri] | map(select(. != null))) as $apps |
+            ([.Hermes, .HermesFast, .Photino, .PhotinoX, .Tauri] | map(select(. != null))) as $apps |
             "### Benchmark Results (${{ matrix.platform }})",
             "",
             "Environment: \(.Environment.OS), \(.Environment.Runtime), \(.Environment.ProcessorCount) cores",

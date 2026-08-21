@@ -7,8 +7,8 @@ namespace Hermes.Benchmarks;
 /// <summary>
 /// Benchmarks comparing Hermes vs Photino message pump implementations.
 ///
-/// Photino: Unbounded channel, Thread.Sleep(200) on backpressure, no batching
-/// Hermes: Bounded channel, async wait on backpressure, batches up to 16 messages
+/// Photino: Unbounded channel, Thread.Sleep(200) on write failure, no batching
+/// Hermes: Unbounded channel, single reader/writer, batches up to 16 messages
 /// </summary>
 [MemoryDiagnoser]
 [SimpleJob]
@@ -147,8 +147,7 @@ internal sealed class PhotinoStyleMessagePump : IDisposable
 
 /// <summary>
 /// Simulates Hermes's message pump approach from HermesWebViewManager.
-/// - Bounded channel (1024 capacity)
-/// - Async wait on backpressure (no Thread.Sleep)
+/// - Unbounded channel with single reader/writer
 /// - Batches up to 16 messages per UI thread dispatch
 /// </summary>
 internal sealed class HermesStyleMessagePump : IDisposable
@@ -161,12 +160,10 @@ internal sealed class HermesStyleMessagePump : IDisposable
 
     public HermesStyleMessagePump()
     {
-        // Hermes uses bounded channel
-        _channel = Channel.CreateBounded<string>(new BoundedChannelOptions(1024)
+        _channel = Channel.CreateUnbounded<string>(new UnboundedChannelOptions
         {
             SingleReader = true,
             SingleWriter = true,  // Optimized: SendMessage is called from single thread
-            FullMode = BoundedChannelFullMode.Wait,
             AllowSynchronousContinuations = false
         });
 
@@ -177,16 +174,12 @@ internal sealed class HermesStyleMessagePump : IDisposable
     public int BatchesSent => _batchesSent;
 
     /// <summary>
-    /// Hermes's SendMessage implementation (HermesWebViewManager.cs lines 68-76).
+    /// Hermes's SendMessage implementation from HermesWebViewManager.
     /// </summary>
     public void SendMessage(string message)
     {
-        // Non-blocking write - if channel is full, wait asynchronously
-        if (!_channel.Writer.TryWrite(message))
-        {
-            // Slow path: queue the write (fire and forget in benchmarks)
-            _ = _channel.Writer.WriteAsync(message, _cts.Token);
-        }
+        // Unbounded TryWrite only fails once the writer is completed during shutdown
+        _channel.Writer.TryWrite(message);
     }
 
     private async Task RunPumpAsync()
