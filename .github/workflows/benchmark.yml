@@ -119,9 +119,11 @@ jobs:
             "",
             "Environment: \(.Environment.OS), \(.Environment.Runtime), \(.Environment.ProcessorCount) cores",
             "",
-            "| App | Startup Mean (ms) | Startup Median (ms) | Startup P95 (ms) | Memory Mean (MB) | Memory Median (MB) |",
-            "| --- | --- | --- | --- | --- | --- |",
-            ($apps[] | "| \(.Name) | \(.StartupTimeMs.Mean | fmt) | \(.StartupTimeMs.Median | fmt) | \(.StartupTimeMs.P95 | fmt) | \(.PeakMemoryMB.Mean | fmt) | \(.PeakMemoryMB.Median | fmt) |")
+            "| App | Startup Mean (ms) | Startup Median (ms) | Startup P95 (ms) | Memory Mean (MB) | Memory Median (MB) | Failures |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
+            ($apps[] | "| \(.Name) | \(.StartupTimeMs.Mean | fmt) | \(.StartupTimeMs.Median | fmt) | \(.StartupTimeMs.P95 | fmt) | \(.PeakMemoryMB.Mean | fmt) | \(.PeakMemoryMB.Median | fmt) | \(.FailedIterations // 0) |"),
+            "",
+            ($apps[] | select(.FirstFailure != null) | "**\(.Name)** first failure: \(.FirstFailure)")
           ' benchmark-results.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Harness Results
