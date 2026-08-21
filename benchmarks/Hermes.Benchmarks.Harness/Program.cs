@@ -7,9 +7,15 @@ namespace Hermes.Benchmarks.Harness;
 
 public class Program
 {
+    private static readonly TimeSpan ReadyTimeout = TimeSpan.FromSeconds(30);
+
+    // Sampling memory a fixed interval after first render keeps readings comparable
+    // across frameworks without waiting out the full ready timeout every iteration.
+    private static readonly TimeSpan MemorySettleDelay = TimeSpan.FromSeconds(2);
+
     public static async Task Main(string[] args)
     {
-        AnsiConsole.Write(new FigletText("Hermes vs Photino vs Tauri").Color(Color.Purple));
+        AnsiConsole.Write(new FigletText("Hermes Benchmarks").Color(Color.Purple));
         AnsiConsole.MarkupLine("[dim]Startup & Memory Benchmark Harness[/]");
         AnsiConsole.WriteLine();
 
@@ -36,59 +42,56 @@ public class Program
             return;
         }
 
-        var hermesAppPath = Path.Combine(basePath, "HermesTestApp", "bin", "Release", "net10.0", GetExecutableName("HermesTestApp"));
-        var photinoAppPath = Path.Combine(basePath, "PhotinoTestApp", "bin", "Release", "net10.0", GetExecutableName("PhotinoTestApp"));
-        var tauriAppPath = GetTauriAppPath(basePath);
-
-        if (!File.Exists(hermesAppPath))
+        var apps = new List<AppDefinition>
         {
-            AnsiConsole.MarkupLine($"[red]Hermes app not found at: {hermesAppPath}[/]");
-            AnsiConsole.MarkupLine("[yellow]Build with: dotnet build -c Release benchmarks/Hermes.Benchmarks.Apps/HermesTestApp[/]");
-            return;
-        }
+            new("Hermes", GetDotnetAppPath(basePath, "HermesTestApp"), "blue",
+                "dotnet build -c Release benchmarks/Hermes.Benchmarks.Apps/HermesTestApp"),
+            new("Photino", GetDotnetAppPath(basePath, "PhotinoTestApp"), "green",
+                "dotnet build -c Release benchmarks/Hermes.Benchmarks.Apps/PhotinoTestApp"),
+            new("PhotinoX", GetDotnetAppPath(basePath, "PhotinoXTestApp"), "mediumpurple2",
+                "dotnet build -c Release benchmarks/Hermes.Benchmarks.Apps/PhotinoXTestApp"),
+        };
 
-        if (!File.Exists(photinoAppPath))
-        {
-            AnsiConsole.MarkupLine($"[red]Photino app not found at: {photinoAppPath}[/]");
-            AnsiConsole.MarkupLine("[yellow]Build with: dotnet build -c Release benchmarks/Hermes.Benchmarks.Apps/PhotinoTestApp[/]");
-            return;
-        }
-
-        if (includeTauri && !File.Exists(tauriAppPath))
-        {
-            AnsiConsole.MarkupLine($"[red]Tauri app not found at: {tauriAppPath}[/]");
-            AnsiConsole.MarkupLine("[yellow]Build with: cd benchmarks/Hermes.Benchmarks.Apps/TauriTestApp && dotnet publish BlazorApp -c Release -o dist && cargo tauri build[/]");
-            return;
-        }
-
-        AnsiConsole.MarkupLine($"[dim]Hermes app: {hermesAppPath}[/]");
-        AnsiConsole.MarkupLine($"[dim]Photino app: {photinoAppPath}[/]");
         if (includeTauri)
-            AnsiConsole.MarkupLine($"[dim]Tauri app: {tauriAppPath}[/]");
+        {
+            apps.Add(new AppDefinition("Tauri", GetTauriAppPath(basePath), "orange1",
+                "cd benchmarks/Hermes.Benchmarks.Apps/TauriTestApp && dotnet publish BlazorApp -c Release -o dist && cargo tauri build"));
+        }
+
+        foreach (var app in apps)
+        {
+            if (!File.Exists(app.Path))
+            {
+                AnsiConsole.MarkupLine($"[red]{app.Name} app not found at: {app.Path}[/]");
+                AnsiConsole.MarkupLine($"[yellow]Build with: {app.BuildHint}[/]");
+                return;
+            }
+
+            AnsiConsole.MarkupLine($"[dim]{app.Name} app: {app.Path}[/]");
+        }
+
         AnsiConsole.MarkupLine($"[dim]Iterations: {iterations} (warmup: {warmupIterations})[/]");
         AnsiConsole.WriteLine();
 
         // Run benchmarks
-        var hermesResults = await RunStartupBenchmark("Hermes", hermesAppPath, iterations, warmupIterations);
-        var photinoResults = await RunStartupBenchmark("Photino", photinoAppPath, iterations, warmupIterations);
-        AppBenchmarkResults? tauriResults = null;
-
-        if (includeTauri)
+        var appResults = new List<AppBenchmarkResults>();
+        foreach (var app in apps)
         {
-            tauriResults = await RunStartupBenchmark("Tauri", tauriAppPath, iterations, warmupIterations);
+            appResults.Add(await RunStartupBenchmark(app, iterations, warmupIterations));
         }
 
         // Display results
-        DisplayResults(hermesResults, photinoResults, tauriResults);
+        DisplayResults(apps, appResults);
 
         // Export results
         var results = new BenchmarkResults
         {
             Timestamp = DateTime.UtcNow,
             Environment = GetEnvironmentInfo(),
-            Hermes = hermesResults,
-            Photino = photinoResults,
-            Tauri = tauriResults
+            Hermes = appResults.FirstOrDefault(r => r.Name == "Hermes"),
+            Photino = appResults.FirstOrDefault(r => r.Name == "Photino"),
+            PhotinoX = appResults.FirstOrDefault(r => r.Name == "PhotinoX"),
+            Tauri = appResults.FirstOrDefault(r => r.Name == "Tauri")
         };
 
         var jsonPath = "benchmark-results.json";
@@ -96,28 +99,28 @@ public class Program
         AnsiConsole.MarkupLine($"[dim]Results exported to: {jsonPath}[/]");
     }
 
-    private static async Task<AppBenchmarkResults> RunStartupBenchmark(string name, string appPath, int iterations, int warmupIterations)
+    private static async Task<AppBenchmarkResults> RunStartupBenchmark(AppDefinition app, int iterations, int warmupIterations)
     {
-        var results = new AppBenchmarkResults { Name = name };
+        var results = new AppBenchmarkResults { Name = app.Name };
         var startupTimes = new List<double>();
         var memoryReadings = new List<long>();
 
         await AnsiConsole.Status()
-            .StartAsync($"Running {name} benchmarks...", async ctx =>
+            .StartAsync($"Running {app.Name} benchmarks...", async ctx =>
             {
                 // Warmup runs (not counted)
-                ctx.Status($"[yellow]Warming up {name}...[/]");
+                ctx.Status($"[yellow]Warming up {app.Name}...[/]");
                 for (int i = 0; i < warmupIterations; i++)
                 {
-                    await RunSingleIteration(appPath, null, null);
+                    await RunSingleIteration(app.Path);
                 }
 
                 // Actual benchmark runs
                 for (int i = 0; i < iterations; i++)
                 {
-                    ctx.Status($"[blue]{name}[/] iteration {i + 1}/{iterations}");
+                    ctx.Status($"[{app.Color}]{app.Name}[/] iteration {i + 1}/{iterations}");
 
-                    var (startupTime, peakMemory) = await RunSingleIteration(appPath, startupTimes, memoryReadings);
+                    var (startupTime, peakMemory) = await RunSingleIteration(app.Path);
 
                     if (startupTime.HasValue)
                         startupTimes.Add(startupTime.Value);
@@ -160,14 +163,8 @@ public class Program
         return results;
     }
 
-    private static async Task<(double? StartupTime, long? PeakMemory)> RunSingleIteration(
-        string appPath,
-        List<double>? startupTimes,
-        List<long>? memoryReadings)
+    private static async Task<(double? StartupTime, long? PeakMemory)> RunSingleIteration(string appPath)
     {
-        double? startupTime = null;
-        long? peakMemory = null;
-
         var psi = new ProcessStartInfo(appPath)
         {
             UseShellExecute = false,
@@ -179,23 +176,30 @@ public class Program
         using var process = Process.Start(psi);
         if (process == null) return (null, null);
 
-        var outputTask = process.StandardOutput.ReadToEndAsync();
-        var errorTask = process.StandardError.ReadToEndAsync();
+        var readySignal = new TaskCompletionSource<double>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        // Wait for ready signal or timeout
-        var readyReceived = false;
-        var timeout = TimeSpan.FromSeconds(30);
-        var sw = Stopwatch.StartNew();
-
-        while (!readyReceived && sw.Elapsed < timeout && !process.HasExited)
+        process.OutputDataReceived += (_, e) =>
         {
-            await Task.Delay(100);
+            if (e.Data != null && e.Data.StartsWith("BENCHMARK_READY:"))
+            {
+                var timeStr = e.Data.Substring("BENCHMARK_READY:".Length).Trim();
+                if (double.TryParse(timeStr, out var time))
+                    readySignal.TrySetResult(time);
+            }
+        };
+        process.ErrorDataReceived += (_, _) => { };
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
 
-            // Check if we got the ready signal
-            // Note: For a real implementation, we'd want to read output incrementally
+        double? startupTime = null;
+        var completed = await Task.WhenAny(readySignal.Task, Task.Delay(ReadyTimeout));
+        if (completed == readySignal.Task)
+        {
+            startupTime = await readySignal.Task;
+            await Task.Delay(MemorySettleDelay);
         }
 
-        // Capture memory at this point
+        long? peakMemory = null;
         if (!process.HasExited)
         {
             try
@@ -233,155 +237,107 @@ public class Program
             try { process.Kill(); } catch { }
         }
 
-        await Task.WhenAll(outputTask, errorTask);
-        var output = await outputTask;
-
-        // Parse the startup time from output
-        foreach (var line in output.Split('\n'))
+        try
         {
-            if (line.StartsWith("BENCHMARK_READY:"))
-            {
-                var timeStr = line.Substring("BENCHMARK_READY:".Length).Trim();
-                if (double.TryParse(timeStr, out var time))
-                {
-                    startupTime = time;
-                }
-            }
+            using var exitCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await process.WaitForExitAsync(exitCts.Token);
         }
+        catch (OperationCanceledException) { }
 
         return (startupTime, peakMemory);
     }
 
-    private static void DisplayResults(AppBenchmarkResults hermes, AppBenchmarkResults photino, AppBenchmarkResults? tauri)
+    private static void DisplayResults(List<AppDefinition> apps, List<AppBenchmarkResults> results)
     {
-        AnsiConsole.WriteLine();
-        AnsiConsole.Write(new Rule("[bold yellow]Startup Time Results[/]").RuleStyle("grey"));
-        AnsiConsole.WriteLine();
+        var baseline = results.FirstOrDefault(r => r.Name == "Hermes");
+        if (baseline == null) return;
 
-        var startupTable = new Table()
-            .Border(TableBorder.Rounded)
-            .AddColumn("Metric")
-            .AddColumn("[blue]Hermes[/]")
-            .AddColumn("[green]Photino[/]");
+        DisplayMetricTable(
+            "Startup Time Results", "ms", apps, results, baseline,
+            r => r.StartupTimeMs, lowerIsBetter: true);
 
-        if (tauri != null)
-            startupTable.AddColumn("[orange1]Tauri[/]");
-
-        startupTable.AddColumn("Delta (H vs P)");
-        if (tauri != null)
-            startupTable.AddColumn("Delta (H vs T)");
-
-        if (hermes.StartupTimeMs != null && photino.StartupTimeMs != null)
-        {
-            var deltaHP = ((hermes.StartupTimeMs.Mean - photino.StartupTimeMs.Mean) / photino.StartupTimeMs.Mean) * 100;
-            var deltaColorHP = deltaHP < 0 ? "green" : "red";
-
-            var row = new List<string>
-            {
-                "Mean",
-                $"{hermes.StartupTimeMs.Mean:F2} ms",
-                $"{photino.StartupTimeMs.Mean:F2} ms"
-            };
-
-            if (tauri?.StartupTimeMs != null)
-            {
-                row.Add($"{tauri.StartupTimeMs.Mean:F2} ms");
-            }
-
-            row.Add($"[{deltaColorHP}]{deltaHP:+0.0;-0.0}%[/]");
-
-            if (tauri?.StartupTimeMs != null)
-            {
-                var deltaHT = ((hermes.StartupTimeMs.Mean - tauri.StartupTimeMs.Mean) / tauri.StartupTimeMs.Mean) * 100;
-                var deltaColorHT = deltaHT < 0 ? "green" : "red";
-                row.Add($"[{deltaColorHT}]{deltaHT:+0.0;-0.0}%[/]");
-            }
-
-            startupTable.AddRow(row.ToArray());
-
-            // Add other rows without delta columns for cleanliness
-            AddStatRow(startupTable, "Median", hermes.StartupTimeMs.Median, photino.StartupTimeMs.Median, tauri?.StartupTimeMs?.Median, "ms");
-            AddStatRow(startupTable, "Min", hermes.StartupTimeMs.Min, photino.StartupTimeMs.Min, tauri?.StartupTimeMs?.Min, "ms");
-            AddStatRow(startupTable, "Max", hermes.StartupTimeMs.Max, photino.StartupTimeMs.Max, tauri?.StartupTimeMs?.Max, "ms");
-            AddStatRow(startupTable, "StdDev", hermes.StartupTimeMs.StdDev, photino.StartupTimeMs.StdDev, tauri?.StartupTimeMs?.StdDev, "ms");
-            AddStatRow(startupTable, "P95", hermes.StartupTimeMs.P95, photino.StartupTimeMs.P95, tauri?.StartupTimeMs?.P95, "ms");
-            AddStatRowInt(startupTable, "Samples", hermes.StartupTimeMs.SampleCount, photino.StartupTimeMs.SampleCount, tauri?.StartupTimeMs?.SampleCount);
-        }
-
-        AnsiConsole.Write(startupTable);
-
-        AnsiConsole.WriteLine();
-        AnsiConsole.Write(new Rule("[bold yellow]Memory Results[/]").RuleStyle("grey"));
-        AnsiConsole.WriteLine();
-
-        var memoryTable = new Table()
-            .Border(TableBorder.Rounded)
-            .AddColumn("Metric")
-            .AddColumn("[blue]Hermes[/]")
-            .AddColumn("[green]Photino[/]");
-
-        if (tauri != null)
-            memoryTable.AddColumn("[orange1]Tauri[/]");
-
-        memoryTable.AddColumn("Delta (H vs P)");
-        if (tauri != null)
-            memoryTable.AddColumn("Delta (H vs T)");
-
-        if (hermes.PeakMemoryMB != null && photino.PeakMemoryMB != null)
-        {
-            var deltaHP = ((hermes.PeakMemoryMB.Mean - photino.PeakMemoryMB.Mean) / photino.PeakMemoryMB.Mean) * 100;
-            var deltaColorHP = deltaHP < 0 ? "green" : "red";
-
-            var row = new List<string>
-            {
-                "Mean",
-                $"{hermes.PeakMemoryMB.Mean:F2} MB",
-                $"{photino.PeakMemoryMB.Mean:F2} MB"
-            };
-
-            if (tauri?.PeakMemoryMB != null)
-            {
-                row.Add($"{tauri.PeakMemoryMB.Mean:F2} MB");
-            }
-
-            row.Add($"[{deltaColorHP}]{deltaHP:+0.0;-0.0}%[/]");
-
-            if (tauri?.PeakMemoryMB != null)
-            {
-                var deltaHT = ((hermes.PeakMemoryMB.Mean - tauri.PeakMemoryMB.Mean) / tauri.PeakMemoryMB.Mean) * 100;
-                var deltaColorHT = deltaHT < 0 ? "green" : "red";
-                row.Add($"[{deltaColorHT}]{deltaHT:+0.0;-0.0}%[/]");
-            }
-
-            memoryTable.AddRow(row.ToArray());
-
-            AddStatRow(memoryTable, "Median", hermes.PeakMemoryMB.Median, photino.PeakMemoryMB.Median, tauri?.PeakMemoryMB?.Median, "MB");
-            AddStatRow(memoryTable, "Min", hermes.PeakMemoryMB.Min, photino.PeakMemoryMB.Min, tauri?.PeakMemoryMB?.Min, "MB");
-            AddStatRow(memoryTable, "Max", hermes.PeakMemoryMB.Max, photino.PeakMemoryMB.Max, tauri?.PeakMemoryMB?.Max, "MB");
-        }
-
-        AnsiConsole.Write(memoryTable);
+        DisplayMetricTable(
+            "Memory Results", "MB", apps, results, baseline,
+            r => r.PeakMemoryMB, lowerIsBetter: true);
     }
 
-    private static void AddStatRow(Table table, string metric, double hermes, double photino, double? tauri, string unit)
+    private static void DisplayMetricTable(
+        string title,
+        string unit,
+        List<AppDefinition> apps,
+        List<AppBenchmarkResults> results,
+        AppBenchmarkResults baseline,
+        Func<AppBenchmarkResults, Statistics?> metric,
+        bool lowerIsBetter)
     {
-        var row = new List<string> { metric, $"{hermes:F2} {unit}", $"{photino:F2} {unit}" };
-        if (tauri.HasValue)
-            row.Add($"{tauri.Value:F2} {unit}");
-        row.Add(""); // Empty delta column
-        if (tauri.HasValue)
-            row.Add(""); // Empty delta column for Tauri
-        table.AddRow(row.ToArray());
+        AnsiConsole.WriteLine();
+        AnsiConsole.Write(new Rule($"[bold yellow]{title}[/]").RuleStyle("grey"));
+        AnsiConsole.WriteLine();
+
+        var comparisons = results.Where(r => r.Name != baseline.Name && metric(r) != null).ToList();
+        var baselineStats = metric(baseline);
+        if (baselineStats == null) return;
+
+        var table = new Table().Border(TableBorder.Rounded).AddColumn("Metric");
+
+        foreach (var result in results)
+        {
+            var color = apps.First(a => a.Name == result.Name).Color;
+            table.AddColumn($"[{color}]{result.Name}[/]");
+        }
+
+        foreach (var comparison in comparisons)
+            table.AddColumn($"Delta (H vs {comparison.Name})");
+
+        AddStatRow(table, "Mean", unit, results, comparisons, metric, s => s.Mean, baselineStats, lowerIsBetter);
+        AddStatRow(table, "Median", unit, results, comparisons, metric, s => s.Median);
+        AddStatRow(table, "Min", unit, results, comparisons, metric, s => s.Min);
+        AddStatRow(table, "Max", unit, results, comparisons, metric, s => s.Max);
+        AddStatRow(table, "StdDev", unit, results, comparisons, metric, s => s.StdDev);
+        AddStatRow(table, "P95", unit, results, comparisons, metric, s => s.P95);
+
+        var samplesRow = new List<string> { "Samples" };
+        samplesRow.AddRange(results.Select(r => metric(r)?.SampleCount.ToString() ?? "-"));
+        samplesRow.AddRange(comparisons.Select(_ => ""));
+        table.AddRow(samplesRow.ToArray());
+
+        AnsiConsole.Write(table);
     }
 
-    private static void AddStatRowInt(Table table, string metric, int hermes, int photino, int? tauri)
+    private static void AddStatRow(
+        Table table,
+        string label,
+        string unit,
+        List<AppBenchmarkResults> results,
+        List<AppBenchmarkResults> comparisons,
+        Func<AppBenchmarkResults, Statistics?> metric,
+        Func<Statistics, double> value,
+        Statistics? baselineStats = null,
+        bool lowerIsBetter = true)
     {
-        var row = new List<string> { metric, $"{hermes}", $"{photino}" };
-        if (tauri.HasValue)
-            row.Add($"{tauri.Value}");
-        row.Add(""); // Empty delta column
-        if (tauri.HasValue)
-            row.Add(""); // Empty delta column for Tauri
+        var row = new List<string> { label };
+
+        foreach (var result in results)
+        {
+            var stats = metric(result);
+            row.Add(stats == null ? "-" : $"{value(stats):F2} {unit}");
+        }
+
+        foreach (var comparison in comparisons)
+        {
+            if (baselineStats == null)
+            {
+                row.Add("");
+                continue;
+            }
+
+            var comparisonStats = metric(comparison)!;
+            var delta = ((value(baselineStats) - value(comparisonStats)) / value(comparisonStats)) * 100;
+            var isGood = lowerIsBetter ? delta < 0 : delta > 0;
+            var color = isGood ? "green" : "red";
+            row.Add($"[{color}]{delta:+0.0;-0.0}%[/]");
+        }
+
         table.AddRow(row.ToArray());
     }
 
@@ -406,6 +362,11 @@ public class Program
         };
 
         return paths.FirstOrDefault(Directory.Exists);
+    }
+
+    private static string GetDotnetAppPath(string basePath, string appName)
+    {
+        return Path.Combine(basePath, appName, "bin", "Release", "net10.0", GetExecutableName(appName));
     }
 
     private static string GetTauriAppPath(string basePath)
@@ -438,6 +399,8 @@ public class Program
     }
 }
 
+public record AppDefinition(string Name, string Path, string Color, string BuildHint);
+
 // Data classes for results
 public class BenchmarkResults
 {
@@ -445,6 +408,7 @@ public class BenchmarkResults
     public EnvironmentInfo? Environment { get; set; }
     public AppBenchmarkResults? Hermes { get; set; }
     public AppBenchmarkResults? Photino { get; set; }
+    public AppBenchmarkResults? PhotinoX { get; set; }
     public AppBenchmarkResults? Tauri { get; set; }
 }
 

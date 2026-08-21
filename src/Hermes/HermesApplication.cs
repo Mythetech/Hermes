@@ -162,6 +162,35 @@ public static class HermesApplication
     }
 
     /// <summary>
+    /// Raised when an exception escapes a callback dispatched asynchronously to the UI thread,
+    /// for example via BeginInvoke or the Blazor render dispatch path.
+    /// When no handler is attached the exception is logged through
+    /// <see cref="Diagnostics.HermesLogger"/> instead of being lost.
+    /// </summary>
+    public static event Action<Exception>? DispatcherUnhandledException;
+
+    internal static void RaiseDispatcherUnhandledException(Exception exception)
+    {
+        var handler = DispatcherUnhandledException;
+        if (handler is null)
+        {
+            Diagnostics.HermesLogger.Error(
+                "Unhandled exception in asynchronously dispatched UI callback.", exception);
+            return;
+        }
+
+        try
+        {
+            handler(exception);
+        }
+        catch (Exception handlerException)
+        {
+            Diagnostics.HermesLogger.Error(
+                "DispatcherUnhandledException subscriber threw.", handlerException);
+        }
+    }
+
+    /// <summary>
     /// Enable crash interception for the application.
     /// Installs handlers for unhandled exceptions, unobserved task exceptions,
     /// and WebView process crashes. Wire <see cref="Diagnostics.HermesCrashInterceptor.OnCrash"/>

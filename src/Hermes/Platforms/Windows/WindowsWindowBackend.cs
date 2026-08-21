@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text.Json;
 using Hermes.Abstractions;
+using Hermes.Infrastructure;
 using Microsoft.Web.WebView2.Core;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -39,7 +40,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     private CoreWebView2? _webView;
     private TaskCompletionSource? _webViewReady;
 
-    private readonly ConcurrentQueue<(Action Action, TaskCompletionSource Tcs)> _invokeQueue = new();
+    private readonly UiInvokeQueue _invokeQueue = new(HermesApplication.RaiseDispatcherUnhandledException);
     private readonly Dictionary<string, Func<string, (Stream? Content, string? ContentType)>> _customSchemeHandlers = new();
 
     private WindowsMenuBackend? _menuBackend;
@@ -357,9 +358,13 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         }
 
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        _invokeQueue.Enqueue((action, tcs));
+        if (!_invokeQueue.TryEnqueue(action, tcs, out bool wakeupNeeded))
+            throw new ObjectDisposedException(nameof(WindowsWindowBackend));
 
-        PInvoke.PostMessage(_hwnd, WM_USER_INVOKE, 0, 0);
+        if (wakeupNeeded)
+        {
+            PInvoke.PostMessage(_hwnd, WM_USER_INVOKE, 0, 0);
+        }
 
         tcs.Task.GetAwaiter().GetResult();
     }
@@ -372,15 +377,19 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
             return;
         }
 
-        // Fire-and-forget: enqueue without waiting
-        _invokeQueue.Enqueue((action, new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)));
-        PInvoke.PostMessage(_hwnd, WM_USER_INVOKE, 0, 0);
+        // Rejection means the window is tearing down; fire-and-forget work is droppable then.
+        if (_invokeQueue.TryEnqueue(action, completion: null, out bool wakeupNeeded) && wakeupNeeded)
+        {
+            PInvoke.PostMessage(_hwnd, WM_USER_INVOKE, 0, 0);
+        }
     }
 
     public void Dispose()
     {
         if (_isDisposed) return;
         _isDisposed = true;
+
+        _invokeQueue.Dispose();
 
         _webViewController?.Close();
         _webViewController = null;
@@ -589,18 +598,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
     private LRESULT HandleUserInvoke()
     {
-        while (_invokeQueue.TryDequeue(out var item))
-        {
-            try
-            {
-                item.Action();
-                item.Tcs.SetResult();
-            }
-            catch (Exception ex)
-            {
-                item.Tcs.SetException(ex);
-            }
-        }
+        _invokeQueue.Drain();
         return new LRESULT(0);
     }
 

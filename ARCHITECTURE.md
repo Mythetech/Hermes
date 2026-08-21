@@ -5,7 +5,7 @@ Build a native desktop framework for a premium IDE with first-class native menu 
 
 ## Key Decisions
 - **Target .NET 9/10** - Modern framework, no legacy support needed
-- **Minimize native code** - Windows/Linux pure C#, macOS only native layer
+- **Minimize native code** - Windows pure C#, macOS and Linux use thin native shims
 - **Dynamic plugin menus** - First-class support for runtime menu modifications
 
 ## .NET Features We Can Use
@@ -22,8 +22,8 @@ Build a native desktop framework for a premium IDE with first-class native menu 
 | Platform | WebView | Menus | Dialogs | Native Code |
 |----------|---------|-------|---------|-------------|
 | **Windows** | Microsoft.Web.WebView2 (NuGet) | CsWin32 P/Invoke | CsWin32 P/Invoke | **None** |
-| **Linux** | GtkSharp + WebKitGTKSharp | GtkSharp | GtkSharp | **None** |
-| **macOS** | Thin Obj-C wrapper for WebKit | Thin Obj-C for NSMenu | Thin Obj-C for NSPanel | ~3,100 LOC |
+| **Linux** | WebKitGTK via thin C shim | Thin C shim (GTK3) | Thin C shim (GTK3) | ~2,700 LOC |
+| **macOS** | Thin Obj-C wrapper for WebKit | Thin Obj-C for NSMenu | Thin Obj-C for NSPanel | ~3,800 LOC |
 
 ### Key Dependencies
 ```xml
@@ -32,10 +32,10 @@ Build a native desktop framework for a premium IDE with first-class native menu 
 <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.*" />
 
 <!-- Linux -->
-<PackageReference Include="GtkSharp" Version="3.*" />
+<!-- libHermes.Native.Linux.so - small C library (GTK3 + WebKitGTK), called via LibraryImport -->
 
 <!-- macOS -->
-<!-- Hermes.Native.dylib - small Objective-C library -->
+<!-- libHermes.Native.macOS.dylib - small Objective-C library, called via LibraryImport -->
 ```
 
 ---
@@ -49,8 +49,8 @@ Hermes/
 │   │   ├── Abstractions/         # IHermesWindow, IMenuBar, etc.
 │   │   ├── Platforms/
 │   │   │   ├── Windows/          # WebView2 + CsWin32 (pure C#)
-│   │   │   ├── Linux/            # GtkSharp (pure C#)
-│   │   │   └── macOS/            # P/Invoke to Hermes.Native.dylib
+│   │   │   ├── Linux/            # P/Invoke to libHermes.Native.Linux.so
+│   │   │   └── macOS/            # P/Invoke to libHermes.Native.macOS.dylib
 │   │   ├── Menu/                 # NativeMenuBar, NativeContextMenu
 │   │   └── HermesWindow.cs       # Facade over platform backends
 │   │
