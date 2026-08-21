@@ -60,11 +60,13 @@ internal sealed class HermesWebViewManager : WebViewManager
         _baseUri = new Uri(baseUri ?? AppBaseUri);
         _isDevMode = isDevMode;
 
-        _messageChannel = Channel.CreateBounded<string>(new BoundedChannelOptions(1024)
+        // Unbounded with SingleReader gets the runtime's zero-allocation
+        // SingleConsumerUnboundedChannel; Blazor's render-batch acknowledgment
+        // already provides upstream flow control, so a bound adds no safety
+        _messageChannel = Channel.CreateUnbounded<string>(new UnboundedChannelOptions
         {
             SingleReader = true,
             SingleWriter = true,
-            FullMode = BoundedChannelFullMode.Wait,
             AllowSynchronousContinuations = false
         });
 
@@ -99,18 +101,8 @@ internal sealed class HermesWebViewManager : WebViewManager
         if (_disposed)
             return;
 
-        if (!_messageChannel.Writer.TryWrite(message))
-            _ = WriteMessageAsync(message);
-    }
-
-    private async Task WriteMessageAsync(string message)
-    {
-        try
-        {
-            await _messageChannel.Writer.WriteAsync(message, _cts.Token);
-        }
-        catch (ObjectDisposedException) { }
-        catch (OperationCanceledException) { }
+        // Unbounded TryWrite only fails once the writer is completed during shutdown
+        _messageChannel.Writer.TryWrite(message);
     }
 
     private async Task RunMessagePumpAsync(CancellationToken cancellationToken)

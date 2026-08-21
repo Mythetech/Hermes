@@ -1,51 +1,118 @@
 {
-  "Timestamp": "2026-01-27T21:11:10.933879Z",
+  "Timestamp": "2026-08-21T22:06:08.975476Z",
   "Environment": {
-    "OS": "Unix 15.7.4",
+    "OS": "Unix 26.3.2",
     "Runtime": ".NET 10.0.1",
-    "ProcessorCount": 10,
-    "MachineName": "Toms-MacBook-Pro"
+    "ProcessorCount": 18,
+    "MachineName": "MacBook-Pro"
   },
   "Hermes": {
     "Name": "Hermes",
     "StartupTimeMs": {
-      "Mean": 536.7276666666667,
-      "Median": 514.29,
-      "Min": 477.39,
-      "Max": 756.4,
-      "StdDev": 62.54058448848171,
-      "P95": 695.75,
-      "SampleCount": 30
+      "Mean": 456.72,
+      "Median": 456.72,
+      "Min": 456.72,
+      "Max": 456.72,
+      "StdDev": 0,
+      "P95": 456.72,
+      "SampleCount": 1
     },
     "PeakMemoryMB": {
-      "Mean": 0,
-      "Median": 0,
-      "Min": 0,
-      "Max": 0,
+      "Mean": 164,
+      "Median": 164,
+      "Min": 164,
+      "Max": 164,
       "StdDev": 0,
-      "P95": 0,
-      "SampleCount": 30
-    }
+      "P95": 164,
+      "SampleCount": 1
+    },
+    "StartupSamplesMs": [
+      456.72
+    ],
+    "MemorySamplesMB": [
+      164
+    ]
+  },
+  "HermesFast": {
+    "Name": "HermesFast",
+    "StartupTimeMs": {
+      "Mean": 421.97,
+      "Median": 421.97,
+      "Min": 421.97,
+      "Max": 421.97,
+      "StdDev": 0,
+      "P95": 421.97,
+      "SampleCount": 1
+    },
+    "PeakMemoryMB": {
+      "Mean": 164.234375,
+      "Median": 164.234375,
+      "Min": 164.234375,
+      "Max": 164.234375,
+      "StdDev": 0,
+      "P95": 164.234375,
+      "SampleCount": 1
+    },
+    "StartupSamplesMs": [
+      421.97
+    ],
+    "MemorySamplesMB": [
+      164.234375
+    ]
   },
   "Photino": {
     "Name": "Photino",
     "StartupTimeMs": {
-      "Mean": 581.857,
-      "Median": 577.11,
-      "Min": 470.95,
-      "Max": 790.18,
-      "StdDev": 71.05923372501427,
-      "P95": 738.7,
-      "SampleCount": 30
+      "Mean": 461.67,
+      "Median": 461.67,
+      "Min": 461.67,
+      "Max": 461.67,
+      "StdDev": 0,
+      "P95": 461.67,
+      "SampleCount": 1
     },
     "PeakMemoryMB": {
-      "Mean": 0,
-      "Median": 0,
-      "Min": 0,
-      "Max": 0,
+      "Mean": 169.71875,
+      "Median": 169.71875,
+      "Min": 169.71875,
+      "Max": 169.71875,
       "StdDev": 0,
-      "P95": 0,
-      "SampleCount": 30
-    }
-  }
+      "P95": 169.71875,
+      "SampleCount": 1
+    },
+    "StartupSamplesMs": [
+      461.67
+    ],
+    "MemorySamplesMB": [
+      169.71875
+    ]
+  },
+  "PhotinoX": {
+    "Name": "PhotinoX",
+    "StartupTimeMs": {
+      "Mean": 455.7,
+      "Median": 455.7,
+      "Min": 455.7,
+      "Max": 455.7,
+      "StdDev": 0,
+      "P95": 455.7,
+      "SampleCount": 1
+    },
+    "PeakMemoryMB": {
+      "Mean": 160.515625,
+      "Median": 160.515625,
+      "Min": 160.515625,
+      "Max": 160.515625,
+      "StdDev": 0,
+      "P95": 160.515625,
+      "SampleCount": 1
+    },
+    "StartupSamplesMs": [
+      455.7
+    ],
+    "MemorySamplesMB": [
+      160.515625
+    ]
+  },
+  "Tauri": null
 }
