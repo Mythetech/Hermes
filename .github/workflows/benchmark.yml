@@ -1,0 +1,150 @@
+name: On-Demand Benchmarks
+
+on:
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'Platforms to benchmark'
+        type: choice
+        options:
+          - all
+          - windows
+          - macos
+          - linux
+        default: 'all'
+      iterations:
+        description: 'Harness iterations per app'
+        type: number
+        default: 30
+      microbenchmarks:
+        description: 'Also run BenchmarkDotNet microbenchmarks'
+        type: boolean
+        default: false
+
+jobs:
+  benchmark:
+    name: Benchmarks (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            platform: windows
+          - os: ubuntu-latest
+            rid: linux-x64
+            platform: linux
+          - os: macos-latest
+            rid: osx-x64
+            platform: macos
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+
+    steps:
+      - name: Check if platform should run
+        id: check
+        shell: bash
+        run: |
+          if [[ "${{ inputs.platforms }}" != "all" && "${{ inputs.platforms }}" != "${{ matrix.platform }}" ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.skip != 'true'
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.check.outputs.skip != 'true'
+        with:
+          dotnet-version: '10.0.x'
+
+      # macOS: Build native library
+      - name: Build Native Library (macOS)
+        if: steps.check.outputs.skip != 'true' && matrix.os == 'macos-latest'
+        run: make universal
+        working-directory: src/Hermes.Native.macOS
+
+      # Linux: Install dependencies and build native library
+      - name: Install Linux Dependencies
+        if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev cmake xvfb
+
+      - name: Build Native Library (Linux)
+        if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
+        run: ./build.sh
+        working-directory: src/Hermes.Native.Linux
+
+      - name: Start Virtual Display (Linux)
+        if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
+        run: |
+          Xvfb :99 -screen 0 1920x1080x24 &
+          sleep 3
+          echo "DISPLAY=:99" >> $GITHUB_ENV
+          echo "GDK_BACKEND=x11" >> $GITHUB_ENV
+
+      - name: Restore
+        if: steps.check.outputs.skip != 'true'
+        run: dotnet restore
+
+      - name: Build Benchmark Apps
+        if: steps.check.outputs.skip != 'true'
+        shell: bash
+        run: |
+          dotnet build benchmarks/Hermes.Benchmarks.Apps/HermesTestApp -c Release --no-restore
+          dotnet build benchmarks/Hermes.Benchmarks.Apps/PhotinoTestApp -c Release --no-restore
+          dotnet build benchmarks/Hermes.Benchmarks.Apps/PhotinoXTestApp -c Release --no-restore
+          dotnet build benchmarks/Hermes.Benchmarks.Harness -c Release --no-restore
+
+      - name: Run Startup & Memory Harness
+        if: steps.check.outputs.skip != 'true'
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" != "Windows" ]]; then
+            chmod +x benchmarks/Hermes.Benchmarks.Apps/*/bin/Release/net10.0/*TestApp 2>/dev/null || true
+          fi
+          dotnet run --project benchmarks/Hermes.Benchmarks.Harness -c Release --no-build -- --iterations ${{ inputs.iterations }}
+
+      - name: Write Step Summary
+        if: steps.check.outputs.skip != 'true'
+        shell: bash
+        run: |
+          jq -r '
+            def fmt: if . == null then "-" else (. * 100 | round / 100) end;
+            ([.Hermes, .Photino, .PhotinoX, .Tauri] | map(select(. != null))) as $apps |
+            "### Benchmark Results (${{ matrix.platform }})",
+            "",
+            "Environment: \(.Environment.OS), \(.Environment.Runtime), \(.Environment.ProcessorCount) cores",
+            "",
+            "| App | Startup Mean (ms) | Startup Median (ms) | Startup P95 (ms) | Memory Mean (MB) | Memory Median (MB) |",
+            "| --- | --- | --- | --- | --- | --- |",
+            ($apps[] | "| \(.Name) | \(.StartupTimeMs.Mean | fmt) | \(.StartupTimeMs.Median | fmt) | \(.StartupTimeMs.P95 | fmt) | \(.PeakMemoryMB.Mean | fmt) | \(.PeakMemoryMB.Median | fmt) |")
+          ' benchmark-results.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Harness Results
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ matrix.platform }}
+          path: benchmark-results.json
+          if-no-files-found: error
+
+      - name: Run Microbenchmarks
+        if: steps.check.outputs.skip != 'true' && inputs.microbenchmarks
+        run: dotnet run -c Release -- --filter '*'
+        working-directory: benchmarks/Hermes.Benchmarks
+
+      - name: Upload Microbenchmark Results
+        if: steps.check.outputs.skip != 'true' && inputs.microbenchmarks
+        uses: actions/upload-artifact@v4
+        with:
+          name: microbenchmarks-${{ matrix.platform }}
+          path: benchmarks/Hermes.Benchmarks/BenchmarkDotNet.Artifacts/results
+          if-no-files-found: error
+
+      - name: Skipped
+        if: steps.check.outputs.skip == 'true'
+        run: echo "Skipping ${{ matrix.platform }} - not selected"
