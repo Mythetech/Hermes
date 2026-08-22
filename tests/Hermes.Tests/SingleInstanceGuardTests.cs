@@ -178,4 +178,48 @@ public sealed class SingleInstanceGuardTests
         Assert.True(allReceived.Wait(TimeSpan.FromSeconds(30)), "Timed out waiting for all notifications");
         Assert.Equal(3, receivedCount);
     }
+
+    [Fact]
+    public async Task Notification_WhilePreviousMessageStillProcessing_IsNotLost()
+    {
+        var id = $"t{Guid.NewGuid().ToString("N")[..8]}";
+        using var first = new SingleInstanceGuard(id);
+
+        // Holding the handler open keeps the server busy with message 1 while
+        // message 2 is sent. On Unix the second connection lands in the
+        // listening socket's backlog and must survive until the server accepts
+        // it; on Windows the client blocks until the busy instance disconnects,
+        // so the send must run concurrently and the handler is released while
+        // the send is in flight.
+        var releaseHandler = new ManualResetEventSlim(false);
+        var receivedCount = 0;
+        var bothReceived = new ManualResetEventSlim(false);
+        first.SecondInstanceLaunched += _ =>
+        {
+            if (Interlocked.Increment(ref receivedCount) == 2)
+                bothReceived.Set();
+            releaseHandler.Wait(TimeSpan.FromSeconds(10));
+        };
+
+        using (var second = new SingleInstanceGuard(id))
+        {
+            Assert.True(second.NotifyFirstInstance(["first-message"]), "First notification failed to send");
+        }
+
+        SpinWait.SpinUntil(() => Volatile.Read(ref receivedCount) >= 1, TimeSpan.FromSeconds(10));
+        Assert.Equal(1, receivedCount);
+
+        var secondSend = Task.Run(() =>
+        {
+            using var third = new SingleInstanceGuard(id);
+            return third.NotifyFirstInstance(["second-message"]);
+        });
+
+        await Task.Delay(500);
+        releaseHandler.Set();
+
+        Assert.True(await secondSend.WaitAsync(TimeSpan.FromSeconds(10)), "Second notification failed to send");
+        Assert.True(bothReceived.Wait(TimeSpan.FromSeconds(10)), "Second notification was lost while the first was being processed");
+        Assert.Equal(2, receivedCount);
+    }
 }

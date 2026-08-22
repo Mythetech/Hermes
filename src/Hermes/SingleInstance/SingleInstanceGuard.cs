@@ -99,50 +99,76 @@ public sealed class SingleInstanceGuard : IDisposable
     {
         var ct = _listenerCts!.Token;
 
-        while (!_disposed)
+        // One server instance for the guard's lifetime, disconnected between
+        // connections rather than disposed. On Unix, named pipes are domain
+        // sockets: a client connecting while a previous message is still being
+        // processed lands in the listening socket's backlog, and disposing the
+        // instance would close that socket and silently reset the backlogged
+        // connection after the client's write already reported success.
+        NamedPipeServerStream? server = null;
+        try
         {
-            NamedPipeServerStream? server = null;
-            try
+            server = new NamedPipeServerStream(
+                _pipeName,
+                PipeDirection.In,
+                NamedPipeServerStream.MaxAllowedServerInstances,
+                PipeTransmissionMode.Byte,
+                PipeOptions.None);
+
+            while (!_disposed)
             {
-                server = new NamedPipeServerStream(
-                    _pipeName,
-                    PipeDirection.In,
-                    NamedPipeServerStream.MaxAllowedServerInstances,
-                    PipeTransmissionMode.Byte,
-                    PipeOptions.None);
-
-                server.WaitForConnectionAsync(ct).GetAwaiter().GetResult();
-
-                if (_disposed) break;
-
-                using var reader = new StreamReader(server, Encoding.UTF8);
-                var line = reader.ReadLine();
-
-                if (!string.IsNullOrEmpty(line))
+                try
                 {
-                    var args = JsonSerializer.Deserialize(line, SingleInstanceJsonContext.Default.StringArray);
-                    if (args is not null)
+                    server.WaitForConnectionAsync(ct).GetAwaiter().GetResult();
+
+                    if (_disposed) break;
+
+                    using var reader = new StreamReader(server, Encoding.UTF8,
+                        detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
+                    var line = reader.ReadLine();
+
+                    if (!string.IsNullOrEmpty(line))
                     {
-                        HermesLogger.Info($"Received {args.Length} arg(s) from second instance");
-                        SecondInstanceLaunched?.Invoke(args);
+                        var args = JsonSerializer.Deserialize(line, SingleInstanceJsonContext.Default.StringArray);
+                        if (args is not null)
+                        {
+                            HermesLogger.Info($"Received {args.Length} arg(s) from second instance");
+                            SecondInstanceLaunched?.Invoke(args);
+                        }
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    if (!_disposed)
+                    {
+                        HermesLogger.Warning($"Single instance listener error: {ex.Message}");
+                    }
+                }
+                finally
+                {
+                    try
+                    {
+                        if (server.IsConnected)
+                            server.Disconnect();
+                    }
+                    catch
+                    {
+                        // Disconnect can race with a client that already closed
                     }
                 }
             }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                if (!_disposed)
-                {
-                    HermesLogger.Warning($"Single instance listener error: {ex.Message}");
-                }
-            }
-            finally
-            {
-                server?.Dispose();
-            }
+        }
+        catch (Exception ex)
+        {
+            HermesLogger.Warning($"Single instance listener stopped: {ex.Message}");
+        }
+        finally
+        {
+            server?.Dispose();
         }
     }
 
