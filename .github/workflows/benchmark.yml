@@ -71,7 +71,9 @@ jobs:
         if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev cmake xvfb
+          # libnotify4 is not preinstalled on ubuntu-24.04 runners but Photino's
+          # and PhotinoX's prebuilt native libraries link against libnotify.so.4
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev cmake xvfb libnotify4
 
       - name: Build Native Library (Linux)
         if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
@@ -119,9 +121,9 @@ jobs:
             "",
             "Environment: \(.Environment.OS), \(.Environment.Runtime), \(.Environment.ProcessorCount) cores",
             "",
-            "| App | Startup Mean (ms) | Startup Median (ms) | Startup P95 (ms) | Memory Mean (MB) | Memory Median (MB) | Failures |",
-            "| --- | --- | --- | --- | --- | --- | --- |",
-            ($apps[] | "| \(.Name) | \(.StartupTimeMs.Mean | fmt) | \(.StartupTimeMs.Median | fmt) | \(.StartupTimeMs.P95 | fmt) | \(.PeakMemoryMB.Mean | fmt) | \(.PeakMemoryMB.Median | fmt) | \(.FailedIterations // 0) |"),
+            "| App | Window Mean (ms) | Window Median (ms) | Startup Mean (ms) | Startup Median (ms) | Startup P95 (ms) | Memory Mean (MB) | Memory Median (MB) | Failures |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            ($apps[] | "| \(.Name) | \(.WindowTimeMs.Mean | fmt) | \(.WindowTimeMs.Median | fmt) | \(.StartupTimeMs.Mean | fmt) | \(.StartupTimeMs.Median | fmt) | \(.StartupTimeMs.P95 | fmt) | \(.PeakMemoryMB.Mean | fmt) | \(.PeakMemoryMB.Median | fmt) | \(.FailedIterations // 0) |"),
             "",
             ($apps[] | select(.FirstFailure != null) | "**\(.Name)** first failure: \(.FirstFailure)")
           ' benchmark-results.json >> "$GITHUB_STEP_SUMMARY"
