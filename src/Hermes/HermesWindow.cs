@@ -533,6 +533,12 @@ public sealed class HermesWindow : IDisposable
         """;
 
     /// <summary>
+    /// Raised after the window is shown via <see cref="Show"/> or <see cref="ShowWithLoadingState"/>.
+    /// Fires synchronously on the thread that called the show method.
+    /// </summary>
+    public event Action? Shown;
+
+    /// <summary>
     /// Show the window immediately with loading content, then return.
     /// Use this for faster perceived startup when Blazor initialization can happen after the window is visible.
     /// </summary>
@@ -544,6 +550,7 @@ public sealed class HermesWindow : IDisposable
 
         EnsureInitialized();
         _backend.Show();
+        Shown?.Invoke();
     }
 
     /// <summary>
@@ -553,6 +560,7 @@ public sealed class HermesWindow : IDisposable
     {
         EnsureInitialized();
         _backend.Show();
+        Shown?.Invoke();
     }
 
     /// <summary>

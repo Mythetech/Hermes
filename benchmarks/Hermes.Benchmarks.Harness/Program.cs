@@ -106,6 +106,7 @@ public class Program
     {
         var results = new AppBenchmarkResults { Name = app.Name };
         var startupTimes = new List<double>();
+        var windowTimes = new List<double>();
         var memoryReadings = new List<long>();
         var failures = 0;
         string? firstFailure = null;
@@ -156,6 +157,8 @@ public class Program
                     if (iteration.StartupTimeMs.HasValue)
                     {
                         startupTimes.Add(iteration.StartupTimeMs.Value);
+                        if (iteration.WindowTimeMs.HasValue)
+                            windowTimes.Add(iteration.WindowTimeMs.Value);
                     }
                     else
                     {
@@ -180,39 +183,34 @@ public class Program
         // Raw samples stay in iteration order so exported results show distribution
         // shape and whether fast runs cluster after warmup or scatter randomly
         results.StartupSamplesMs = startupTimes.ToList();
+        results.WindowSamplesMs = windowTimes.ToList();
         results.MemorySamplesMB = memoryReadings.Select(m => m / (1024.0 * 1024.0)).ToList();
 
         if (startupTimes.Count > 0)
-        {
-            var sortedStartupTimes = startupTimes.OrderBy(t => t).ToList();
-            results.StartupTimeMs = new Statistics
-            {
-                Mean = sortedStartupTimes.Average(),
-                Median = sortedStartupTimes[sortedStartupTimes.Count / 2],
-                Min = sortedStartupTimes.Min(),
-                Max = sortedStartupTimes.Max(),
-                StdDev = CalculateStdDev(sortedStartupTimes),
-                P95 = sortedStartupTimes[(int)(sortedStartupTimes.Count * 0.95)],
-                SampleCount = sortedStartupTimes.Count
-            };
-        }
+            results.StartupTimeMs = ComputeStatistics(startupTimes);
+
+        if (windowTimes.Count > 0)
+            results.WindowTimeMs = ComputeStatistics(windowTimes);
 
         if (memoryReadings.Count > 0)
-        {
-            var sortedMemoryReadings = memoryReadings.OrderBy(m => m).ToList();
-            results.PeakMemoryMB = new Statistics
-            {
-                Mean = sortedMemoryReadings.Average() / (1024.0 * 1024.0),
-                Median = sortedMemoryReadings[sortedMemoryReadings.Count / 2] / (1024.0 * 1024.0),
-                Min = sortedMemoryReadings.Min() / (1024.0 * 1024.0),
-                Max = sortedMemoryReadings.Max() / (1024.0 * 1024.0),
-                StdDev = CalculateStdDev(sortedMemoryReadings.Select(m => (double)m).ToList()) / (1024.0 * 1024.0),
-                P95 = sortedMemoryReadings[(int)(sortedMemoryReadings.Count * 0.95)] / (1024.0 * 1024.0),
-                SampleCount = sortedMemoryReadings.Count
-            };
-        }
+            results.PeakMemoryMB = ComputeStatistics(results.MemorySamplesMB);
 
         return results;
+    }
+
+    private static Statistics ComputeStatistics(List<double> values)
+    {
+        var sorted = values.OrderBy(v => v).ToList();
+        return new Statistics
+        {
+            Mean = sorted.Average(),
+            Median = sorted[sorted.Count / 2],
+            Min = sorted[0],
+            Max = sorted[^1],
+            StdDev = CalculateStdDev(sorted),
+            P95 = sorted[Math.Min((int)(sorted.Count * 0.95), sorted.Count - 1)],
+            SampleCount = sorted.Count
+        };
     }
 
     private static async Task<IterationResult> RunSingleIteration(AppDefinition app)
@@ -228,9 +226,10 @@ public class Program
 
         using var process = Process.Start(psi);
         if (process == null)
-            return new IterationResult(null, null, false, null, ["process failed to start"], []);
+            return new IterationResult(null, null, null, false, null, ["process failed to start"], []);
 
         var readySignal = new TaskCompletionSource<double>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var windowSignal = new TaskCompletionSource<double>(TaskCreationOptions.RunContinuationsAsynchronously);
         var stdoutTail = new OutputBuffer(8, 12);
         var stderrTail = new OutputBuffer(8, 12);
 
@@ -244,6 +243,12 @@ public class Program
                 var timeStr = e.Data.Substring("BENCHMARK_READY:".Length).Trim();
                 if (double.TryParse(timeStr, out var time))
                     readySignal.TrySetResult(time);
+            }
+            else if (e.Data.StartsWith("BENCHMARK_WINDOW:"))
+            {
+                var timeStr = e.Data.Substring("BENCHMARK_WINDOW:".Length).Trim();
+                if (double.TryParse(timeStr, out var time))
+                    windowSignal.TrySetResult(time);
             }
             else
             {
@@ -303,7 +308,11 @@ public class Program
         }
         catch (OperationCanceledException) { }
 
-        return new IterationResult(startupTime, peakMemory, timedOut, exitCode, stderrTail.Snapshot(), stdoutTail.Snapshot());
+        // The window signal always precedes ready on the same stdout pipe, so if
+        // it fired at all its value is already set by the time we get here
+        double? windowTime = windowSignal.Task.IsCompleted ? windowSignal.Task.Result : null;
+
+        return new IterationResult(startupTime, windowTime, peakMemory, timedOut, exitCode, stderrTail.Snapshot(), stdoutTail.Snapshot());
     }
 
     private static async Task<long?> SampleMemoryAsync(Process process)
@@ -369,6 +378,10 @@ public class Program
         DisplayMetricTable(
             "Startup Time Results", "ms", apps, results, baseline,
             r => r.StartupTimeMs, lowerIsBetter: true);
+
+        DisplayMetricTable(
+            "Window Visible Results", "ms", apps, results, baseline,
+            r => r.WindowTimeMs, lowerIsBetter: true);
 
         DisplayMetricTable(
             "Memory Results", "MB", apps, results, baseline,
@@ -517,6 +530,7 @@ public record AppDefinition(string Name, string Path, string Color, string Build
 
 internal sealed record IterationResult(
     double? StartupTimeMs,
+    double? WindowTimeMs,
     long? PeakMemoryBytes,
     bool TimedOut,
     int? ExitCode,
@@ -598,8 +612,10 @@ public class AppBenchmarkResults
 {
     public string? Name { get; set; }
     public Statistics? StartupTimeMs { get; set; }
+    public Statistics? WindowTimeMs { get; set; }
     public Statistics? PeakMemoryMB { get; set; }
     public List<double>? StartupSamplesMs { get; set; }
+    public List<double>? WindowSamplesMs { get; set; }
     public List<double>? MemorySamplesMB { get; set; }
     public int FailedIterations { get; set; }
     public string? FirstFailure { get; set; }

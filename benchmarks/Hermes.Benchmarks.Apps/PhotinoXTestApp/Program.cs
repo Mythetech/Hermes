@@ -3,24 +3,38 @@ using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Photino.Blazor;
 
-// Start timing from the very beginning
-var sw = Stopwatch.StartNew();
+namespace PhotinoXTestApp;
 
-// Build the app
-var builder = PhotinoBlazorAppBuilder.CreateDefault();
+internal static class Program
+{
+    // Windows requires the main thread to be STA for WebView2
+    [STAThread]
+    private static void Main(string[] args)
+    {
+        // Start timing from the very beginning
+        var sw = Stopwatch.StartNew();
 
-// Register the stopwatch so the component can report render time
-builder.Services.AddSingleton(sw);
+        // Build the app
+        var builder = PhotinoBlazorAppBuilder.CreateDefault();
 
-builder.RootComponents.Add<PhotinoXTestApp.App>("#app");
+        // Register the stopwatch so the component can report render time
+        builder.Services.AddSingleton(sw);
 
-var app = builder.Build();
+        builder.RootComponents.Add<App>("#app");
 
-// Configure window to match Hermes test app
-app.MainWindow
-    .SetTitle("PhotinoX Benchmark App")
-    .SetWidth(800)
-    .SetHeight(600);
+        var app = builder.Build();
 
-// Run the app - will block until window closes
-app.Run();
+        // Configure window to match Hermes test app
+        app.MainWindow
+            .SetTitle("PhotinoX Benchmark App")
+            .SetWidth(800)
+            .SetHeight(600);
+
+        // Photino creates and shows the native window during Run; the PhotinoX
+        // fork renamed WindowCreated to Created
+        app.MainWindow.Created += (_, _) => Console.WriteLine($"BENCHMARK_WINDOW:{sw.Elapsed.TotalMilliseconds:F2}");
+
+        // Run the app - will block until window closes
+        app.Run();
+    }
+}
