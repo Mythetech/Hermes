@@ -269,17 +269,19 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         {
             window.EnsureInitialized();
 
-            // Issue the initial load before the window is shown. WebKitGTK stalls
-            // the UI process for a full 500ms timeout when the WebView is
-            // size-allocated before its first load request: the drawing area
-            // waits synchronously for a web process that has not been initialized
-            // yet, which is what put Linux 400ms behind Photino in the benchmarks.
-            // The deferred scheme handler holds the early request until the
-            // WebViewManager exists. Windows keeps its WebView2 prewarm path: the
-            // controller does not exist before Show() and navigation there is a
-            // different, already optimized sequence. The dev server's base URI is
-            // only known after composition, so hot reload keeps navigating in Run().
-            if (!useDevServer && backend.Platform != HermesPlatform.Windows)
+            // Linux only: issue the initial load before the window is shown.
+            // WebKitGTK stalls the UI process for a full 500ms timeout when the
+            // WebView is size-allocated before its first load request: the drawing
+            // area waits synchronously for a web process that has not been
+            // initialized yet, which is what put Linux 400ms behind Photino in the
+            // benchmarks. The deferred scheme handler holds the early request
+            // until the WebViewManager exists. On macOS, WKWebView does its process
+            // launch work synchronously inside the load call, so loading here only
+            // delays the window (CI measured +57ms window-visible for no startup
+            // gain). Windows keeps its WebView2 prewarm path. The dev server's base
+            // URI is only known after composition, so hot reload keeps navigating
+            // in Run().
+            if (!useDevServer && backend.Platform == HermesPlatform.Linux)
             {
                 backend.NavigateToUrl(HermesWebViewManager.AppBaseUri);
                 navigatedDuringBuild = true;
