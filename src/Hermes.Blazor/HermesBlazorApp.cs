@@ -25,6 +25,7 @@ public sealed class HermesBlazorApp : IAsyncDisposable
     private readonly HermesSynchronizationContext _syncContext;
     private readonly string? _loadingHtml;
     private readonly bool _windowShownDuringBuild;
+    private readonly bool _navigatedDuringBuild;
     private bool _disposed;
     private readonly HermesDevServer? _devServer;
     private readonly IHost? _host;
@@ -41,7 +42,8 @@ public sealed class HermesBlazorApp : IAsyncDisposable
         string? loadingHtml = null,
         bool windowShownDuringBuild = true,
         HermesDevServer? devServer = null,
-        IHost? host = null)
+        IHost? host = null,
+        bool navigatedDuringBuild = false)
     {
         _services = services;
         _configuration = configuration;
@@ -50,6 +52,7 @@ public sealed class HermesBlazorApp : IAsyncDisposable
         _syncContext = syncContext;
         _loadingHtml = loadingHtml;
         _windowShownDuringBuild = windowShownDuringBuild;
+        _navigatedDuringBuild = navigatedDuringBuild;
         _devServer = devServer;
         _host = host;
         _applicationLifetime = host?.Services.GetService<IHostApplicationLifetime>();
@@ -109,8 +112,13 @@ public sealed class HermesBlazorApp : IAsyncDisposable
         // Navigate synchronously before entering the loop: issuing the native
         // load request now lets the WebView kick off its content process spawn
         // while the loop is still starting. Deferring this into the loop was
-        // measured about 65ms slower to first render on macOS.
-        _webViewManager.Navigate("/");
+        // measured about 65ms slower to first render on macOS. When Build()
+        // already issued the load before showing the window, a second request
+        // for the same URI would only reload the page.
+        if (!_navigatedDuringBuild)
+        {
+            _webViewManager.Navigate("/");
+        }
 
         BeginHostStart();
 

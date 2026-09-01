@@ -15,9 +15,6 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
-        // Check for fast startup mode via env var or arg
-        var useFastStartup = args.Contains("--fast") || Environment.GetEnvironmentVariable("HERMES_FAST_STARTUP") == "1";
-
         // Start timing from the very beginning
         var sw = Stopwatch.StartNew();
 
@@ -26,11 +23,6 @@ internal static class Program
 
         // Build the app with minimal configuration
         var builder = HermesBlazorAppBuilder.CreateSlimBuilder();
-
-        if (useFastStartup)
-        {
-            builder.UseFastStartup();
-        }
 
         builder.ConfigureWindow(options =>
         {
@@ -46,20 +38,11 @@ internal static class Program
 
         var app = builder.Build();
 
+        // Build() shows the window synchronously, so it is visible by now
+        Console.WriteLine($"BENCHMARK_WINDOW:{sw.Elapsed.TotalMilliseconds:F2}");
+
         // Run the app - will block until window closes
-        if (useFastStartup)
-        {
-            // Fast startup defers Show into RunWithFastStartup, so window
-            // visibility has to be reported from the Shown event
-            app.MainWindow.Shown += () => Console.WriteLine($"BENCHMARK_WINDOW:{sw.Elapsed.TotalMilliseconds:F2}");
-            app.RunWithFastStartup();
-        }
-        else
-        {
-            // Build() shows the window synchronously, so it is visible by now
-            Console.WriteLine($"BENCHMARK_WINDOW:{sw.Elapsed.TotalMilliseconds:F2}");
-            app.Run();
-        }
+        app.Run();
 
         app.DisposeAsync().AsTask().GetAwaiter().GetResult();
     }

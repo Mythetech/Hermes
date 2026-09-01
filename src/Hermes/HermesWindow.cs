@@ -745,7 +745,7 @@ public sealed class HermesWindow : IDisposable
 
     #region Private Helpers
 
-    private void EnsureInitialized()
+    internal void EnsureInitialized()
     {
         if (_initialized) return;
 
