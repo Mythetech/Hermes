@@ -1,5 +1,5 @@
 {
-  "Timestamp": "2026-07-28T21:27:00.778997Z",
+  "Timestamp": "2026-08-26T01:15:52.920868Z",
   "Environment": {
     "OS": "Unix 26.3.2",
     "Runtime": ".NET 10.0.1",
@@ -8,66 +8,111 @@
   },
   "Hermes": {
     "Name": "Hermes",
-    "StartupTimeMs": {
-      "Mean": 466.68033333333335,
-      "Median": 465.61,
-      "Min": 436.64,
-      "Max": 539.85,
-      "StdDev": 22.202312629362602,
-      "P95": 502.9,
-      "SampleCount": 30
-    },
-    "PeakMemoryMB": {
-      "Mean": 163.81197916666667,
-      "Median": 163.84375,
-      "Min": 163.03125,
-      "Max": 164.59375,
-      "StdDev": 0.40165428000974124,
-      "P95": 164.53125,
-      "SampleCount": 30
-    }
+    "StartupTimeMs": null,
+    "WindowTimeMs": null,
+    "PeakMemoryMB": null,
+    "StartupSamplesMs": [],
+    "WindowSamplesMs": [],
+    "MemorySamplesMB": [],
+    "FailedIterations": 1,
+    "FirstFailure": "process exited with code 154 before ready; output: The application to execute does not exist: \u0027/Users/tombrewer/Code/Hermes/benchmarks/Hermes.Benchmarks.Apps/HermesTestApp/bin/Release/net10.0/HermesTestApp.dll\u0027.",
+    "Failed": true
+  },
+  "HermesFast": {
+    "Name": "HermesFast",
+    "StartupTimeMs": null,
+    "WindowTimeMs": null,
+    "PeakMemoryMB": null,
+    "StartupSamplesMs": [],
+    "WindowSamplesMs": [],
+    "MemorySamplesMB": [],
+    "FailedIterations": 1,
+    "FirstFailure": "process exited with code 154 before ready; output: The application to execute does not exist: \u0027/Users/tombrewer/Code/Hermes/benchmarks/Hermes.Benchmarks.Apps/HermesTestApp/bin/Release/net10.0/HermesTestApp.dll\u0027.",
+    "Failed": true
   },
   "Photino": {
     "Name": "Photino",
     "StartupTimeMs": {
-      "Mean": 472.9923333333334,
-      "Median": 464.66,
-      "Min": 441,
-      "Max": 619.31,
-      "StdDev": 33.068861244726705,
-      "P95": 532.48,
-      "SampleCount": 30
+      "Mean": 404.86,
+      "Median": 404.86,
+      "Min": 404.86,
+      "Max": 404.86,
+      "StdDev": 0,
+      "P95": 404.86,
+      "SampleCount": 1
+    },
+    "WindowTimeMs": {
+      "Mean": 196.55,
+      "Median": 196.55,
+      "Min": 196.55,
+      "Max": 196.55,
+      "StdDev": 0,
+      "P95": 196.55,
+      "SampleCount": 1
     },
     "PeakMemoryMB": {
-      "Mean": 170.51197916666666,
-      "Median": 169.46875,
-      "Min": 168.640625,
-      "Max": 174.078125,
-      "StdDev": 1.9430307398259978,
-      "P95": 173.921875,
-      "SampleCount": 30
-    }
+      "Mean": 165.03125,
+      "Median": 165.03125,
+      "Min": 165.03125,
+      "Max": 165.03125,
+      "StdDev": 0,
+      "P95": 165.03125,
+      "SampleCount": 1
+    },
+    "StartupSamplesMs": [
+      404.86
+    ],
+    "WindowSamplesMs": [
+      196.55
+    ],
+    "MemorySamplesMB": [
+      165.03125
+    ],
+    "FailedIterations": 0,
+    "FirstFailure": null,
+    "Failed": false
   },
   "PhotinoX": {
     "Name": "PhotinoX",
     "StartupTimeMs": {
-      "Mean": 463.97833333333335,
-      "Median": 457.65,
-      "Min": 402.02,
-      "Max": 599.6,
-      "StdDev": 37.51169758551492,
-      "P95": 545.92,
-      "SampleCount": 30
+      "Mean": 393.57,
+      "Median": 393.57,
+      "Min": 393.57,
+      "Max": 393.57,
+      "StdDev": 0,
+      "P95": 393.57,
+      "SampleCount": 1
+    },
+    "WindowTimeMs": {
+      "Mean": 190.95,
+      "Median": 190.95,
+      "Min": 190.95,
+      "Max": 190.95,
+      "StdDev": 0,
+      "P95": 190.95,
+      "SampleCount": 1
     },
     "PeakMemoryMB": {
-      "Mean": 160.88697916666666,
-      "Median": 161.921875,
-      "Min": 106.234375,
-      "Max": 166.203125,
-      "StdDev": 10.645961893406607,
-      "P95": 165.875,
-      "SampleCount": 30
-    }
+      "Mean": 157.3125,
+      "Median": 157.3125,
+      "Min": 157.3125,
+      "Max": 157.3125,
+      "StdDev": 0,
+      "P95": 157.3125,
+      "SampleCount": 1
+    },
+    "StartupSamplesMs": [
+      393.57
+    ],
+    "WindowSamplesMs": [
+      190.95
+    ],
+    "MemorySamplesMB": [
+      157.3125
+    ],
+    "FailedIterations": 0,
+    "FirstFailure": null,
+    "Failed": false
   },
   "Tauri": null
 }

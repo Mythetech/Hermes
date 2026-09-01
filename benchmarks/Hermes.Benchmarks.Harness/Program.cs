@@ -13,7 +13,7 @@ public class Program
     // across frameworks without waiting out the full ready timeout every iteration.
     private static readonly TimeSpan MemorySettleDelay = TimeSpan.FromSeconds(2);
 
-    public static async Task Main(string[] args)
+    public static async Task<int> Main(string[] args)
     {
         AnsiConsole.Write(new FigletText("Hermes Benchmarks").Color(Color.Purple));
         AnsiConsole.MarkupLine("[dim]Startup & Memory Benchmark Harness[/]");
@@ -39,7 +39,7 @@ public class Program
         if (basePath == null)
         {
             AnsiConsole.MarkupLine("[red]Could not find benchmark apps. Build them first with 'dotnet build -c Release'[/]");
-            return;
+            return 1;
         }
 
         var apps = new List<AppDefinition>
@@ -66,7 +66,7 @@ public class Program
             {
                 AnsiConsole.MarkupLine($"[red]{app.Name} app not found at: {app.Path}[/]");
                 AnsiConsole.MarkupLine($"[yellow]Build with: {app.BuildHint}[/]");
-                return;
+                return 1;
             }
 
             AnsiConsole.MarkupLine($"[dim]{app.Name} app: {app.Path}[/]");
@@ -100,6 +100,24 @@ public class Program
         var jsonPath = "benchmark-results.json";
         await File.WriteAllTextAsync(jsonPath, JsonSerializer.Serialize(results, new JsonSerializerOptions { WriteIndented = true }));
         AnsiConsole.MarkupLine($"[dim]Results exported to: {jsonPath}[/]");
+
+        // Results are displayed and exported first so a red run still produces
+        // the table and artifacts, but any failed iteration must fail the
+        // process: a green exit with failures buried in the summary is how a
+        // 30/30 Windows failure once shipped unnoticed.
+        var failedApps = appResults
+            .Where(r => r.Failed)
+            .Select(r => r.Name)
+            .ToList();
+
+        if (failedApps.Count > 0)
+        {
+            AnsiConsole.MarkupLine(
+                $"[red]Benchmark run failed: {string.Join(", ", failedApps)} had failed or missing iterations.[/]");
+            return 1;
+        }
+
+        return 0;
     }
 
     private static async Task<AppBenchmarkResults> RunStartupBenchmark(AppDefinition app, int iterations, int warmupIterations)
@@ -619,6 +637,13 @@ public class AppBenchmarkResults
     public List<double>? MemorySamplesMB { get; set; }
     public int FailedIterations { get; set; }
     public string? FirstFailure { get; set; }
+
+    /// <summary>
+    /// The single definition of a failed run for this app: any failed iteration,
+    /// or no successful samples at all. The harness exit code derives from this;
+    /// keep it in sync with what RunStartupBenchmark records.
+    /// </summary>
+    public bool Failed => FailedIterations > 0 || (StartupSamplesMs?.Count ?? 0) == 0;
 }
 
 public class Statistics

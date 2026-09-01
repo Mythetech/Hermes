@@ -110,10 +110,22 @@ jobs:
           fi
           dotnet run --project benchmarks/Hermes.Benchmarks.Harness -c Release --no-build -- --iterations ${{ inputs.iterations }}
 
+      # always() so a red harness run (nonzero exit on failed iterations)
+      # still renders the table and failure details in the job summary.
+      # skip == 'false' (not != 'true') so a failed check step, which leaves
+      # the output empty, does not run this for a platform that never set up.
+      # The harness exits before writing benchmark-results.json when a binary
+      # is missing, so guard the jq or its error would bury the real failure.
       - name: Write Step Summary
-        if: steps.check.outputs.skip != 'true'
+        if: always() && steps.check.outputs.skip == 'false'
         shell: bash
         run: |
+          if [[ ! -f benchmark-results.json ]]; then
+            echo "### Benchmark Results (${{ matrix.platform }})" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Harness exited before producing results (missing app binary or build failure); see the job log." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           jq -r '
             def fmt: if . == null then "-" else (. * 100 | round / 100) end;
             ([.Hermes, .HermesFast, .Photino, .PhotinoX, .Tauri] | map(select(. != null))) as $apps |
@@ -128,21 +140,25 @@ jobs:
             ($apps[] | select(.FirstFailure != null) | "**\(.Name)** first failure: \(.FirstFailure)")
           ' benchmark-results.json >> "$GITHUB_STEP_SUMMARY"
 
+      # warn, not error: on an early harness exit the JSON never exists and the
+      # job is already red; a second failure here would just add noise
       - name: Upload Harness Results
-        if: steps.check.outputs.skip != 'true'
+        if: always() && steps.check.outputs.skip == 'false'
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-results-${{ matrix.platform }}
           path: benchmark-results.json
-          if-no-files-found: error
+          if-no-files-found: warn
 
+      # always() so a red harness run does not skip the microbenchmarks; they
+      # are an independent BenchmarkDotNet suite, not downstream of the harness
       - name: Run Microbenchmarks
-        if: steps.check.outputs.skip != 'true' && inputs.microbenchmarks
+        if: always() && steps.check.outputs.skip == 'false' && inputs.microbenchmarks
         run: dotnet run -c Release -- --filter '*'
         working-directory: benchmarks/Hermes.Benchmarks
 
       - name: Upload Microbenchmark Results
-        if: steps.check.outputs.skip != 'true' && inputs.microbenchmarks
+        if: always() && steps.check.outputs.skip == 'false' && inputs.microbenchmarks
         uses: actions/upload-artifact@v4
         with:
           name: microbenchmarks-${{ matrix.platform }}

@@ -8,9 +8,12 @@ namespace HermesTestApp;
 
 internal static class Program
 {
-    // Windows requires the main thread to be STA for WebView2
+    // Windows requires the main thread to be STA for WebView2. The attribute
+    // must sit on a synchronous Main: on an async Main the runtime reads the
+    // apartment from the compiler-generated entry point wrapper, which does
+    // not inherit [STAThread], so the thread silently starts MTA.
     [STAThread]
-    private static async Task Main(string[] args)
+    private static void Main(string[] args)
     {
         // Check for fast startup mode via env var or arg
         var useFastStartup = args.Contains("--fast") || Environment.GetEnvironmentVariable("HERMES_FAST_STARTUP") == "1";
@@ -58,6 +61,6 @@ internal static class Program
             app.Run();
         }
 
-        await app.DisposeAsync();
+        app.DisposeAsync().AsTask().GetAwaiter().GetResult();
     }
 }

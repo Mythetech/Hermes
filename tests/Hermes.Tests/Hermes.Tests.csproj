@@ -20,4 +20,13 @@
     <ProjectReference Include="..\..\src\Hermes.Web\Hermes.Web.csproj" />
   </ItemGroup>
 
+  <!-- Build-order only: BenchmarkAppEntryPointTests reads these apps' compiled
+       entry points from PE metadata, so building the tests must build the apps.
+       No assembly reference is taken; their dependencies stay out of the tests. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\benchmarks\Hermes.Benchmarks.Apps\HermesTestApp\HermesTestApp.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\benchmarks\Hermes.Benchmarks.Apps\PhotinoTestApp\PhotinoTestApp.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\benchmarks\Hermes.Benchmarks.Apps\PhotinoXTestApp\PhotinoXTestApp.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+
 </Project>

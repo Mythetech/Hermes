@@ -86,7 +86,10 @@ jobs:
         if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev cmake xvfb
+          # libnotify4 is not preinstalled on ubuntu-24.04 runners but Photino's
+          # and PhotinoX's prebuilt native libraries (benchmark app smoke boot)
+          # link against libnotify.so.4
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev cmake xvfb libnotify4
 
       - name: Build Native Library (Linux)
         if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
@@ -369,6 +372,36 @@ jobs:
 
           echo ""
           echo "PASS: Integration tests completed successfully"
+
+      # Smoke boot for the benchmark apps, reusing this job's toolchain and
+      # native builds: a benchmark app that cannot reach ready fails the PR
+      # that broke it, not a benchmark run days later. The harness exits
+      # nonzero on any failed iteration or missing binary. One warmup boot
+      # absorbs cold-start slowness on shared runners; warmup failures are
+      # logged but do not fail the run.
+      - name: Build Benchmark Apps
+        if: steps.check.outputs.skip != 'true'
+        shell: bash
+        run: |
+          dotnet build benchmarks/Hermes.Benchmarks.Apps/HermesTestApp -c Release --no-restore
+          dotnet build benchmarks/Hermes.Benchmarks.Apps/PhotinoTestApp -c Release --no-restore
+          dotnet build benchmarks/Hermes.Benchmarks.Apps/PhotinoXTestApp -c Release --no-restore
+          dotnet build benchmarks/Hermes.Benchmarks.Harness -c Release --no-restore
+
+      - name: Smoke Boot Benchmark Apps
+        if: steps.check.outputs.skip != 'true'
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            Xvfb :99 -screen 0 1920x1080x24 2>/dev/null &
+            sleep 2
+            export DISPLAY=:99
+            export GDK_BACKEND=x11
+          fi
+          if [[ "${{ runner.os }}" != "Windows" ]]; then
+            chmod +x benchmarks/Hermes.Benchmarks.Apps/*/bin/Release/net10.0/*TestApp 2>/dev/null || true
+          fi
+          dotnet run --project benchmarks/Hermes.Benchmarks.Harness -c Release --no-build -- --iterations 1 --warmup 1
 
       - name: Skipped
         if: steps.check.outputs.skip == 'true'

@@ -69,6 +69,23 @@ public sealed class ScenarioRunner : IDisposable
         {
             Console.WriteLine("Auto-exiting after test completion...");
 
+            // The clean-close path exits through Main returning normally, so
+            // the verdict must ride Environment.ExitCode; without this a
+            // failed run exits 0 and only the force-exit backstop below ever
+            // carried the failure.
+            var exitCode = TestReporter.AllPassed ? 0 : 1;
+            Environment.ExitCode = exitCode;
+
+            // On macOS, closing the last window makes AppKit call
+            // [NSApp terminate:], which hard-exits the process with code 0
+            // before Main's epilogue runs, masking any failure. A failing run
+            // must therefore exit managed before initiating the native close.
+            if (OperatingSystem.IsMacOS() && exitCode != 0)
+            {
+                Console.WriteLine("Exiting before close: macOS native terminate would mask the failure exit code.");
+                Environment.Exit(exitCode);
+            }
+
             // Close must happen on the UI thread
             _app.MainWindow.Invoke(() => _app.MainWindow.Close());
 
@@ -78,7 +95,7 @@ public sealed class ScenarioRunner : IDisposable
             {
                 await Task.Delay(5000);
                 Console.WriteLine("Force-exiting: Close() did not terminate the app within 5s.");
-                Environment.Exit(TestReporter.AllPassed ? 0 : 1);
+                Environment.Exit(exitCode);
             });
         }
     }
