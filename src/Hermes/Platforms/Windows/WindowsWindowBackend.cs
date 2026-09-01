@@ -67,7 +67,10 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         {
             throw new InvalidOperationException(
                 "Hermes requires the main thread to be an STA thread. " +
-                "Add [STAThread] attribute to your Main method or use 'async Task Main(string[] args)' with [STAThread].");
+                "Add [STAThread] to a synchronous Main method. Note that [STAThread] on an " +
+                "'async Task Main' does not work: the attribute is not inherited by the " +
+                "compiler-generated entry point, so the thread starts MTA. Use a synchronous " +
+                "Main and block on trailing async work with GetAwaiter().GetResult().");
         }
 
         _options = options;
