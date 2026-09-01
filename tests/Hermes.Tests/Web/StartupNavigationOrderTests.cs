@@ -15,12 +15,10 @@ namespace Hermes.Tests.Web;
 /// </summary>
 public class StartupNavigationOrderTests
 {
-    [Theory]
-    [InlineData(HermesPlatform.Linux)]
-    [InlineData(HermesPlatform.macOS)]
-    public void Build_NavigatesToAppBaseUri_BeforeShowingTheWindow(HermesPlatform platform)
+    [Fact]
+    public void Build_NavigatesToAppBaseUri_BeforeShowingTheWindow_OnLinux()
     {
-        var backend = new RecordingWindowBackend { Platform = platform };
+        var backend = new RecordingWindowBackend { Platform = HermesPlatform.Linux };
 
         using var app = BuildApp(backend);
 
@@ -36,10 +34,17 @@ public class StartupNavigationOrderTests
         Assert.Equal(HermesWebViewManager.AppBaseUri, backend.Recording.Navigations.Single());
     }
 
-    [Fact]
-    public void Build_DoesNotNavigate_OnWindows()
+    /// <summary>
+    /// WKWebView does its process launch work synchronously inside the load call,
+    /// so loading before Show() only delays the window on macOS (CI measured +57ms
+    /// window-visible with no startup gain). Windows keeps the WebView2 prewarm path.
+    /// </summary>
+    [Theory]
+    [InlineData(HermesPlatform.Windows)]
+    [InlineData(HermesPlatform.macOS)]
+    public void Build_DoesNotNavigateBeforeShow_OnWindowsAndMacOS(HermesPlatform platform)
     {
-        var backend = new RecordingWindowBackend { Platform = HermesPlatform.Windows };
+        var backend = new RecordingWindowBackend { Platform = platform };
 
         using var app = BuildApp(backend);
 
@@ -61,7 +66,7 @@ public class StartupNavigationOrderTests
     [Fact]
     public void Run_IssuesTheLoad_WhenBuildDidNotNavigate()
     {
-        var backend = new RecordingWindowBackend { Platform = HermesPlatform.Windows };
+        var backend = new RecordingWindowBackend { Platform = HermesPlatform.macOS };
         using var app = BuildApp(backend);
 
         RunApp(app);
