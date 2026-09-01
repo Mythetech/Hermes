@@ -205,10 +205,21 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
     /// </summary>
     [RequiresDynamicCode("Blazor WebView requires dynamic code for component rendering")]
     [RequiresUnreferencedCode("Blazor WebView uses reflection for component instantiation")]
-    public HermesBlazorApp Build()
-    {
-        var window = new HermesWindow();
+    public HermesBlazorApp Build() => BuildCore(new HermesWindow());
 
+    /// <summary>
+    /// Runs the real Build() sequence against a supplied backend so tests can
+    /// assert the order of native calls made during startup.
+    /// </summary>
+    [RequiresDynamicCode("Blazor WebView requires dynamic code for component rendering")]
+    [RequiresUnreferencedCode("Blazor WebView uses reflection for component instantiation")]
+    internal static HermesBlazorApp BuildForTest(HermesBlazorAppBuilder builder, IHermesWindowBackend backend) =>
+        builder.BuildCore(new HermesWindow(backend));
+
+    [RequiresDynamicCode("Blazor WebView requires dynamic code for component rendering")]
+    [RequiresUnreferencedCode("Blazor WebView uses reflection for component instantiation")]
+    private HermesBlazorApp BuildCore(HermesWindow window)
+    {
         if (_windowConfiguration is not null)
         {
             var options = new HermesWindowOptions();
@@ -253,8 +264,27 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
 
         backend.InitializeApplication();
 
+        var navigatedDuringBuild = false;
         if (!_deferWindowShow)
         {
+            window.EnsureInitialized();
+
+            // Issue the initial load before the window is shown. WebKitGTK stalls
+            // the UI process for a full 500ms timeout when the WebView is
+            // size-allocated before its first load request: the drawing area
+            // waits synchronously for a web process that has not been initialized
+            // yet, which is what put Linux 400ms behind Photino in the benchmarks.
+            // The deferred scheme handler holds the early request until the
+            // WebViewManager exists. Windows keeps its WebView2 prewarm path: the
+            // controller does not exist before Show() and navigation there is a
+            // different, already optimized sequence. The dev server's base URI is
+            // only known after composition, so hot reload keeps navigating in Run().
+            if (!useDevServer && backend.Platform != HermesPlatform.Windows)
+            {
+                backend.NavigateToUrl(HermesWebViewManager.AppBaseUri);
+                navigatedDuringBuild = true;
+            }
+
             window.Show();
         }
 
@@ -273,7 +303,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             isDevMode: composition.DevServer is not null,
             deferredHandler: deferredHandler);
 
-        var app = new HermesBlazorApp(composition.ServiceProvider, _hostBuilder.Configuration, window, webViewManager, syncContext, _loadingHtml, windowShownDuringBuild: !_deferWindowShow, devServer: composition.DevServer, host: composition.Host);
+        var app = new HermesBlazorApp(composition.ServiceProvider, _hostBuilder.Configuration, window, webViewManager, syncContext, _loadingHtml, windowShownDuringBuild: !_deferWindowShow, devServer: composition.DevServer, host: composition.Host, navigatedDuringBuild: navigatedDuringBuild);
 
         foreach (var component in RootComponents.GetComponents())
         {

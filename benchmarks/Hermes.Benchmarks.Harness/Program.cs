@@ -46,8 +46,6 @@ public class Program
         {
             new("Hermes", GetDotnetAppPath(basePath, "HermesTestApp"), "blue",
                 "dotnet build -c Release benchmarks/Hermes.Benchmarks.Apps/HermesTestApp"),
-            new("HermesFast", GetDotnetAppPath(basePath, "HermesTestApp"), "cyan1",
-                "dotnet build -c Release benchmarks/Hermes.Benchmarks.Apps/HermesTestApp", "--fast"),
             new("Photino", GetDotnetAppPath(basePath, "PhotinoTestApp"), "green",
                 "dotnet build -c Release benchmarks/Hermes.Benchmarks.Apps/PhotinoTestApp"),
             new("PhotinoX", GetDotnetAppPath(basePath, "PhotinoXTestApp"), "mediumpurple2",
@@ -91,7 +89,6 @@ public class Program
             Timestamp = DateTime.UtcNow,
             Environment = GetEnvironmentInfo(),
             Hermes = appResults.FirstOrDefault(r => r.Name == "Hermes"),
-            HermesFast = appResults.FirstOrDefault(r => r.Name == "HermesFast"),
             Photino = appResults.FirstOrDefault(r => r.Name == "Photino"),
             PhotinoX = appResults.FirstOrDefault(r => r.Name == "PhotinoX"),
             Tauri = appResults.FirstOrDefault(r => r.Name == "Tauri")
@@ -612,7 +609,6 @@ public class BenchmarkResults
     public DateTime Timestamp { get; set; }
     public EnvironmentInfo? Environment { get; set; }
     public AppBenchmarkResults? Hermes { get; set; }
-    public AppBenchmarkResults? HermesFast { get; set; }
     public AppBenchmarkResults? Photino { get; set; }
     public AppBenchmarkResults? PhotinoX { get; set; }
     public AppBenchmarkResults? Tauri { get; set; }
