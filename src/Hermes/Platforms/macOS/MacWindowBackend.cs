@@ -154,6 +154,11 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
         MacNative.WindowWaitForClose(_windowHandle);
     }
 
+    public void RunEventLoopIteration(int maxWaitMilliseconds)
+    {
+        MacNative.AppRunLoopIteration(Math.Max(0, maxWaitMilliseconds) / 1000.0);
+    }
+
     #endregion
 
     #region Window Properties

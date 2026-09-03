@@ -147,44 +147,85 @@ public interface IMenuBackend
 
 ## Startup Sequence
 
-Startup is structured as two concurrent tracks to minimize time to first render:
+Startup overlaps the WebView's native boot with managed composition so time to
+first render approaches the platform floor plus one render:
 
-1. **UI thread (native track)**: registers custom scheme names, pays native
-   application initialization explicitly via `IHermesWindowBackend.InitializeApplication()`
-   (NSApplication registration on macOS, about 100ms cold), then creates and
-   shows the window. All native, COM, AppKit, and GTK calls stay on this thread,
-   which preserves the Windows STA apartment model.
-2. **Worker thread (managed track)**: service registration, `BuildServiceProvider`,
-   and dev server startup run concurrently via `Task.Run` inside
-   `HermesBlazorAppBuilder.Build()`. The worker then pre-JITs the Blazor
-   renderer stack (`RendererWarmup`) while the WebView spawns its content
-   process. The worker touches no native state and never posts to the UI
-   synchronization context, and the UI thread blocks only on the worker, so
-   the join cannot deadlock.
+1. **UI thread (native track)**: creates a lazy handle to the static file
+   provider (the manifest read itself runs on the composition worker, about
+   11ms cold when it ran on the UI thread) and an `InlinedHostPage` over it,
+   registers the `StartupSchemeHandler` for the app scheme,
+   attaches a `WebMessageBuffer`, starts the composition worker, pays native
+   application initialization explicitly via
+   `IHermesWindowBackend.InitializeApplication()` (NSApplication registration on
+   macOS, about 100ms cold), and creates the window. Linux issues the initial
+   load before `Show()` because WebKitGTK stalls the UI process for a full
+   500ms timeout when the WebView is size-allocated before its first load;
+   macOS and Windows show the window and leave the initial load to `Run()`,
+   because loading before `Show()` measured +57ms window-visible on CI and
+   loading right after `Show()` inside `Build()` measured 31 to 45ms of
+   synchronous WKWebView work moved into `Build()` with no first-render gain
+   (local, 2026-09-03). It then pumps the native loop in 5ms slices through
+   `RunEventLoopIteration` until the worker finishes; on fast hardware
+   composition is often already complete by then and the pump runs zero
+   iterations.
+2. **Worker thread (managed track)**: service registration, `IHost` build, and
+   dev server startup run concurrently via `Task.Run` inside
+   `HermesBlazorAppBuilder.Build()`, followed by `RendererWarmup`. The worker
+   touches no native state and never posts to the UI synchronization context,
+   so pumping cannot deadlock on it.
 
-The synchronization context is installed on the UI thread before `Show()`:
-on Windows, WebView2 initialization continuations capture it, and without it
-they resume on thread pool threads and controller calls fail COM apartment
+On Linux, where `Build()` issues the load before `Show()`, and in the macOS and
+Linux dev-server-failure fallback, the WebView requests the host page and its
+script while the UI thread pumps, through the `StartupSchemeHandler`, which
+answers from the `EarlyStaticContentHandler` (host page with
+`blazor.webview.js` inlined, static files from the same provider, 404
+otherwise) and never blocks. On macOS and Windows the default path navigates in
+`Run()`, after the manager exists, so during `Build()` the pump's job there is
+to let WebKit's application-level setup and WebView2's controller
+initialization (whose continuations are dispatched through the pump) progress.
+Windows under hot reload registers nothing for the app scheme, because an
+`http://*` WebView2 filter would intercept the dev server; macOS and Linux
+register the `app` scheme even under hot reload, so a dev server that fails to
+start and falls back to release mode still has a handler. IPC messages the page
+script sends in that window are held by the `WebMessageBuffer`. When composition
+completes, `HermesWebViewManager` installs itself as the inner scheme handler
+and the buffered messages are replayed into it in arrival order, all on the UI
+thread with no pump in between, so nothing is delivered twice or out of order.
+`Run()` adds the root components and, on macOS and Windows, issues the initial
+load; on Linux the page can already be attached by then and renders
+immediately.
+
+`RunEventLoopIteration` services run loop sources on macOS
+(`CFRunLoopRunInMode`, no NSEvents, so no window or input callbacks fire before
+the app is ready), the default GLib main context on Linux, and the thread
+message queue on Windows (a `WM_QUIT` seen during startup is re-posted for the
+main loop). Hot reload and `UseFastStartup` keep the previous sequence: the dev
+server's base URI is only known after composition, and fast startup defers the
+window to `Run()`.
+
+The synchronization context is installed on the UI thread before `Show()`: on
+Windows, WebView2 initialization continuations capture it, and without it they
+resume on thread pool threads and controller calls fail COM apartment
 marshaling.
 
-A `DeferredSchemeHandler` bridges the gap between early window creation and the
-`HermesWebViewManager` existing: scheme requests that arrive before the manager
-is constructed block briefly and then delegate once the real handler is
-installed. On Windows this is unnecessary because handlers resolve per request
-from a dictionary. When serving the host page, `HostPageInliner` embeds
-blazor.webview.js directly into the HTML, removing scheme round trips.
+Set `HERMES_STARTUP_TRACE=1` to print `HERMES_PHASE:<name>:<ms since process
+start>` lines for `app-initialized`, `window-initialized`, `window-shown`,
+`navigate`, `composition-done`, `manager-ready`, `first-request`,
+`first-message`, and `first-render-batch`. `first-request` precedes
+`composition-done` only where the load is issued in `Build()` and composition
+outlasts native init; on fast hardware `composition-done` lands before the
+pump starts.
 
 Orderings that look tempting but measured slower, do not revisit without new
 evidence: deferring navigation into the message loop (about 65ms slower,
-WebKit needs the early native load request), and creating the WKWebView before
+WebKit needs the early native load request), creating the WKWebView before
 NSApplication initialization (32ms slower in a standalone spike, WebKit's
-process spawn only progresses while the run loop is serviced).
-
-`Run()` navigates synchronously before entering the message loop (issuing the
-native load request early lets the WebView kick off its content process spawn),
-while root component initialization rides the loop through posted continuations.
-The initialization task is stored and observed in `DisposeAsync`, never
-fire-and-forget.
+process spawn only progresses while the run loop is serviced), and issuing the
+macOS load inside `Build()` right after `Show()` (31 to 45ms of synchronous
+WKWebView work moved into `Build()`, no first-render gain, measured
+2026-09-03). The UI thread pumps instead of blocking on the composition join
+so WebKit's process launch and WebView2's initialization can progress whenever
+composition outlasts native init; locally the join measured close to zero.
 
 Threading contract for contributors: native object creation and access belong
 on the UI thread only; pure managed composition may run on workers.

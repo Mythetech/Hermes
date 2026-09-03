@@ -403,6 +403,26 @@ jobs:
           fi
           dotnet run --project benchmarks/Hermes.Benchmarks.Harness -c Release --no-build -- --iterations 1 --warmup 1
 
+      # Diagnostic only: prints where startup time goes on this runner. The
+      # harness swallows app stdout on success, so boot the Hermes app once
+      # directly with the trace enabled.
+      - name: Startup Phase Trace (Hermes)
+        if: steps.check.outputs.skip != 'true'
+        shell: bash
+        continue-on-error: true
+        run: |
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            export DISPLAY=:99
+            export GDK_BACKEND=x11
+          fi
+          APP=benchmarks/Hermes.Benchmarks.Apps/HermesTestApp/bin/Release/net10.0/HermesTestApp
+          if [[ "${{ runner.os }}" == "Windows" ]]; then APP="$APP.exe"; fi
+          HERMES_STARTUP_TRACE=1 "$APP" > phase-trace.log 2>&1 &
+          pid=$!
+          for _ in $(seq 1 600); do grep -q BENCHMARK_READY phase-trace.log 2>/dev/null && break; sleep 0.05; done
+          kill $pid 2>/dev/null || true
+          grep -E "HERMES_PHASE|BENCHMARK" phase-trace.log || echo "no phase lines captured"
+
       - name: Skipped
         if: steps.check.outputs.skip == 'true'
         run: echo "Skipping ${{ matrix.platform }} - not selected"

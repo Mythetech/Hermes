@@ -14,6 +14,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Components.WebView;
 using Hermes.Blazor.DevServer;
+using Hermes.Blazor.Diagnostics;
+using Hermes.Blazor.Startup;
 
 namespace Hermes.Blazor;
 
@@ -233,27 +235,47 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
 
         var useDevServer = DevServer.DevServerDetector.ShouldUseDevServer(_forceDevServer);
 
+        // The static web assets manifest read costs about 11ms cold on the UI
+        // thread (measured 2026-09-03), so it runs on the composition worker as it
+        // did before the early handler existed. The early handler resolves the
+        // provider only when a request arrives, which in the default path happens
+        // only on Linux, and the manager receives the instance after the join.
+        var fileProviderHandle = CreateFileProviderHandle(this);
+
         // Custom schemes must be registered by name before Initialize() on macOS and
-        // Linux. The deferred handler lets the window show and the WebView start up
-        // before the WebViewManager exists; any request that races the manager blocks
-        // inside Handle() until SetInner() is called. Windows resolves handlers per
-        // request from a dictionary (see WindowsWindowBackend.RegisterCustomScheme),
-        // so the manager registers directly there and no deferred handler is needed.
-        DeferredSchemeHandler? deferredHandler = null;
-        if (!OperatingSystem.IsWindows())
+        // Linux, and on Windows before the WebView2 controller finishes initializing
+        // so its resource filter is in place. The startup handler serves the host
+        // page and static assets straight from the file provider until the
+        // WebViewManager exists, then forwards to it. It never blocks, which is what
+        // lets the UI thread pump native events while composition runs. On Windows
+        // the app scheme is http, and registering it during hot reload would install
+        // a WebView2 http://* resource filter that intercepts the dev server's own
+        // requests, so Windows registers nothing in that mode; on macOS and Linux the
+        // app scheme can only be registered before Initialize(), and when the dev
+        // server fails to start, ComposeServices falls back to release mode, so the
+        // handler must already be registered for the manager to install itself into
+        // (this is today's behavior with the deferred handler).
+        StartupSchemeHandler? startupHandler = null;
+        InlinedHostPage? hostPage = null;
+        if (!useDevServer || !OperatingSystem.IsWindows())
         {
-            deferredHandler = new DeferredSchemeHandler(TimeSpan.FromSeconds(5));
-            backend.RegisterCustomScheme("app", deferredHandler.Handle);
+            hostPage = new InlinedHostPage(fileProviderHandle, _hostPage);
+            startupHandler = new StartupSchemeHandler(new EarlyStaticContentHandler(fileProviderHandle, hostPage));
+            backend.RegisterCustomScheme(new Uri(HermesWebViewManager.AppBaseUri).Scheme, startupHandler.Handle);
         }
 
+        // The page script can send its first IPC message while composition is still
+        // running; hold those messages and hand them to the manager in order.
+        using var messageBuffer = new WebMessageBuffer(backend);
+
         // Managed composition runs on a worker while this (UI) thread pays for
-        // native application and window initialization. The worker touches no
-        // native state and never posts to the UI synchronization context, and
-        // this thread blocks only on the worker, so the join below cannot
-        // deadlock.
+        // native application and window initialization, then pumps the native
+        // loop until the worker finishes. The worker touches no native state and
+        // never posts to the UI synchronization context, so pumping cannot
+        // deadlock on it.
         var compositionTask = Task.Run(() => ComposeServices(
             window, backend, syncContext, dispatcher, useDevServer, _hostPage,
-            _fileProvider, _hostBuilder));
+            fileProviderHandle, _hostBuilder));
 
         // The synchronization context must be installed before Show(). On
         // Windows, Show() starts async WebView2 initialization whose await
@@ -263,34 +285,48 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         SynchronizationContext.SetSynchronizationContext(syncContext);
 
         backend.InitializeApplication();
+        StartupLog.Phase("app-initialized");
 
         var navigatedDuringBuild = false;
         if (!_deferWindowShow)
         {
             window.EnsureInitialized();
+            StartupLog.Phase("window-initialized");
 
             // Linux only: issue the initial load before the window is shown.
             // WebKitGTK stalls the UI process for a full 500ms timeout when the
             // WebView is size-allocated before its first load request: the drawing
             // area waits synchronously for a web process that has not been
             // initialized yet, which is what put Linux 400ms behind Photino in the
-            // benchmarks. The deferred scheme handler holds the early request
-            // until the WebViewManager exists. On macOS, WKWebView does its process
-            // launch work synchronously inside the load call, so loading here only
-            // delays the window (CI measured +57ms window-visible for no startup
-            // gain). Windows keeps its WebView2 prewarm path. The dev server's base
-            // URI is only known after composition, so hot reload keeps navigating
-            // in Run().
+            // benchmarks. The startup handler answers the early request without
+            // the WebViewManager. On macOS, WKWebView does its process launch work
+            // synchronously inside the load call: loading before Show() delays the
+            // window (CI measured +57ms window-visible), and loading right after
+            // Show() inside Build() moves 31 to 45ms of that work into Build() with
+            // no first-render gain (measured locally, 2026-09-03), so macOS and
+            // Windows keep navigating in Run(). The dev server's base URI is only
+            // known after composition, so hot reload keeps navigating in Run() too.
             if (!useDevServer && backend.Platform == HermesPlatform.Linux)
             {
                 backend.NavigateToUrl(HermesWebViewManager.AppBaseUri);
+                StartupLog.Phase("navigate");
                 navigatedDuringBuild = true;
             }
 
             window.Show();
+            StartupLog.Phase("window-shown");
         }
 
+        // Pump native events while the worker composes. WebKit's process launch
+        // and WebView2's initialization chain only progress when the UI loop is
+        // serviced, and the startup scheme handler and message buffer above make
+        // it safe to service it before the manager exists. With the window
+        // deferred (UseFastStartup) nothing native is in flight, so the plain
+        // join below is enough.
+        if (!_deferWindowShow)
+            PumpUntilComplete(backend, compositionTask);
         var composition = compositionTask.GetAwaiter().GetResult();
+        StartupLog.Phase("composition-done");
 
         var jsComponents = new JSComponentConfigurationStore();
 
@@ -303,7 +339,13 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             _hostPage,
             baseUri: composition.DevBaseUri,
             isDevMode: composition.DevServer is not null,
-            deferredHandler: deferredHandler);
+            startupHandler: startupHandler,
+            hostPage: hostPage);
+
+        // The manager subscribed in its constructor and nothing pumps between that
+        // and this drain, so no message is delivered twice or out of order.
+        messageBuffer.Drain(webViewManager.ReplayMessage);
+        StartupLog.Phase("manager-ready");
 
         var app = new HermesBlazorApp(composition.ServiceProvider, _hostBuilder.Configuration, window, webViewManager, syncContext, _loadingHtml, windowShownDuringBuild: !_deferWindowShow, devServer: composition.DevServer, host: composition.Host, navigatedDuringBuild: navigatedDuringBuild);
 
@@ -322,16 +364,14 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         HermesDispatcher dispatcher,
         bool useDevServer,
         string hostPage,
-        IFileProvider? explicitFileProvider,
+        Lazy<IFileProvider> fileProviderHandle,
         HostApplicationBuilder hostBuilder)
     {
-        var wwwrootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
-        var fallbackProvider = Directory.Exists(wwwrootPath)
-            ? new PhysicalFileProvider(wwwrootPath)
-            : (IFileProvider)new NullFileProvider();
+        // Forcing it here, on the worker, keeps the manifest read off the UI
+        // thread whenever the worker reaches this point before a request does.
+        var resolvedFileProvider = fileProviderHandle.Value;
 
-        var appName = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name ?? "App";
-        var fileProvider = explicitFileProvider ?? StaticWebAssetsFileProvider.Create(appName, fallbackProvider);
+        var wwwrootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
 
         DevServer.HermesDevServer? devServer = null;
         string? devBaseUri = null;
@@ -375,7 +415,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         // so the first real render after attach is cheap.
         RendererWarmup.Run(serviceProvider);
 
-        return new BuildComposition(host, serviceProvider, fileProvider, devServer, devBaseUri);
+        return new BuildComposition(host, serviceProvider, resolvedFileProvider, devServer, devBaseUri);
     }
 
     internal static BuildComposition ComposeForTest(HermesBlazorAppBuilder builder, IHermesWindowBackend backend)
@@ -388,7 +428,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             window, backend, syncContext, dispatcher,
             useDevServer: false,
             hostPage: builder._hostPage,
-            explicitFileProvider: builder._fileProvider,
+            fileProviderHandle: CreateFileProviderHandle(builder),
             hostBuilder: builder._hostBuilder);
     }
 
@@ -399,8 +439,38 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         DevServer.HermesDevServer? DevServer,
         string? DevBaseUri);
 
+    private static IFileProvider CreateDefaultFileProvider()
+    {
+        var wwwrootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
+        var fallbackProvider = Directory.Exists(wwwrootPath)
+            ? new PhysicalFileProvider(wwwrootPath)
+            : (IFileProvider)new NullFileProvider();
+
+        var appName = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name ?? "App";
+        return StaticWebAssetsFileProvider.Create(appName, fallbackProvider);
+    }
+
+    // ExecutionAndPublication is shared by both callers because on Linux the
+    // early request can arrive on the UI thread while the worker is already
+    // inside the factory; that mode makes the UI thread wait for the single
+    // in-flight instance instead of building a second one.
+    private static Lazy<IFileProvider> CreateFileProviderHandle(HermesBlazorAppBuilder builder) =>
+        new Lazy<IFileProvider>(
+            () => builder._fileProvider ?? CreateDefaultFileProvider(),
+            LazyThreadSafetyMode.ExecutionAndPublication);
+
     private static void ApplyOptions(HermesWindow window, HermesWindowOptions options) =>
         HermesWindowOptions.ApplyTo(window, options);
+
+    // Short slices keep the join latency after composition completes negligible
+    // while still letting each iteration drain a burst of native work.
+    private const int CompositionPumpSliceMilliseconds = 5;
+
+    private static void PumpUntilComplete(IHermesWindowBackend backend, Task composition)
+    {
+        while (!composition.IsCompleted)
+            backend.RunEventLoopIteration(CompositionPumpSliceMilliseconds);
+    }
 
     private static IHermesWindowBackend GetBackend(HermesWindow window) =>
         window.Backend;

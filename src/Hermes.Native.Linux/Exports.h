@@ -21,6 +21,12 @@ void Hermes_App_Run(void);
 /// Quit the GTK main loop
 void Hermes_App_Quit(void);
 
+/// Dispatch pending GLib main context work, blocking at most timeoutMs when idle.
+/// Safe to call before gtk_main(); lets WebKitGTK's web process start up while
+/// the host is still composing services.
+/// Call only on the UI thread, and never while gtk_main is running.
+void Hermes_App_RunLoopIteration(int timeoutMs);
+
 /// Set the application to accessory mode (skip taskbar for all windows)
 void Hermes_App_SetAccessoryMode(void);
 

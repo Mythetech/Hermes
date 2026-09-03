@@ -34,6 +34,7 @@ struct _HermesWindow {
     int lastY;
     int64_t uiThreadId;
     gboolean isShown;
+    gboolean isClosed;
     gboolean hasRoundedCorners;
     gboolean customTitleBar;
     gboolean transparent;

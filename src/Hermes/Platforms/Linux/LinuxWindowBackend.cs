@@ -141,6 +141,12 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         LinuxNative.WindowWaitForClose(_windowHandle);
     }
 
+    public void RunEventLoopIteration(int maxWaitMilliseconds)
+    {
+        EnsureGtkInitialized();
+        LinuxNative.AppRunLoopIteration(Math.Max(0, maxWaitMilliseconds));
+    }
+
     #endregion
 
     #region Window Properties

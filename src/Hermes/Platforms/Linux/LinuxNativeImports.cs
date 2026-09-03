@@ -24,6 +24,9 @@ internal static partial class LinuxNative
     [LibraryImport(LibraryName, EntryPoint = "Hermes_App_Quit")]
     internal static partial void AppQuit();
 
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_App_RunLoopIteration")]
+    internal static partial void AppRunLoopIteration(int timeoutMs);
+
     [LibraryImport(LibraryName, EntryPoint = "Hermes_App_SetAccessoryMode")]
     internal static partial void AppSetAccessoryMode();
 

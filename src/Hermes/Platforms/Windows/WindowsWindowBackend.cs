@@ -33,6 +33,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     private bool _isDisposed;
     private bool _firstShowComplete;
     private bool _webViewInitialized;
+    private bool _quitRequested;
     private int _uiThreadId;
 
     private CoreWebView2Environment? _webViewEnvironment;
@@ -179,23 +180,58 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         if (_webViewReady is not null)
         {
             if (isSmokeTest) Console.WriteLine("WAITFORCLOSE:pumping_messages");
-            while (!_webViewReady.Task.IsCompleted)
+            while (!_webViewReady.Task.IsCompleted && !_quitRequested)
             {
-                if (PInvoke.PeekMessage(out var msg, HWND.Null, 0, 0, PEEK_MESSAGE_REMOVE_TYPE.PM_REMOVE))
-                {
-                    PInvoke.TranslateMessage(in msg);
-                    PInvoke.DispatchMessage(in msg);
-                }
-                else
-                {
-                    Thread.Sleep(1); // Avoid busy-waiting
-                }
+                RunEventLoopIteration(1);
             }
             if (isSmokeTest) Console.WriteLine("WAITFORCLOSE:webview_ready");
         }
 
         if (isSmokeTest) Console.WriteLine("WAITFORCLOSE:entering_main_loop");
         RunMessageLoop();
+    }
+
+    public void RunEventLoopIteration(int maxWaitMilliseconds)
+    {
+        // Once WM_QUIT has been seen it is left in the queue for WaitForClose's
+        // main loop; peeking again here would dequeue it a second time and lose
+        // it, and GetMessage would then block forever on a destroyed window.
+        // Sleeping keeps the idle-wait contract so a caller looping on this
+        // method does not spin.
+        if (_quitRequested)
+        {
+            Thread.Sleep(Math.Clamp(maxWaitMilliseconds, 0, 50));
+            return;
+        }
+
+        var deadline = Environment.TickCount64 + Math.Max(0, maxWaitMilliseconds);
+        do
+        {
+            var dispatched = false;
+            while (PInvoke.PeekMessage(out var msg, HWND.Null, 0, 0, PEEK_MESSAGE_REMOVE_TYPE.PM_REMOVE))
+            {
+                if (msg.message == PInvoke.WM_QUIT)
+                {
+                    // Keep the quit for the main loop so WaitForClose still
+                    // terminates; re-post it once so this pump cannot spin on it.
+                    if (!_quitRequested)
+                    {
+                        _quitRequested = true;
+                        PInvoke.PostQuitMessage(unchecked((int)(nuint)msg.wParam.Value));
+                    }
+                    return;
+                }
+
+                PInvoke.TranslateMessage(in msg);
+                PInvoke.DispatchMessage(in msg);
+                dispatched = true;
+            }
+
+            if (dispatched)
+                return;
+
+            Thread.Sleep(1);
+        } while (Environment.TickCount64 < deadline);
     }
 
     public void Close()

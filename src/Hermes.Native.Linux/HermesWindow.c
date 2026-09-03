@@ -47,6 +47,32 @@ void Hermes_App_Quit(void) {
     gtk_main_quit();
 }
 
+static gboolean on_runloop_iteration_timeout(gpointer user_data) {
+    *(gboolean*)user_data = TRUE;
+    return G_SOURCE_REMOVE;
+}
+
+void Hermes_App_RunLoopIteration(int timeoutMs) {
+    if (!g_gtkInitialized) return;
+
+    GMainContext* context = g_main_context_default();
+
+    // Drain whatever is already pending without blocking.
+    gboolean dispatched = FALSE;
+    while (g_main_context_iteration(context, FALSE)) {
+        dispatched = TRUE;
+    }
+    if (dispatched || timeoutMs <= 0) return;
+
+    // Idle: wait for the next source or the deadline, whichever comes first.
+    gboolean fired = FALSE;
+    guint timeoutId = g_timeout_add(timeoutMs, on_runloop_iteration_timeout, &fired);
+    g_main_context_iteration(context, TRUE);
+    if (!fired) {
+        g_source_remove(timeoutId);
+    }
+}
+
 void Hermes_App_ActivateProcessWindow(int pid) {
 #ifdef GDK_WINDOWING_X11
     GdkDisplay* gdkDisplay = gdk_display_get_default();
@@ -118,6 +144,20 @@ static gboolean on_window_delete(GtkWidget* widget, GdkEvent* event, gpointer us
         return shouldClose ? FALSE : TRUE;
     }
     return FALSE;
+}
+
+static void on_window_destroyed(GtkWidget* widget, gpointer user_data) {
+    HermesWindow* hw = (HermesWindow*)user_data;
+    hw->isClosed = TRUE;
+}
+
+// gtk_main_quit asserts when no main loop is running, which is now possible
+// because the host pumps the context before entering gtk_main.
+static gboolean quit_main_loop_if_running(gpointer user_data) {
+    if (gtk_main_level() > 0) {
+        gtk_main_quit();
+    }
+    return G_SOURCE_REMOVE;
 }
 
 static gboolean on_window_configure(GtkWidget* widget, GdkEventConfigure* event, gpointer user_data) {
@@ -574,6 +614,7 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
 
     // Wire up window events
     g_signal_connect(hw->window, "delete-event", G_CALLBACK(on_window_delete), hw);
+    g_signal_connect(hw->window, "destroy", G_CALLBACK(on_window_destroyed), hw);
     g_signal_connect(hw->window, "configure-event", G_CALLBACK(on_window_configure), hw);
     g_signal_connect(hw->window, "focus-in-event", G_CALLBACK(on_window_focus_in), hw);
     g_signal_connect(hw->window, "focus-out-event", G_CALLBACK(on_window_focus_out), hw);
@@ -768,7 +809,7 @@ void* Hermes_Window_Create(const HermesWindowParams* params) {
 
 void Hermes_Window_Show(void* window) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw) return;
+    if (!hw || hw->isClosed) return;
 
     hw->isShown = TRUE;
     gtk_widget_show_all(hw->window);
@@ -789,15 +830,20 @@ void Hermes_Window_Hide(void* window) {
 
 void Hermes_Window_Close(void* window) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw) return;
+    if (!hw || hw->isClosed) return;
 
+    hw->isClosed = TRUE;
     g_idle_add((GSourceFunc)gtk_widget_destroy, hw->window);
-    g_idle_add((GSourceFunc)gtk_main_quit, NULL);
+    g_idle_add(quit_main_loop_if_running, NULL);
 }
 
 void Hermes_Window_WaitForClose(void* window) {
     HermesWindow* hw = (HermesWindow*)window;
     if (!hw) return;
+
+    // The window can be closed while the host pumps during startup; entering
+    // gtk_main then would block forever with nothing left to close.
+    if (hw->isClosed) return;
 
     Hermes_Window_Show(window);
     gtk_main();
@@ -915,7 +961,7 @@ void Hermes_Window_SetIsMinimized(void* window, bool minimized) {
 
 void Hermes_Window_NavigateToUrl(void* window, const char* url) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw || !url) return;
+    if (!hw || hw->isClosed || !url) return;
 
     printf("[Hermes] NavigateToUrl: %s\n", url);
     fflush(stdout);
@@ -924,14 +970,14 @@ void Hermes_Window_NavigateToUrl(void* window, const char* url) {
 
 void Hermes_Window_NavigateToString(void* window, const char* html) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw || !html) return;
+    if (!hw || hw->isClosed || !html) return;
 
     webkit_web_view_load_html(WEBKIT_WEB_VIEW(hw->webView), html, "about:blank");
 }
 
 void Hermes_Window_SendWebMessage(void* window, const char* message) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw || !message) return;
+    if (!hw || hw->isClosed || !message) return;
 
     // Escape message for JavaScript
     GString* escaped = g_string_new(NULL);

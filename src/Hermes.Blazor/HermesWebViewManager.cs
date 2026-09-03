@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Threading.Channels;
 using Hermes.Abstractions;
 using Hermes.Blazor.Diagnostics;
+using Hermes.Blazor.Startup;
 using Hermes.Blazor.Threading;
 using Hermes.Diagnostics;
 using Microsoft.AspNetCore.Components;
@@ -28,10 +29,13 @@ internal sealed class HermesWebViewManager : WebViewManager
     private readonly IHermesWindowBackend _backend;
     private readonly Uri _baseUri;
     private readonly bool _isDevMode;
+    private readonly InlinedHostPage? _hostPage;
     private readonly Channel<string> _messageChannel;
     private readonly Task _messagePumpTask;
     private readonly CancellationTokenSource _cts = new();
     private volatile bool _disposed;
+    private int _firstMessageLogged;
+    private int _firstRenderBatchLogged;
 
     public HermesWebViewManager(
         IHermesWindowBackend backend,
@@ -53,12 +57,14 @@ internal sealed class HermesWebViewManager : WebViewManager
         string hostPageRelativePath,
         string? baseUri,
         bool isDevMode,
-        DeferredSchemeHandler? deferredHandler = null)
+        StartupSchemeHandler? startupHandler = null,
+        InlinedHostPage? hostPage = null)
         : base(services, dispatcher, new Uri(baseUri ?? AppBaseUri), fileProvider, jsComponents, hostPageRelativePath)
     {
         _backend = backend;
         _baseUri = new Uri(baseUri ?? AppBaseUri);
         _isDevMode = isDevMode;
+        _hostPage = hostPage;
 
         // Unbounded with SingleReader gets the runtime's zero-allocation
         // SingleConsumerUnboundedChannel; Blazor's render-batch acknowledgment
@@ -75,24 +81,20 @@ internal sealed class HermesWebViewManager : WebViewManager
 
         if (!_isDevMode)
         {
-            // When the builder registered a deferred handler before showing the
-            // window, fulfill it; requests that arrived early unblock here.
-            // Otherwise register directly (Windows, or direct construction).
-            if (deferredHandler is not null)
-            {
-                deferredHandler.SetInner(HandleWebRequest);
-            }
+            // The builder registers the startup handler before the window exists so
+            // early requests are served without the manager; installing the real
+            // handler here switches every later request over. Direct construction
+            // (tests, custom hosts) registers with the backend as before.
+            if (startupHandler is not null)
+                startupHandler.SetInner(HandleWebRequest);
             else
-            {
-                var scheme = _baseUri.Scheme;
-                _backend.RegisterCustomScheme(scheme, HandleWebRequest);
-            }
+                _backend.RegisterCustomScheme(_baseUri.Scheme, HandleWebRequest);
         }
     }
 
     protected override void NavigateCore(Uri absoluteUri)
     {
-        StartupLog.Log("WebView", $"NavigateCore: {absoluteUri}");
+        StartupLog.Phase("navigate");
         _backend.NavigateToUrl(absoluteUri.ToString());
     }
 
@@ -100,6 +102,9 @@ internal sealed class HermesWebViewManager : WebViewManager
     {
         if (_disposed)
             return;
+
+        if (StartupLog.IsEnabled && message.StartsWith("__bwv:[\"RenderBatch\"", StringComparison.Ordinal))
+            StartupLog.PhaseOnce("first-render-batch", ref _firstRenderBatchLogged);
 
         // Unbounded TryWrite only fails once the writer is completed during shutdown
         _messageChannel.Writer.TryWrite(message);
@@ -141,9 +146,15 @@ internal sealed class HermesWebViewManager : WebViewManager
 
     private void OnWebMessageReceived(string message)
     {
-        StartupLog.LogFirstMessage();
+        StartupLog.PhaseOnce("first-message", ref _firstMessageLogged);
         MessageReceived(_baseUri, message);
     }
+
+    /// <summary>
+    /// Delivers a message that arrived before this manager existed, exactly as if
+    /// the WebView had just sent it.
+    /// </summary>
+    internal void ReplayMessage(string message) => OnWebMessageReceived(message);
 
     private (Stream? Content, string? ContentType) HandleWebRequest(string url)
     {
@@ -163,15 +174,10 @@ internal sealed class HermesWebViewManager : WebViewManager
         if (TryGetResponseContent(cleanUrl, allowFallbackOnHostPage, out var statusCode, out var statusMessage,
             out var content, out var headers))
         {
-            if (path == "/" || path.EndsWith("index.html", StringComparison.OrdinalIgnoreCase))
-                StartupLog.Log("WebView", "Serving index.html (host page)");
-            else if (path.Contains("blazor.webview.js"))
-                StartupLog.Log("WebView", "Serving blazor.webview.js");
-
             headers.TryGetValue("Content-Type", out var contentType);
 
             if (contentType is not null && contentType.StartsWith("text/html", StringComparison.OrdinalIgnoreCase))
-                return (ServeHtmlWithInlinedScript(cleanUrl, content), contentType);
+                return (ServeHtmlWithInlinedScript(cleanUrl, path, content), contentType);
 
             return (content, contentType);
         }
@@ -182,8 +188,16 @@ internal sealed class HermesWebViewManager : WebViewManager
     private string? _inlinedPageUrl;
     private byte[]? _inlinedPageBytes;
 
-    private Stream ServeHtmlWithInlinedScript(string cleanUrl, Stream content)
+    private Stream ServeHtmlWithInlinedScript(string cleanUrl, string path, Stream content)
     {
+        // Prefer the page the startup handler already built so both handlers
+        // serve identical bytes and the inlining work happens once per process.
+        if (_hostPage is not null && _hostPage.Matches(path) && _hostPage.TryGetBytes(out var shared))
+        {
+            content.Dispose();
+            return new MemoryStream(shared, writable: false);
+        }
+
         if (_inlinedPageUrl != cleanUrl)
         {
             using var reader = new StreamReader(content);

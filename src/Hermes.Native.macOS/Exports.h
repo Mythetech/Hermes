@@ -21,6 +21,12 @@ void Hermes_App_SetAccessoryMode(void);
 /// Activate (bring to front) the main window of another process by its PID
 void Hermes_App_ActivateProcessWindow(int pid);
 
+/// Service the main run loop's sources for at most timeoutSeconds, returning
+/// early once it goes idle. Drives WebKit IPC and the main dispatch queue without
+/// dequeuing AppKit events, so it is safe to call before [NSApp run].
+/// Call only on the UI thread, and never while [NSApp run] is running.
+void Hermes_App_RunLoopIteration(double timeoutSeconds);
+
 // ============================================================================
 // Window Lifecycle
 // ============================================================================

@@ -102,6 +102,33 @@ void Hermes_App_ActivateProcessWindow(int pid) {
     }
 }
 
+void Hermes_App_RunLoopIteration(double timeoutSeconds) {
+    @autoreleasepool {
+        // WebKit's UI-process side of the content process launch runs on the
+        // main run loop. Draining sources until idle or the deadline lets it
+        // progress while the host is still composing services, without handling
+        // NSEvents (no window or input callbacks fire before the app is ready).
+        CFAbsoluteTime deadline = CFAbsoluteTimeGetCurrent() + timeoutSeconds;
+        SInt32 result = kCFRunLoopRunTimedOut;
+        do {
+            CFTimeInterval remaining = deadline - CFAbsoluteTimeGetCurrent();
+            if (remaining <= 0) return;
+            result = CFRunLoopRunInMode(kCFRunLoopDefaultMode, remaining, true);
+        } while (result == kCFRunLoopRunHandledSource);
+
+        // kCFRunLoopRunFinished (the mode has no sources or timers, which is the
+        // case before any window exists) and kCFRunLoopRunStopped return without
+        // consuming the slice. Waiting out the rest of it honors the idle-wait
+        // contract, so a host looping on this function does not spin hot.
+        if (result != kCFRunLoopRunTimedOut) {
+            CFTimeInterval remaining = deadline - CFAbsoluteTimeGetCurrent();
+            if (remaining > 0) {
+                [NSThread sleepForTimeInterval:remaining];
+            }
+        }
+    }
+}
+
 #pragma mark - Window Lifecycle
 
 void* Hermes_Window_Create(const HermesWindowParams* params) {

@@ -59,6 +59,21 @@ public interface IHermesWindowBackend : IDisposable
     /// </summary>
     void WaitForClose();
 
+    /// <summary>
+    /// Run pending native work for the UI thread and return, blocking at most
+    /// <paramref name="maxWaitMilliseconds"/> when nothing is pending. Hosts call
+    /// this while waiting on background startup work so WebView process launches
+    /// and asynchronous WebView initialization keep progressing. Must be called on
+    /// the UI thread, and never while WaitForClose() is blocking in the platform
+    /// message loop; a backend may use it for its own pre-loop pumping before that
+    /// loop starts. The default sleeps so backends that do not implement it stay
+    /// correct, only slower to start.
+    /// </summary>
+    void RunEventLoopIteration(int maxWaitMilliseconds)
+    {
+        Thread.Sleep(Math.Clamp(maxWaitMilliseconds, 0, 50));
+    }
+
     #endregion
 
     #region Window Properties

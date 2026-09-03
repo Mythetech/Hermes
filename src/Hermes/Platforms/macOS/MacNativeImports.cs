@@ -24,6 +24,9 @@ internal static partial class MacNative
     [LibraryImport(LibraryName, EntryPoint = "Hermes_App_ActivateProcessWindow")]
     internal static partial void AppActivateProcessWindow(int pid);
 
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_App_RunLoopIteration")]
+    internal static partial void AppRunLoopIteration(double timeoutSeconds);
+
     #endregion
 
     #region Window Lifecycle

@@ -198,6 +198,25 @@ public sealed class RecordingWindowBackend : IHermesWindowBackend
         // In test mode, we don't actually block
     }
 
+    /// <summary>
+    /// Raised on every RunEventLoopIteration call so tests can inject events or
+    /// release a gated composition while Build() is pumping.
+    /// </summary>
+    public event Action? EventLoopIterated;
+
+    public void RunEventLoopIteration(int maxWaitMilliseconds)
+    {
+        Recording.RecordMethodCall(nameof(RunEventLoopIteration), maxWaitMilliseconds);
+        var ranPendingWork = DrainPending();
+        EventLoopIterated?.Invoke();
+
+        // Native backends block until the deadline when nothing is queued. Returning
+        // straight away instead would let a pumping host spin for the whole of
+        // composition and record an unbounded number of calls.
+        if (!ranPendingWork)
+            Thread.Sleep(Math.Clamp(maxWaitMilliseconds, 0, 50));
+    }
+
     public void NavigateToUrl(string url)
     {
         Recording.RecordMethodCall(nameof(NavigateToUrl), url);
@@ -407,6 +426,20 @@ public sealed class RecordingWindowBackend : IHermesWindowBackend
         SimulateWebMessage("""{"type":"hermes-drag","action":"no-drag"}""");
     }
 
+    /// <summary>
+    /// Invoke the handler registered for the URL's scheme, as the native WebView
+    /// would for a resource request. Throws when nothing is registered for it.
+    /// </summary>
+    public (Stream? Content, string? ContentType) SimulateSchemeRequest(string url)
+    {
+        var scheme = new Uri(url).Scheme;
+        if (!_customSchemes.TryGetValue(scheme, out var handler))
+            throw new InvalidOperationException($"No handler is registered for the '{scheme}' scheme.");
+
+        Recording.RecordEvent("SchemeRequest", url);
+        return handler(url);
+    }
+
     #endregion
 
     #region Custom Scheme Testing
@@ -437,8 +470,15 @@ public sealed class RecordingWindowBackend : IHermesWindowBackend
     /// Process any pending actions queued via BeginInvoke.
     /// Call this from tests to simulate the UI thread processing.
     /// </summary>
-    public void ProcessPending()
+    public void ProcessPending() => DrainPending();
+
+    /// <summary>
+    /// Drains the pending queue and reports whether at least one action ran, so a
+    /// pumping caller can tell an idle iteration from a productive one.
+    /// </summary>
+    private bool DrainPending()
     {
+        var ranAction = false;
         while (true)
         {
             Action? action;
@@ -449,7 +489,10 @@ public sealed class RecordingWindowBackend : IHermesWindowBackend
                 action = _pendingActions.Dequeue();
             }
             action();
+            ranAction = true;
         }
+
+        return ranAction;
     }
 
     #endregion
