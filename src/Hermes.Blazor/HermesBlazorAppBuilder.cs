@@ -317,13 +317,19 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             StartupLog.Phase("window-shown");
         }
 
-        // Pump native events while the worker composes. WebKit's process launch
-        // and WebView2's initialization chain only progress when the UI loop is
-        // serviced, and the startup scheme handler and message buffer above make
-        // it safe to service it before the manager exists. With the window
-        // deferred (UseFastStartup) nothing native is in flight, so the plain
-        // join below is enough.
-        if (!_deferWindowShow)
+        // Pump native events while the worker composes only when native WebView
+        // work is in flight: on Linux the load was issued above, and on Windows
+        // Show() started WebView2 initialization whose continuations need the
+        // message queue. Otherwise (macOS, where the load is issued in Run(), and
+        // any platform with the window deferred) block on the join as before.
+        // Pumping with nothing to advance only services AppKit display timers,
+        // which on the 3-core macOS CI runner measured about 170ms later
+        // window-visible and 210ms later first render (2026-09-03). The
+        // startup scheme handler and message buffer above are what make
+        // pumping safe before the manager exists.
+        var nativeWorkInFlight = navigatedDuringBuild
+            || (!_deferWindowShow && backend.Platform == HermesPlatform.Windows);
+        if (nativeWorkInFlight)
             PumpUntilComplete(backend, compositionTask);
         var composition = compositionTask.GetAwaiter().GetResult();
         StartupLog.Phase("composition-done");

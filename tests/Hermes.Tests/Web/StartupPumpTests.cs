@@ -12,18 +12,24 @@ namespace Hermes.Tests.Web;
 
 /// <summary>
 /// While the composition worker runs, Build() must keep servicing the native
-/// event loop so the WebView's process launch and page load progress, and any
-/// IPC message that arrives in that window must reach the manager afterwards.
+/// event loop only where native WebView work is actually in flight: Linux,
+/// where the load was issued before Show(), and Windows, where Show() started
+/// WebView2 initialization. On macOS, where the load is issued in Run(), and
+/// whenever the window is deferred, Build() blocks on the join instead. Any
+/// IPC message that arrives while composition runs must reach the manager
+/// afterwards regardless of which path was taken.
 /// </summary>
 public class StartupPumpTests
 {
     private const string HostHtml =
         "<html><body><div id=\"app\"></div><script src=\"_framework/blazor.webview.js\"></script></body></html>";
 
-    [Fact]
-    public void Build_PumpsTheEventLoop_WhileCompositionRuns()
+    [Theory]
+    [InlineData(HermesPlatform.Windows)]
+    [InlineData(HermesPlatform.Linux)]
+    public void Build_PumpsTheEventLoop_WhileCompositionRuns(HermesPlatform platform)
     {
-        var backend = new RecordingWindowBackend { Platform = HermesPlatform.macOS };
+        var backend = new RecordingWindowBackend { Platform = platform };
         using var release = new ManualResetEventSlim(false);
         backend.EventLoopIterated += release.Set;
 
@@ -37,6 +43,49 @@ public class StartupPumpTests
         Assert.True(showIndex < pumpIndex, "The window must be shown before pumping starts.");
     }
 
+    /// <summary>
+    /// macOS issues its initial load in Run(), not Build(), so during Build()
+    /// there is no native WebView work for the pump to advance: it would only
+    /// service AppKit display timers for the already-shown window. On the
+    /// 3-core macOS CI runner that idle pumping measured about 170ms slower
+    /// window-visible and 210ms slower first render (2026-09-03) because it
+    /// competes with the JIT-bound composition worker, so Build() must block
+    /// on the join instead of pumping.
+    /// </summary>
+    [Fact]
+    public void Build_BlocksOnTheJoin_WithoutPumping_OnMacOS()
+    {
+        var backend = new RecordingWindowBackend { Platform = HermesPlatform.macOS };
+
+        using var app = BuildApp(backend, builder =>
+            ((IHostApplicationBuilder)builder).ConfigureContainer(
+                new StartupSchemeRegistrationTests.CallbackServiceProviderFactory(() => Thread.Sleep(100))));
+
+        var calls = backend.Recording.MethodCalls.Select(c => c.MethodName).ToList();
+        Assert.DoesNotContain("RunEventLoopIteration", calls);
+        Assert.Contains("Show", calls);
+    }
+
+    [Fact]
+    public void Build_DoesNotPump_WhenTheWindowIsDeferred()
+    {
+        var backend = new RecordingWindowBackend { Platform = HermesPlatform.Windows };
+
+        using var app = BuildApp(backend, builder =>
+        {
+            builder.UseFastStartup();
+            ((IHostApplicationBuilder)builder).ConfigureContainer(
+                new StartupSchemeRegistrationTests.CallbackServiceProviderFactory(() => Thread.Sleep(100)));
+        });
+
+        var calls = backend.Recording.MethodCalls.Select(c => c.MethodName).ToList();
+        Assert.DoesNotContain("RunEventLoopIteration", calls);
+        Assert.DoesNotContain("Show", calls);
+    }
+
+    // On macOS, Build() never pumps at all (see Build_BlocksOnTheJoin_WithoutPumping_OnMacOS),
+    // so this guards against pumping resuming once Run() takes over, not against
+    // pumping continuing past composition.
     [Fact]
     public void Build_StopsPumping_OnceCompositionCompletes()
     {

@@ -164,25 +164,27 @@ first render approaches the platform floor plus one render:
    because loading before `Show()` measured +57ms window-visible on CI and
    loading right after `Show()` inside `Build()` measured 31 to 45ms of
    synchronous WKWebView work moved into `Build()` with no first-render gain
-   (local, 2026-09-03). It then pumps the native loop in 5ms slices through
-   `RunEventLoopIteration` until the worker finishes; on fast hardware
-   composition is often already complete by then and the pump runs zero
-   iterations.
+   (local, 2026-09-03). On Linux, where the load is in flight, and on Windows,
+   where `Show()` started WebView2 initialization, it then pumps the native
+   loop in 5ms slices through `RunEventLoopIteration` until the worker
+   finishes; on macOS, where the load is issued in `Run()`, and whenever the
+   window is deferred, it blocks on the join as before.
 2. **Worker thread (managed track)**: service registration, `IHost` build, and
    dev server startup run concurrently via `Task.Run` inside
    `HermesBlazorAppBuilder.Build()`, followed by `RendererWarmup`. The worker
    touches no native state and never posts to the UI synchronization context,
    so pumping cannot deadlock on it.
 
-On Linux, where `Build()` issues the load before `Show()`, and in the macOS and
-Linux dev-server-failure fallback, the WebView requests the host page and its
-script while the UI thread pumps, through the `StartupSchemeHandler`, which
-answers from the `EarlyStaticContentHandler` (host page with
-`blazor.webview.js` inlined, static files from the same provider, 404
-otherwise) and never blocks. On macOS and Windows the default path navigates in
-`Run()`, after the manager exists, so during `Build()` the pump's job there is
-to let WebKit's application-level setup and WebView2's controller
-initialization (whose continuations are dispatched through the pump) progress.
+On Linux, where `Build()` issues the load before `Show()`, the WebView
+requests the host page and its script while the UI thread pumps, through the
+`StartupSchemeHandler`, which answers from the `EarlyStaticContentHandler`
+(host page with `blazor.webview.js` inlined, static files from the same
+provider, 404 otherwise) and never blocks. On macOS and Windows the default
+path navigates in `Run()`, after the manager exists. On Windows, during
+`Build()` the pump's job is to let WebView2's controller initialization
+progress, its continuations dispatched through the pump. macOS never pumps
+during `Build()`: there is no native WebView work in flight for it to
+advance.
 Windows under hot reload registers nothing for the app scheme, because an
 `http://*` WebView2 filter would intercept the dev server; macOS and Linux
 register the `app` scheme even under hot reload, so a dev server that fails to
@@ -199,9 +201,11 @@ immediately.
 (`CFRunLoopRunInMode`, no NSEvents, so no window or input callbacks fire before
 the app is ready), the default GLib main context on Linux, and the thread
 message queue on Windows (a `WM_QUIT` seen during startup is re-posted for the
-main loop). Hot reload and `UseFastStartup` keep the previous sequence: the dev
-server's base URI is only known after composition, and fast startup defers the
-window to `Run()`.
+main loop). The macOS implementation is never called during `Build()`, since
+`Build()` blocks on the join instead of pumping on macOS; it exists for a
+future experiment that issues the macOS load during `Build()`. Hot reload and
+`UseFastStartup` keep the previous sequence: the dev server's base URI is only
+known after composition, and fast startup defers the window to `Run()`.
 
 The synchronization context is installed on the UI thread before `Show()`: on
 Windows, WebView2 initialization continuations capture it, and without it they
@@ -223,9 +227,13 @@ NSApplication initialization (32ms slower in a standalone spike, WebKit's
 process spawn only progresses while the run loop is serviced), and issuing the
 macOS load inside `Build()` right after `Show()` (31 to 45ms of synchronous
 WKWebView work moved into `Build()`, no first-render gain, measured
-2026-09-03). The UI thread pumps instead of blocking on the composition join
-so WebKit's process launch and WebView2's initialization can progress whenever
-composition outlasts native init; locally the join measured close to zero.
+2026-09-03), and pumping the macOS run loop during composition with no load in
+flight (3-core CI runner, 2026-09-03: about 170ms later window-visible and
+210ms later first render, because the pump only serviced AppKit display
+timers while competing with the JIT-bound worker). The UI thread pumps instead
+of blocking on the composition join so WebKit's process launch and WebView2's
+initialization can progress whenever composition outlasts native init on the
+platforms where the pump is used; locally the join measured close to zero.
 
 Threading contract for contributors: native object creation and access belong
 on the UI thread only; pure managed composition may run on workers.
