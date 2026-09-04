@@ -191,6 +191,22 @@ on the UI thread only; pure managed composition may run on workers.
 
 ---
 
+## Owned WebView host layer (`src/Hermes.Blazor/WebView/`)
+
+Hermes does not use `Microsoft.AspNetCore.Components.WebView`'s managed types. The internal types of that package (10.0.11) are forked into `Hermes.Blazor.WebView` under the MIT license; `THIRD-PARTY-NOTICES.md` lists every file and its upstream path, every forked file carries a marker naming the tag it came from, and `ForkProvenanceTests` enforces both. The package stays referenced only for the `blazor.webview.js` static web asset, because the `__bwv:` wire protocol is unchanged.
+
+Why: under Native AOT the upstream layer boxed every IPC argument into `object[]` for the reflection-based serializer, and the one message carrying enums (`BeginInvokeJS`) could not be serialized. The failure landed in a task upstream discarded, so the window stayed blank with no diagnostic. Owning the layer makes the seams explicit:
+
+- `IpcMessageWriter` writes each outgoing envelope field by field with `Utf8JsonWriter`, byte-identical to upstream (pinned by `IpcMessageWriterTests` against strings recorded from upstream's serializer).
+- `IpcMessageReader` parses incoming envelopes with `JsonDocument`; a prefixed message that cannot be parsed throws instead of being ignored.
+- `HermesWebRenderer` derives from the public `Renderer` and owns the `attachWebRendererInterop` call. It is sent with async handle 0 so no completion is requested; upstream allocated a handle and discarded the completion, which is the swallow that hid the failure.
+- `WebViewJSRuntime` resolves the renderer interop object reference through `DotNetObjectReferenceTypeInfoResolver`, the framework's other interop shapes through the generated `HermesWebViewJsonContext`, and appends the reflection resolver only while `JsonSerializer.IsReflectionEnabledByDefault` is true. JIT apps keep working unchanged; AOT apps never ask reflection for a framework shape.
+- Every caught exception goes to the page (`NotifyUnhandledException`, which shows the Blazor error UI) and to `WebViewManager.HandleUnhandledException`, which logs and raises `HermesApplication.DispatcherUnhandledException`.
+
+Hermes has no API for JavaScript-registered root components, so the fork drops `JSComponentConfigurationStore` and the JS-side root component interop methods. Static web assets are resolved by Hermes's own `StaticWebAssetsFileProvider`; upstream's manifest loader, which read `Assembly.Location` and is empty in single-file builds, is gone.
+
+`HeadlessWebViewHost` in `Hermes.Tests` drives the real manager with no native WebView and is the fixture for every IPC behavior test.
+
 ## Implementation Phases
 
 ### Phase 1: Project Scaffolding

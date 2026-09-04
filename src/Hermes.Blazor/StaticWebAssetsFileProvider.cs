@@ -98,7 +98,9 @@ internal sealed class StaticWebAssetsFileProvider : IFileProvider
         safePath = string.Empty;
         try
         {
-            var canonicalBase = Path.GetFullPath(basePath);
+            // Manifest content roots end with a separator; keeping it would double it below
+            // and reject every asset under the root.
+            var canonicalBase = Path.TrimEndingDirectorySeparator(Path.GetFullPath(basePath));
             var canonicalFull = Path.GetFullPath(Path.Combine(basePath, subPath));
 
             // Use case-insensitive comparison on Windows/macOS where filesystems are case-insensitive

@@ -12,7 +12,7 @@ using Microsoft.Extensions.Diagnostics.Metrics;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.AspNetCore.Components.WebView;
+using Hermes.Blazor.WebView;
 using Hermes.Blazor.DevServer;
 
 namespace Hermes.Blazor;
@@ -292,14 +292,11 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
 
         var composition = compositionTask.GetAwaiter().GetResult();
 
-        var jsComponents = new JSComponentConfigurationStore();
-
         var webViewManager = new HermesWebViewManager(
             backend,
             composition.ServiceProvider,
             dispatcher,
             composition.FileProvider,
-            jsComponents,
             _hostPage,
             baseUri: composition.DevBaseUri,
             isDevMode: composition.DevServer is not null,
@@ -354,7 +351,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             }
         }
 
-        hostBuilder.Services.AddBlazorWebView();
+        hostBuilder.Services.AddHermesBlazorWebView();
         hostBuilder.Services.AddSingleton(window);
         hostBuilder.Services.AddSingleton(backend);
         hostBuilder.Services.AddSingleton(syncContext);
@@ -406,9 +403,8 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         window.Backend;
 
     private readonly record struct RootComponentRegistration(
-        [DynamicallyAccessedMembers(
-            DynamicallyAccessedMemberTypes.PublicConstructors |
-            DynamicallyAccessedMemberTypes.PublicProperties)] Type Type,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+        [property: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type Type,
         string Selector,
         IDictionary<string, object?>? Parameters);
 }
@@ -423,9 +419,7 @@ public sealed class RootComponentCollection
     /// <summary>
     /// Adds a root component.
     /// </summary>
-    public void Add<[DynamicallyAccessedMembers(
-        DynamicallyAccessedMemberTypes.PublicConstructors |
-        DynamicallyAccessedMemberTypes.PublicProperties)] TComponent>(
+    public void Add<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] TComponent>(
         string selector) where TComponent : IComponent
     {
         _components.Add((typeof(TComponent), selector, null));
@@ -434,9 +428,7 @@ public sealed class RootComponentCollection
     /// <summary>
     /// Adds a root component with parameters.
     /// </summary>
-    public void Add<[DynamicallyAccessedMembers(
-        DynamicallyAccessedMemberTypes.PublicConstructors |
-        DynamicallyAccessedMemberTypes.PublicProperties)] TComponent>(
+    public void Add<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] TComponent>(
         string selector,
         IDictionary<string, object?> parameters) where TComponent : IComponent
     {

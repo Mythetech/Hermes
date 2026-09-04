@@ -22,6 +22,7 @@ public class Program
         var iterations = 30;
         var warmupIterations = 3;
         var includeTauri = false;
+        string? hermesAotPath = null;
 
         // Parse arguments
         for (int i = 0; i < args.Length; i++)
@@ -32,6 +33,8 @@ public class Program
                 warmupIterations = int.Parse(args[i + 1]);
             if (args[i] == "--tauri")
                 includeTauri = true;
+            if (args[i] == "--hermes-aot" && i + 1 < args.Length)
+                hermesAotPath = args[i + 1];
         }
 
         // Find the test app executables
@@ -51,6 +54,15 @@ public class Program
             new("PhotinoX", GetDotnetAppPath(basePath, "PhotinoXTestApp"), "mediumpurple2",
                 "dotnet build -c Release benchmarks/Hermes.Benchmarks.Apps/PhotinoXTestApp"),
         };
+
+        // The AOT publish directory depends on the runner's RID, so the caller names the
+        // binary. Placed right after Hermes so the table reads JIT, then AOT, then the others,
+        // and the delta column against the JIT baseline shows what AOT buys.
+        if (hermesAotPath is not null)
+        {
+            apps.Insert(1, new AppDefinition("Hermes AOT", Path.GetFullPath(hermesAotPath), "deepskyblue1",
+                "dotnet publish benchmarks/Hermes.Benchmarks.Apps/HermesTestApp -c Release -r <rid> -p:PublishAot=true -o <path>"));
+        }
 
         if (includeTauri)
         {
@@ -89,6 +101,7 @@ public class Program
             Timestamp = DateTime.UtcNow,
             Environment = GetEnvironmentInfo(),
             Hermes = appResults.FirstOrDefault(r => r.Name == "Hermes"),
+            HermesAot = appResults.FirstOrDefault(r => r.Name == "Hermes AOT"),
             Photino = appResults.FirstOrDefault(r => r.Name == "Photino"),
             PhotinoX = appResults.FirstOrDefault(r => r.Name == "PhotinoX"),
             Tauri = appResults.FirstOrDefault(r => r.Name == "Tauri")
@@ -609,6 +622,7 @@ public class BenchmarkResults
     public DateTime Timestamp { get; set; }
     public EnvironmentInfo? Environment { get; set; }
     public AppBenchmarkResults? Hermes { get; set; }
+    public AppBenchmarkResults? HermesAot { get; set; }
     public AppBenchmarkResults? Photino { get; set; }
     public AppBenchmarkResults? PhotinoX { get; set; }
     public AppBenchmarkResults? Tauri { get; set; }

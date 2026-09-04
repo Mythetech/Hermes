@@ -30,4 +30,11 @@
           SkipUnchangedFiles="true" />
   </Target>
 
+  <!-- Copy native library on macOS publish, so the Native AOT benchmark publish boots -->
+  <Target Name="CopyNativeLibraryOnPublish" AfterTargets="Publish" Condition="$([MSBuild]::IsOSPlatform('OSX')) OR $(RuntimeIdentifier.StartsWith('osx'))">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)..\..\..\src\Hermes.Native.macOS\lib\libHermes.Native.macOS.dylib"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

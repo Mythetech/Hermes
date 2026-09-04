@@ -245,7 +245,6 @@ public class HostedServiceTests
             composition.ServiceProvider,
             dispatcher,
             composition.FileProvider,
-            new JSComponentConfigurationStore(),
             "index.html",
             baseUri: null,
             isDevMode: false);

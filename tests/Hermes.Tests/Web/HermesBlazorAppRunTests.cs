@@ -49,7 +49,6 @@ public class HermesBlazorAppRunTests
             composition.ServiceProvider,
             dispatcher,
             composition.FileProvider,
-            new JSComponentConfigurationStore(),
             "index.html",
             baseUri: null,
             isDevMode: false);

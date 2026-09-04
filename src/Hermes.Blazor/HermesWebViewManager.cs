@@ -6,8 +6,7 @@ using Hermes.Blazor.Diagnostics;
 using Hermes.Blazor.Threading;
 using Hermes.Diagnostics;
 using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Web;
-using Microsoft.AspNetCore.Components.WebView;
+using Hermes.Blazor.WebView;
 using Microsoft.Extensions.FileProviders;
 
 namespace Hermes.Blazor;
@@ -38,9 +37,8 @@ internal sealed class HermesWebViewManager : WebViewManager
         IServiceProvider services,
         HermesDispatcher dispatcher,
         IFileProvider fileProvider,
-        JSComponentConfigurationStore jsComponents,
         string hostPageRelativePath)
-        : this(backend, services, dispatcher, fileProvider, jsComponents, hostPageRelativePath, baseUri: null, isDevMode: false)
+        : this(backend, services, dispatcher, fileProvider, hostPageRelativePath, baseUri: null, isDevMode: false)
     {
     }
 
@@ -49,12 +47,11 @@ internal sealed class HermesWebViewManager : WebViewManager
         IServiceProvider services,
         HermesDispatcher dispatcher,
         IFileProvider fileProvider,
-        JSComponentConfigurationStore jsComponents,
         string hostPageRelativePath,
         string? baseUri,
         bool isDevMode,
         DeferredSchemeHandler? deferredHandler = null)
-        : base(services, dispatcher, new Uri(baseUri ?? AppBaseUri), fileProvider, jsComponents, hostPageRelativePath)
+        : base(services, dispatcher, new Uri(baseUri ?? AppBaseUri), fileProvider, hostPageRelativePath)
     {
         _backend = backend;
         _baseUri = new Uri(baseUri ?? AppBaseUri);
@@ -142,7 +139,12 @@ internal sealed class HermesWebViewManager : WebViewManager
     private void OnWebMessageReceived(string message)
     {
         StartupLog.LogFirstMessage();
-        MessageReceived(_baseUri, message);
+
+        // The backend raises a synchronous Action<string>, and processing must stay on this
+        // thread: a channel hop here would put a thread-pool round trip in front of every
+        // render acknowledgment. The task never faults (failures go to HandleUnhandledException
+        // and to the page), so discarding it loses nothing.
+        _ = MessageReceivedAsync(_baseUri, message);
     }
 
     private (Stream? Content, string? ContentType) HandleWebRequest(string url)

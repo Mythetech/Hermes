@@ -8,6 +8,9 @@
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <!-- Library doesn't produce static web assets - apps do -->
     <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+    <!-- The owned WebView host layer (WebView/) works on RenderTree types by design, exactly
+         as the upstream package it was forked from, which carries the same suppression. -->
+    <NoWarn>$(NoWarn);BL0006</NoWarn>
   </PropertyGroup>
 
   <!-- Ready-to-Run (R2R) for faster startup -->
@@ -35,6 +38,7 @@
   <ItemGroup>
     <None Include="../../LICENSE" Pack="true" PackagePath="/" />
     <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <None Include="../../THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <!-- SourceLink for debugging -->

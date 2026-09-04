@@ -248,3 +248,15 @@ When testing your application across platforms:
 3. **Test file dialogs** - Filter syntax may vary
 4. **Test window positioning** - Coordinate conversion should be transparent
 5. **Test WebView messages** - Especially with special characters
+
+## Native AOT (Blazor apps)
+
+Hermes owns the Blazor WebView host layer, so a Blazor app can be published with `PublishAot=true` and reflection-based JSON disabled.
+
+| Platform | Status |
+|----------|--------|
+| **macOS** | First render verified on 2026-09-03 (`benchmarks/Hermes.Benchmarks.Apps/HermesTestApp`, osx-arm64). |
+| **Windows** | Not yet verified. |
+| **Linux** | Not yet verified. |
+
+DOM event dispatch and application JS interop under AOT are the next stage: the standard web events are parsed without reflection already, but custom `EventArgs` types and application interop argument types still need generated contracts, and the dev server's `FrameworkReference` has to move out of `Hermes.Blazor` first.
