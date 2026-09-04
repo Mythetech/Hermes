@@ -20,6 +20,10 @@ on:
         description: 'Also run BenchmarkDotNet microbenchmarks'
         type: boolean
         default: false
+      hermes_aot:
+        description: 'Also benchmark HermesTestApp published with Native AOT'
+        type: boolean
+        default: true
 
 jobs:
   benchmark:
@@ -73,7 +77,8 @@ jobs:
           sudo apt-get update
           # libnotify4 is not preinstalled on ubuntu-24.04 runners but Photino's
           # and PhotinoX's prebuilt native libraries link against libnotify.so.4
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev cmake xvfb libnotify4
+          # clang and zlib1g-dev are what the Native AOT toolchain links with
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev cmake xvfb libnotify4 clang zlib1g-dev
 
       - name: Build Native Library (Linux)
         if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
@@ -101,6 +106,29 @@ jobs:
           dotnet build benchmarks/Hermes.Benchmarks.Apps/PhotinoXTestApp -c Release --no-restore
           dotnet build benchmarks/Hermes.Benchmarks.Harness -c Release --no-restore
 
+      # continue-on-error so a platform whose AOT toolchain or publish is broken still
+      # reports its JIT comparison; the harness step turns the failure into a visible
+      # warning instead of an AOT row. The RID comes from the runner, not the matrix,
+      # because macos-latest is arm64 and a foreign-RID AOT binary would run under
+      # Rosetta and measure the wrong thing. Publish restores for the RID itself, so
+      # no --no-restore here.
+      - name: Publish Hermes AOT
+        id: aot
+        if: steps.check.outputs.skip != 'true' && inputs.hermes_aot
+        continue-on-error: true
+        shell: bash
+        run: |
+          RID=$(dotnet --info | sed -n 's/^ *RID: *//p' | head -1)
+          OUT=benchmarks/Hermes.Benchmarks.Apps/HermesTestApp/bin/Release/net10.0/aot-publish
+          echo "Publishing HermesTestApp for $RID with Native AOT"
+          dotnet publish benchmarks/Hermes.Benchmarks.Apps/HermesTestApp -c Release -r "$RID" -p:PublishAot=true -o "$OUT"
+          BIN="$OUT/HermesTestApp"
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            BIN="$OUT/HermesTestApp.exe"
+          fi
+          test -f "$BIN"
+          echo "binary=$BIN" >> "$GITHUB_OUTPUT"
+
       - name: Run Startup & Memory Harness
         if: steps.check.outputs.skip != 'true'
         shell: bash
@@ -108,7 +136,13 @@ jobs:
           if [[ "${{ runner.os }}" != "Windows" ]]; then
             chmod +x benchmarks/Hermes.Benchmarks.Apps/*/bin/Release/net10.0/*TestApp 2>/dev/null || true
           fi
-          dotnet run --project benchmarks/Hermes.Benchmarks.Harness -c Release --no-build -- --iterations ${{ inputs.iterations }}
+          AOT_ARGS=()
+          if [[ "${{ steps.aot.outcome }}" == "success" ]]; then
+            AOT_ARGS=(--hermes-aot "${{ steps.aot.outputs.binary }}")
+          elif [[ "${{ inputs.hermes_aot }}" == "true" ]]; then
+            echo "::warning::Hermes AOT publish failed on ${{ matrix.platform }}; benchmarking without the AOT row. See the 'Publish Hermes AOT' step."
+          fi
+          dotnet run --project benchmarks/Hermes.Benchmarks.Harness -c Release --no-build -- --iterations ${{ inputs.iterations }} "${AOT_ARGS[@]}"
 
       # always() so a red harness run (nonzero exit on failed iterations)
       # still renders the table and failure details in the job summary.
@@ -126,9 +160,13 @@ jobs:
             echo "Harness exited before producing results (missing app binary or build failure); see the job log." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          if [[ "${{ steps.aot.outcome }}" == "failure" ]]; then
+            echo "> **Warning:** the Hermes AOT publish failed on ${{ matrix.platform }}, so there is no AOT row below. See the 'Publish Hermes AOT' step log." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          fi
           jq -r '
             def fmt: if . == null then "-" else (. * 100 | round / 100) end;
-            ([.Hermes, .Photino, .PhotinoX, .Tauri] | map(select(. != null))) as $apps |
+            ([.Hermes, .HermesAot, .Photino, .PhotinoX, .Tauri] | map(select(. != null))) as $apps |
             "### Benchmark Results (${{ matrix.platform }})",
             "",
             "Environment: \(.Environment.OS), \(.Environment.Runtime), \(.Environment.ProcessorCount) cores",

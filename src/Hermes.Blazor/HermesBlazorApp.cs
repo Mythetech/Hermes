@@ -341,9 +341,7 @@ public sealed class HermesRootComponents
     /// <summary>
     /// Adds a root component to be rendered in the specified selector.
     /// </summary>
-    public void Add<[DynamicallyAccessedMembers(
-        DynamicallyAccessedMemberTypes.PublicConstructors |
-        DynamicallyAccessedMemberTypes.PublicProperties)] TComponent>(
+    public void Add<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] TComponent>(
         string selector,
         IDictionary<string, object?>? parameters = null) where TComponent : IComponent
     {
@@ -354,9 +352,7 @@ public sealed class HermesRootComponents
     /// Adds a root component to be rendered in the specified selector.
     /// </summary>
     public void Add(
-        [DynamicallyAccessedMembers(
-            DynamicallyAccessedMemberTypes.PublicConstructors |
-            DynamicallyAccessedMemberTypes.PublicProperties)] Type componentType,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type componentType,
         string selector,
         IDictionary<string, object?>? parameters = null)
     {
@@ -392,9 +388,8 @@ public sealed class HermesRootComponents
     }
 
     private readonly record struct RootComponentRegistration(
-        [DynamicallyAccessedMembers(
-            DynamicallyAccessedMemberTypes.PublicConstructors |
-            DynamicallyAccessedMemberTypes.PublicProperties)] Type ComponentType,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+        [property: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type ComponentType,
         string Selector,
         IDictionary<string, object?>? Parameters);
 }

@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Owned Blazor WebView host layer** (`Hermes.Blazor.WebView`): the WebView IPC, page context and renderer are Hermes code forked from aspnetcore 10.0.11 (see `THIRD-PARTY-NOTICES.md`), with hand-written IPC envelopes and a generated JSON context so a Hermes Blazor app can be published with `PublishAot=true` and reach first render (macOS verified).
+- Unhandled exceptions in the WebView host are logged and raised on `HermesApplication.DispatcherUnhandledException` instead of disappearing into discarded tasks.
+
+### Fixed
+- Root component types are rooted with `DynamicallyAccessedMemberTypes.All`, so razor `@inject` properties survive trimming and Native AOT.
+- `StaticWebAssetsFileProvider` now resolves assets under manifest content roots that end with a directory separator, which is how the SDK writes them. Upstream's manifest loader had been masking the failure.
+
 ## [1.0.0] - 2026-04-28
 
 ### Added
