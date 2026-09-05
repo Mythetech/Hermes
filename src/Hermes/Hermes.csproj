@@ -54,12 +54,15 @@
     <None Include="$(CIArtifactsPath)/dll-win-x64/Hermes.pdb" Pack="true" PackagePath="runtimes/win-x64/lib/net10.0/" />
     <None Include="$(CIArtifactsPath)/dll-linux-x64/Hermes.dll" Pack="true" PackagePath="runtimes/linux-x64/lib/net10.0/" />
     <None Include="$(CIArtifactsPath)/dll-linux-x64/Hermes.pdb" Pack="true" PackagePath="runtimes/linux-x64/lib/net10.0/" />
+    <None Include="$(CIArtifactsPath)/dll-linux-arm64/Hermes.dll" Pack="true" PackagePath="runtimes/linux-arm64/lib/net10.0/" />
+    <None Include="$(CIArtifactsPath)/dll-linux-arm64/Hermes.pdb" Pack="true" PackagePath="runtimes/linux-arm64/lib/net10.0/" />
     <None Include="$(CIArtifactsPath)/dll-osx/Hermes.dll" Pack="true" PackagePath="runtimes/osx/lib/net10.0/" />
     <None Include="$(CIArtifactsPath)/dll-osx/Hermes.pdb" Pack="true" PackagePath="runtimes/osx/lib/net10.0/" />
-    <!-- macOS native library -->
-    <None Include="$(CIArtifactsPath)/native/libHermes.Native.macOS.dylib" Pack="true" PackagePath="runtimes/osx/native/" />
-    <!-- Linux native library -->
-    <None Include="$(CIArtifactsPath)/native/libHermes.Native.Linux.so" Pack="true" PackagePath="runtimes/linux-x64/native/" />
+    <!-- macOS native library (universal arm64 + x86_64, so the arch-neutral osx RID covers both) -->
+    <None Include="$(CIArtifactsPath)/native-osx/libHermes.Native.macOS.dylib" Pack="true" PackagePath="runtimes/osx/native/" />
+    <!-- Linux native library: one build per architecture, NuGet never falls back from linux-arm64 to linux-x64 -->
+    <None Include="$(CIArtifactsPath)/native-linux-x64/libHermes.Native.Linux.so" Pack="true" PackagePath="runtimes/linux-x64/native/" />
+    <None Include="$(CIArtifactsPath)/native-linux-arm64/libHermes.Native.Linux.so" Pack="true" PackagePath="runtimes/linux-arm64/native/" />
     <!-- Windows: WebView2 managed SDK and native loader (bundled because NuGet can't resolve
          PackageReferences added via .targets files during restore) -->
     <None Include="$(CIArtifactsPath)/webview2-win-x64/Microsoft.Web.WebView2.Core.dll" Pack="true" PackagePath="runtimes/win-x64/lib/net10.0/" />

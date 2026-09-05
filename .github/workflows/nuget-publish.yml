@@ -24,6 +24,8 @@ jobs:
             rid: win-x64
           - os: ubuntu-latest
             rid: linux-x64
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
           - os: macos-latest
             rid: osx
 
@@ -38,19 +40,19 @@ jobs:
 
       # macOS: Build native library
       - name: Build Native Library (macOS)
-        if: matrix.os == 'macos-latest'
+        if: runner.os == 'macOS'
         run: make universal
         working-directory: src/Hermes.Native.macOS
 
       # Linux: Install dependencies and build native library
       - name: Install Linux Dependencies
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev cmake
 
       - name: Build Native Library (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: ./build.sh
         working-directory: src/Hermes.Native.Linux
 
@@ -76,7 +78,7 @@ jobs:
 
       # Windows only: Upload WebView2 managed SDK (needed at runtime, doesn't flow transitively via NuGet)
       - name: Upload WebView2 Binaries
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: webview2-win-x64
@@ -87,19 +89,26 @@ jobs:
 
       # macOS only: Upload native binary
       - name: Upload Native Binary (macOS)
-        if: matrix.os == 'macos-latest'
+        if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
           name: native-osx
           path: src/Hermes.Native.macOS/lib/libHermes.Native.macOS.dylib
           retention-days: 14
 
-      # Linux only: Upload native binary
+      # Linux only: Upload native binary (one per RID; the shim is architecture-specific)
+      - name: Inspect Native Binary (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          LIB=src/Hermes.Native.Linux/lib/libHermes.Native.Linux.so
+          file "$LIB"
+          echo "glibc floor: $(objdump -T "$LIB" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)"
+
       - name: Upload Native Binary (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: native-linux
+          name: native-${{ matrix.rid }}
           path: src/Hermes.Native.Linux/lib/libHermes.Native.Linux.so
           retention-days: 14
 
@@ -113,6 +122,8 @@ jobs:
             rid: win-x64
           - os: ubuntu-latest
             rid: linux-x64
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
           - os: macos-latest
             rid: osx-x64
 
@@ -127,19 +138,19 @@ jobs:
 
       # macOS: Build native library
       - name: Build Native Library (macOS)
-        if: matrix.os == 'macos-latest'
+        if: runner.os == 'macOS'
         run: make universal
         working-directory: src/Hermes.Native.macOS
 
       # Linux: Install dependencies and build native library
       - name: Install Linux Dependencies
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev cmake
 
       - name: Build Native Library (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: ./build.sh
         working-directory: src/Hermes.Native.Linux
 
@@ -182,6 +193,12 @@ jobs:
           name: dll-linux-x64
           path: artifacts/dll-linux-x64
 
+      - name: Download Linux arm64 DLL
+        uses: actions/download-artifact@v4
+        with:
+          name: dll-linux-arm64
+          path: artifacts/dll-linux-arm64
+
       - name: Download macOS DLL
         uses: actions/download-artifact@v4
         with:
@@ -192,13 +209,19 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: native-osx
-          path: artifacts/native
+          path: artifacts/native-osx
 
-      - name: Download Native Binary (Linux)
+      - name: Download Native Binary (Linux x64)
         uses: actions/download-artifact@v4
         with:
-          name: native-linux
-          path: artifacts/native
+          name: native-linux-x64
+          path: artifacts/native-linux-x64
+
+      - name: Download Native Binary (Linux arm64)
+        uses: actions/download-artifact@v4
+        with:
+          name: native-linux-arm64
+          path: artifacts/native-linux-arm64
 
       - name: Download WebView2 Binaries (Windows)
         uses: actions/download-artifact@v4
