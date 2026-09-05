@@ -33,6 +33,7 @@ Designed for .NET 10 and modern development workflows, Hermes prioritizes AOT co
 | Windows 10/11 | .NET 10 | WebView2      | Supported |
 | macOS 12+     | .NET 10 | WKWebView     | Supported |
 | Linux (x64)   | .NET 10 | WebKitGTK 4.x | Supported |
+| Linux (arm64) | .NET 10 | WebKitGTK 4.x | Supported |
 
 ## Getting Started
 
