@@ -76,7 +76,7 @@ public sealed class BenchmarkAppEntryPointTests
 
         var assemblyPath = Path.Combine(
             FindRepositoryRoot(), "benchmarks", "Hermes.Benchmarks.Apps", appName,
-            "bin", configuration, "net10.0", $"{appName}.dll");
+            "bin", configuration, "net11.0", $"{appName}.dll");
 
         Assert.True(File.Exists(assemblyPath),
             $"Expected compiled benchmark app at {assemblyPath}. The test project references " +

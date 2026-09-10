@@ -199,8 +199,10 @@ public sealed class SingleInstanceGuard : IDisposable
 
         if (_isFirstInstance)
         {
+            // Releasing from a thread that does not own the mutex throws ApplicationException
+            // through .NET 10 and InvalidOperationException from .NET 11 onward.
             try { _mutex.ReleaseMutex(); }
-            catch (ApplicationException) { /* Already released or abandoned */ }
+            catch (Exception ex) when (ex is ApplicationException or InvalidOperationException) { /* Already released or abandoned */ }
         }
 
         _mutex.Dispose();

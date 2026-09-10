@@ -88,7 +88,7 @@ run_integration() {
 
     dotnet build samples/IntegrationTestApp -c "$CONFIG"
 
-    local app_path="samples/IntegrationTestApp/bin/${CONFIG}/net10.0/IntegrationTestApp"
+    local app_path="samples/IntegrationTestApp/bin/${CONFIG}/net11.0/IntegrationTestApp"
     if [ ! -f "$app_path" ]; then
         print_fail "App not found at $app_path"
         return 1
@@ -148,7 +148,7 @@ run_single_instance() {
 
     dotnet build tests/Hermes.SingleInstance.IntegrationTests -c "$CONFIG"
 
-    local app_path="tests/Hermes.SingleInstance.IntegrationTests/bin/${CONFIG}/net10.0/Hermes.SingleInstance.IntegrationTests"
+    local app_path="tests/Hermes.SingleInstance.IntegrationTests/bin/${CONFIG}/net11.0/Hermes.SingleInstance.IntegrationTests"
     if [ ! -f "$app_path" ]; then
         print_fail "App not found at $app_path"
         return 1

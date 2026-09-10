@@ -26,7 +26,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
 
       - name: Restore
         run: dotnet restore
@@ -73,7 +73,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         if: steps.check.outputs.skip != 'true'
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
 
       # macOS: Build native library
       - name: Build Native Library (macOS)
@@ -113,7 +113,7 @@ jobs:
           $env:HERMES_SMOKE_TEST = "1"
           $env:HERMES_SMOKE_TEST_EXIT = "1"
 
-          $appPath = "samples/IntegrationTestApp/bin/Release/net10.0/IntegrationTestApp.exe"
+          $appPath = "samples/IntegrationTestApp/bin/Release/net11.0/IntegrationTestApp.exe"
           $timeout = 120
 
           Write-Output "Starting integration tests: $appPath"
@@ -198,7 +198,7 @@ jobs:
           export HERMES_SMOKE_TEST=1
           export HERMES_SMOKE_TEST_EXIT=1
 
-          APP_PATH="samples/IntegrationTestApp/bin/Release/net10.0/IntegrationTestApp"
+          APP_PATH="samples/IntegrationTestApp/bin/Release/net11.0/IntegrationTestApp"
           APP_DIR=$(dirname "$APP_PATH")
           TIMEOUT=120
 
@@ -303,7 +303,7 @@ jobs:
           export DISPLAY=:99
           export GDK_BACKEND=x11
 
-          APP_PATH="samples/IntegrationTestApp/bin/Release/net10.0/IntegrationTestApp"
+          APP_PATH="samples/IntegrationTestApp/bin/Release/net11.0/IntegrationTestApp"
           APP_DIR=$(dirname "$APP_PATH")
           TIMEOUT=120
 
@@ -399,7 +399,7 @@ jobs:
             export GDK_BACKEND=x11
           fi
           if [[ "${{ runner.os }}" != "Windows" ]]; then
-            chmod +x benchmarks/Hermes.Benchmarks.Apps/*/bin/Release/net10.0/*TestApp 2>/dev/null || true
+            chmod +x benchmarks/Hermes.Benchmarks.Apps/*/bin/Release/net11.0/*TestApp 2>/dev/null || true
           fi
           dotnet run --project benchmarks/Hermes.Benchmarks.Harness -c Release --no-build -- --iterations 1 --warmup 1
 
@@ -440,7 +440,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         if: steps.check.outputs.skip != 'true'
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
 
       - name: Build Single Instance Integration Tests
         if: steps.check.outputs.skip != 'true'
@@ -450,7 +450,7 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         shell: bash
         run: |
-          APP_PATH="tests/Hermes.SingleInstance.IntegrationTests/bin/Release/net10.0/Hermes.SingleInstance.IntegrationTests"
+          APP_PATH="tests/Hermes.SingleInstance.IntegrationTests/bin/Release/net11.0/Hermes.SingleInstance.IntegrationTests"
           if [[ "${{ runner.os }}" == "Windows" ]]; then
             APP_PATH="${APP_PATH}.exe"
           fi

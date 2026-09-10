@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-09-09
+
+### Changed
+
+- Retargeted all projects to `net11.0` on the .NET 11 RC1 SDK, pinned via `global.json`
+- CI resolves the SDK from `global.json` instead of a hardcoded `dotnet-version`
+- `Microsoft.AspNetCore.Components.WebView` and the WebAssembly packages moved to `11.0.0-rc.1.26425.128`
+- Removed the explicit `Microsoft.SourceLink.GitHub` references; the .NET SDK supplies SourceLink implicitly, and the floating `8.*` range pulled in a `Microsoft.Build.Tasks.Git` version with a published advisory (NU1902)
+
+### Fixed
+
+- `SingleInstanceGuard.Dispose()` no longer throws when the mutex is released from a thread that does not own it. .NET 11 raises `InvalidOperationException` where earlier runtimes raised `ApplicationException`, and only the latter was handled
+
 ## [1.0.0] - 2026-04-28
 
 ### Added
