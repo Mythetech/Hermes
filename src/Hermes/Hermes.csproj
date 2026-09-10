@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -27,7 +27,7 @@
 
   <!-- NuGet Package Metadata -->
   <PropertyGroup>
-    <VersionPrefix>1.2.0</VersionPrefix>
+    <VersionPrefix>1.3.0</VersionPrefix>
     <PackageId>Mythetech.Hermes</PackageId>
     <Authors>Mythetech</Authors>
     <Description>Cross-platform native desktop framework for .NET</Description>
@@ -50,14 +50,14 @@
   <!-- Multi-RID packaging for CI (passed via -p:IsPackaging=true -p:CIArtifactsPath=...) -->
   <ItemGroup Condition="'$(IsPackaging)' == 'true' AND '$(CIArtifactsPath)' != ''">
     <!-- Runtime-specific assemblies from cross-platform builds -->
-    <None Include="$(CIArtifactsPath)/dll-win-x64/Hermes.dll" Pack="true" PackagePath="runtimes/win-x64/lib/net10.0/" />
-    <None Include="$(CIArtifactsPath)/dll-win-x64/Hermes.pdb" Pack="true" PackagePath="runtimes/win-x64/lib/net10.0/" />
-    <None Include="$(CIArtifactsPath)/dll-linux-x64/Hermes.dll" Pack="true" PackagePath="runtimes/linux-x64/lib/net10.0/" />
-    <None Include="$(CIArtifactsPath)/dll-linux-x64/Hermes.pdb" Pack="true" PackagePath="runtimes/linux-x64/lib/net10.0/" />
-    <None Include="$(CIArtifactsPath)/dll-linux-arm64/Hermes.dll" Pack="true" PackagePath="runtimes/linux-arm64/lib/net10.0/" />
-    <None Include="$(CIArtifactsPath)/dll-linux-arm64/Hermes.pdb" Pack="true" PackagePath="runtimes/linux-arm64/lib/net10.0/" />
-    <None Include="$(CIArtifactsPath)/dll-osx/Hermes.dll" Pack="true" PackagePath="runtimes/osx/lib/net10.0/" />
-    <None Include="$(CIArtifactsPath)/dll-osx/Hermes.pdb" Pack="true" PackagePath="runtimes/osx/lib/net10.0/" />
+    <None Include="$(CIArtifactsPath)/dll-win-x64/Hermes.dll" Pack="true" PackagePath="runtimes/win-x64/lib/net11.0/" />
+    <None Include="$(CIArtifactsPath)/dll-win-x64/Hermes.pdb" Pack="true" PackagePath="runtimes/win-x64/lib/net11.0/" />
+    <None Include="$(CIArtifactsPath)/dll-linux-x64/Hermes.dll" Pack="true" PackagePath="runtimes/linux-x64/lib/net11.0/" />
+    <None Include="$(CIArtifactsPath)/dll-linux-x64/Hermes.pdb" Pack="true" PackagePath="runtimes/linux-x64/lib/net11.0/" />
+    <None Include="$(CIArtifactsPath)/dll-linux-arm64/Hermes.dll" Pack="true" PackagePath="runtimes/linux-arm64/lib/net11.0/" />
+    <None Include="$(CIArtifactsPath)/dll-linux-arm64/Hermes.pdb" Pack="true" PackagePath="runtimes/linux-arm64/lib/net11.0/" />
+    <None Include="$(CIArtifactsPath)/dll-osx/Hermes.dll" Pack="true" PackagePath="runtimes/osx/lib/net11.0/" />
+    <None Include="$(CIArtifactsPath)/dll-osx/Hermes.pdb" Pack="true" PackagePath="runtimes/osx/lib/net11.0/" />
     <!-- macOS native library (universal arm64 + x86_64, so the arch-neutral osx RID covers both) -->
     <None Include="$(CIArtifactsPath)/native-osx/libHermes.Native.macOS.dylib" Pack="true" PackagePath="runtimes/osx/native/" />
     <!-- Linux native library: one build per architecture, NuGet never falls back from linux-arm64 to linux-x64 -->
@@ -65,17 +65,13 @@
     <None Include="$(CIArtifactsPath)/native-linux-arm64/libHermes.Native.Linux.so" Pack="true" PackagePath="runtimes/linux-arm64/native/" />
     <!-- Windows: WebView2 managed SDK and native loader (bundled because NuGet can't resolve
          PackageReferences added via .targets files during restore) -->
-    <None Include="$(CIArtifactsPath)/webview2-win-x64/Microsoft.Web.WebView2.Core.dll" Pack="true" PackagePath="runtimes/win-x64/lib/net10.0/" />
+    <None Include="$(CIArtifactsPath)/webview2-win-x64/Microsoft.Web.WebView2.Core.dll" Pack="true" PackagePath="runtimes/win-x64/lib/net11.0/" />
     <None Include="$(CIArtifactsPath)/webview2-win-x64/runtimes/win-x64/native/WebView2Loader.dll" Pack="true" PackagePath="runtimes/win-x64/native/" />
     <!-- MSBuild targets for conditional platform dependencies (Linux GTK/WebKit) -->
-    <None Include="Hermes.targets" Pack="true" PackagePath="buildTransitive/net10.0/Mythetech.Hermes.targets" />
-    <None Include="Hermes.targets" Pack="true" PackagePath="build/net10.0/Mythetech.Hermes.targets" />
+    <None Include="Hermes.targets" Pack="true" PackagePath="buildTransitive/net11.0/Mythetech.Hermes.targets" />
+    <None Include="Hermes.targets" Pack="true" PackagePath="build/net11.0/Mythetech.Hermes.targets" />
   </ItemGroup>
 
-  <!-- SourceLink for debugging -->
-  <ItemGroup>
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.*" PrivateAssets="All" />
-  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Hermes.Contracts\Hermes.Contracts.csproj" />

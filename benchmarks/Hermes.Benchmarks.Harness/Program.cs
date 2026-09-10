@@ -508,7 +508,7 @@ public class Program
 
     private static string GetDotnetAppPath(string basePath, string appName)
     {
-        return Path.Combine(basePath, appName, "bin", "Release", "net10.0", GetExecutableName(appName));
+        return Path.Combine(basePath, appName, "bin", "Release", "net11.0", GetExecutableName(appName));
     }
 
     private static string GetTauriAppPath(string basePath)

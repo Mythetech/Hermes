@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsAotCompatible>true</IsAotCompatible>
@@ -17,7 +17,7 @@
 
   <!-- NuGet Package Metadata -->
   <PropertyGroup>
-    <VersionPrefix>1.2.0</VersionPrefix>
+    <VersionPrefix>1.3.0</VersionPrefix>
     <PackageId>Mythetech.Hermes.Blazor</PackageId>
     <Authors>Mythetech</Authors>
     <Description>Blazor integration for Hermes desktop framework</Description>
@@ -37,10 +37,6 @@
     <None Include="../../README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
-  <!-- SourceLink for debugging -->
-  <ItemGroup>
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.*" PrivateAssets="All" />
-  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Hermes\Hermes.csproj" />
@@ -54,12 +50,12 @@
 
   <!-- MSBuild targets for static web asset handling (auto-imported by consuming projects) -->
   <ItemGroup>
-    <None Include="build/Hermes.Blazor.targets" Pack="true" PackagePath="buildTransitive/net10.0/Mythetech.Hermes.Blazor.targets" />
-    <None Include="build/Hermes.Blazor.targets" Pack="true" PackagePath="build/net10.0/Mythetech.Hermes.Blazor.targets" />
+    <None Include="build/Hermes.Blazor.targets" Pack="true" PackagePath="buildTransitive/net11.0/Mythetech.Hermes.Blazor.targets" />
+    <None Include="build/Hermes.Blazor.targets" Pack="true" PackagePath="build/net11.0/Mythetech.Hermes.Blazor.targets" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="10.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="11.0.0-rc.1.26425.128" />
   </ItemGroup>
 
   <ItemGroup>
