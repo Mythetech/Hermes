@@ -11,7 +11,7 @@ Hermes.Web enables React, Vue, Angular, Svelte, and other JS/TS frameworks as al
 **NuGet:** `Mythetech.Hermes.Web`
 
 - Depends on `Mythetech.Hermes` (core only, no Blazor dependency)
-- Targets `net10.0`
+- Targets `net11.0`
 
 **npm:** `@hermes/bridge`
 
