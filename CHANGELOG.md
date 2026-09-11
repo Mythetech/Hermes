@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.1] - 2026-09-11
+
+### Fixed
+
+- `Hermes.Blazor` now depends on `Microsoft.AspNetCore.Components.WebView` `11.0.0-rc.1.26425.128`. Its `FrameworkReference` to `Microsoft.AspNetCore.App` puts consuming apps on the .NET 11 shared framework, so the `Components.Web` runtime was already the RC1 build while the 10.0.12 WebView package embedded the 10.x `blazor.webview.js`. Any new JavaScript interop entry point failed at first render; `Virtualize` crashed every app that rendered one with `Blazor._internal.Virtualize.setAnchorMode is not a function`. The 1.3.0 changelog entry described this alignment, but the published package still shipped the 10.0.12 dependency
+- `NU5104` is suppressed for `Hermes.Blazor` until the 11.0.0 GA package replaces the RC build
+
 ## [1.3.0] - 2026-09-09
 
 ### Changed
