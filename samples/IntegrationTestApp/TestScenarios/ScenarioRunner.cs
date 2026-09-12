@@ -14,12 +14,14 @@ namespace IntegrationTestApp.TestScenarios;
 public sealed class ScenarioRunner : IDisposable
 {
     private readonly HermesBlazorApp _app;
+    private readonly VirtualizeProbe _virtualizeProbe;
     private readonly bool _autoExit;
     private bool _disposed;
 
-    public ScenarioRunner(HermesBlazorApp app, bool autoExit = false)
+    public ScenarioRunner(HermesBlazorApp app, VirtualizeProbe virtualizeProbe, bool autoExit = false)
     {
         _app = app;
+        _virtualizeProbe = virtualizeProbe;
         _autoExit = autoExit;
     }
 
@@ -60,6 +62,11 @@ public sealed class ScenarioRunner : IDisposable
         // Web message test runs LAST - gives WebView2 maximum time to initialize
         // On Windows, WebView2 init is async and can take several seconds in CI
         await RunWebMessageRoundTripTestAsync();
+
+        // Virtualize interop runs after the web message round trip because both need the WebView
+        // to be up; by this point the home page has long since rendered, so the probe is normally
+        // already resolved and this returns immediately.
+        await RunVirtualizeInteropTestAsync();
 
         // Print summary
         TestReporter.PrintSummary();
@@ -255,6 +262,25 @@ public sealed class ScenarioRunner : IDisposable
         catch (Exception ex)
         {
             TestReporter.Fail("web-message-roundtrip", ex.Message);
+        }
+    }
+
+    private async Task RunVirtualizeInteropTestAsync()
+    {
+        TestReporter.Start("blazor-virtualize-interop");
+        try
+        {
+            // Same 30s budget as the web message round trip: WebView2 initialization on Windows CI
+            // can take that long, and Virtualize cannot call into JS before it is ready.
+            var completed = await _virtualizeProbe.WaitAsync(TimeSpan.FromSeconds(30));
+
+            TestReporter.Assert("blazor-virtualize-interop",
+                completed,
+                _virtualizeProbe.Error);
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail("blazor-virtualize-interop", ex.Message);
         }
     }
 

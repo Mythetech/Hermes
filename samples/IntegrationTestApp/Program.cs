@@ -45,6 +45,9 @@ public static class Program
             AutoExit = autoExit
         });
 
+        var virtualizeProbe = new VirtualizeProbe();
+        builder.Services.AddSingleton(virtualizeProbe);
+
         builder.Services.AddFluentUIComponents();
 
         builder.RootComponents.Add<App>("#app");
@@ -86,7 +89,7 @@ public static class Program
         {
             TestReporter.Ready();
 
-            var runner = new ScenarioRunner(app, autoExit);
+            var runner = new ScenarioRunner(app, virtualizeProbe, autoExit);
             _ = Task.Run(async () =>
             {
                 // Wait for message loop to start pumping and WebView to begin initializing
