@@ -1,6 +1,7 @@
 @page "/"
 @using Hermes.Blazor.Diagnostics
 @inject TestContext Context
+@inject VirtualizeProbe Probe
 
 <FluentStack Orientation="Orientation.Vertical" VerticalGap="20">
     <FluentCard>
@@ -11,6 +12,7 @@
             <li><strong>Custom Titlebar</strong> - Drag regions and window controls</li>
             <li><strong>Native Menus</strong> - Menu creation and accelerators</li>
             <li><strong>Window Management</strong> - Size, position, maximize/restore</li>
+            <li><strong>Virtualize Interop</strong> - Framework JS entry points used by Blazor components</li>
         </ul>
     </FluentCard>
 
@@ -43,9 +45,33 @@
             <FluentProgressRing />
         }
     </FluentCard>
+
+    <FluentCard>
+        <h2>Virtualize</h2>
+        <p>
+            Virtualize drives <code>Blazor._internal.Virtualize</code> in <code>blazor.webview.js</code>.
+            A script older than the shared framework's Components.Web fails here at first render,
+            which is how the .NET 11 RC1 <code>setAnchorMode</code> break surfaced.
+        </p>
+        <VirtualizeErrorBoundary>
+            <ChildContent>
+                <div class="virtualize-viewport">
+                    <Virtualize ItemsProvider="@LoadRowsAsync" ItemSize="24" Context="row">
+                        <div class="virtualize-row">@row</div>
+                    </Virtualize>
+                </div>
+            </ChildContent>
+            <ErrorContent Context="ex">
+                <FluentBadge Appearance="Appearance.Accent">Virtualize failed: @ex.Message</FluentBadge>
+            </ErrorContent>
+        </VirtualizeErrorBoundary>
+    </FluentCard>
 </FluentStack>
 
 @code {
+    private static readonly string[] Rows =
+        Enumerable.Range(0, 1000).Select(i => $"Virtualized row {i}").ToArray();
+
     private TimeSpan _renderTime;
     private bool _firstRenderReported;
 
@@ -65,5 +91,21 @@
 
             StateHasChanged();
         }
+    }
+
+    private ValueTask<ItemsProviderResult<string>> LoadRowsAsync(ItemsProviderRequest request)
+    {
+        // Virtualize renders with a visible item capacity of zero until the JS spacer callback
+        // reports the container size, so a non-empty request proves the interop round trip closed.
+        if (request.Count > 0)
+        {
+            Probe.ReportInteropCompleted();
+        }
+
+        var start = Math.Min(request.StartIndex, Rows.Length);
+        var count = Math.Min(request.Count, Rows.Length - start);
+
+        return ValueTask.FromResult(
+            new ItemsProviderResult<string>(Rows.Skip(start).Take(count), Rows.Length));
     }
 }
