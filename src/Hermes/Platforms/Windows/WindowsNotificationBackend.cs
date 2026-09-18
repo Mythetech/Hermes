@@ -29,6 +29,9 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
     private const int NotificationSettingEnabled = 0;
     private const int TrackedToastCapacity = 256;
 
+    // HWND_MESSAGE is a macro cast ((HWND)-3) in winuser.h, which CsWin32 cannot emit as a constant.
+    private static readonly HWND s_messageOnlyParent = new(-3);
+
     private static readonly WNDPROC s_wndProc = NotificationWindowProc;
     private static readonly object s_registrationLock = new();
     private static readonly Dictionary<HWND, WindowsNotificationBackend> s_hwndToInstance = new();
@@ -314,7 +317,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
                     className,
                     0,
                     0, 0, 0, 0,
-                    PInvoke.HWND_MESSAGE,
+                    s_messageOnlyParent,
                     HMENU.Null,
                     s_hInstance,
                     null);
