@@ -19,6 +19,7 @@ LoadCursorW
 CreateSolidBrush
 DeleteObject
 GetModuleHandleW
+HWND_MESSAGE
 CW_USEDEFAULT
 MINMAXINFO
 WINDOW_LONG_PTR_INDEX

@@ -387,16 +387,16 @@ public static class HermesApplication
         try
         {
 #if WINDOWS
-            // if (OperatingSystem.IsWindows())
-            //     return new Platforms.Windows.WindowsNotificationBackend(options); // enabled in Task 6
+            if (OperatingSystem.IsWindows())
+                return new Platforms.Windows.WindowsNotificationBackend(options);
 #endif
 #if MACOS
             if (OperatingSystem.IsMacOS())
-                return new Platforms.macOS.MacNotificationBackend(options); // enabled in Task 7
+                return new Platforms.macOS.MacNotificationBackend(options);
 #endif
 #if LINUX
             if (OperatingSystem.IsLinux())
-                return new Platforms.Linux.LinuxNotificationBackend(options); // enabled in Task 7
+                return new Platforms.Linux.LinuxNotificationBackend(options);
 #endif
         }
         catch (DllNotFoundException ex)
