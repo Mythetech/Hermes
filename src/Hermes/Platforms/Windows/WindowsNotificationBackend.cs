@@ -98,6 +98,9 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
     {
         EnsureNotDisposed();
 
+        if (!IsSupported)
+            return Task.FromException(new InvalidOperationException($"Toast notifications are unavailable: {UnsupportedReason}"));
+
         try
         {
             var setting = GetNotifierSetting(_notifier);
@@ -111,7 +114,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
                 var toast2 = QueryInterface(toast, in IID_IToastNotification2);
                 try
                 {
-                    using var tag = new HString(id);
+                    using var tag = new HString(ToastTag.FromId(id));
                     using var group = new HString(ToastGroup);
                     SetTag(toast2, tag.Handle);
                     SetGroup(toast2, group.Handle);
@@ -149,6 +152,9 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
     {
         EnsureNotDisposed();
 
+        if (!IsSupported)
+            return;
+
         lock (_toastsLock)
         {
             if (_toastsById.Remove(id, out var entry))
@@ -158,7 +164,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
         if (_history == IntPtr.Zero)
             return;
 
-        using var tag = new HString(id);
+        using var tag = new HString(ToastTag.FromId(id));
         using var group = new HString(ToastGroup);
         using var appId = new HString(_appId);
         RemoveGroupedTagWithId(_history, tag.Handle, group.Handle, appId.Handle);
@@ -167,6 +173,9 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
     public void DismissAll()
     {
         EnsureNotDisposed();
+
+        if (!IsSupported)
+            return;
 
         lock (_toastsLock)
         {
