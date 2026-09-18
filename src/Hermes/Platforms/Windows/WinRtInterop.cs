@@ -20,12 +20,9 @@ internal static unsafe partial class WinRtInterop
 
     // IIDs: copied from the Windows 10 SDK headers. Verify against the header, never from memory.
     internal static readonly Guid IID_IUnknown = new("00000000-0000-0000-C000-000000000046");
-    internal static readonly Guid IID_IInspectable = new("AF86E2E0-B12D-4C6A-9C5A-D7AA65101E90");
     internal static readonly Guid IID_IAgileObject = new("94EA2B94-E9CC-49E0-C0FF-EE64CA8F5B90");
     internal static readonly Guid IID_IToastNotificationManagerStatics = new("50AC103F-D235-4598-BBEF-98FE4D1A3AD4");
     internal static readonly Guid IID_IToastNotificationManagerStatics2 = new("7AB93C52-0E48-4750-BA9D-1A4113981847");
-    internal static readonly Guid IID_IToastNotificationHistory = new("5CADDC63-01D3-4C97-986F-0533483FEE14");
-    internal static readonly Guid IID_IToastNotifier = new("75927B93-03F3-41EC-91D3-6E5BAC1B38E7");
     internal static readonly Guid IID_IToastNotificationFactory = new("04124B20-82C6-4229-B109-FD9ED4662B53");
     internal static readonly Guid IID_IToastNotification = new("997E2675-059E-4E60-8B06-1760917C8B80");
     internal static readonly Guid IID_IToastNotification2 = new("9DFB9FD1-143A-490E-90BF-B9FBA7132DE7");

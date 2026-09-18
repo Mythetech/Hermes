@@ -92,10 +92,15 @@
     }
 
     NSError* attachError = nil;
-    return [UNNotificationAttachment attachmentWithIdentifier:@"icon"
-                                                          URL:[NSURL fileURLWithPath:tempPath]
-                                                      options:nil
-                                                        error:&attachError];
+    UNNotificationAttachment* attachment = [UNNotificationAttachment attachmentWithIdentifier:@"icon"
+                                                                                          URL:[NSURL fileURLWithPath:tempPath]
+                                                                                      options:nil
+                                                                                        error:&attachError];
+    if (!attachment) {
+        // Only a successful attachment hands the copy over to the notification store, so clean up after a failure.
+        [[NSFileManager defaultManager] removeItemAtPath:tempPath error:nil];
+    }
+    return attachment;
 }
 
 - (void)dismiss:(NSString*)identifier {

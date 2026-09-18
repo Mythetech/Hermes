@@ -269,4 +269,48 @@ public sealed class NativeNotificationCenterTests
         Assert.False(center.IsSupported);
         Assert.Equal("why", center.UnsupportedReason);
     }
+
+    [Fact]
+    public void Clicked_ThrowingHandler_IsRoutedToDispatcherUnhandledException()
+    {
+        var (center, backend, _) = Create();
+        Exception? routed = null;
+        Action<Exception> sink = ex => routed = ex;
+        HermesApplication.DispatcherUnhandledException += sink;
+        try
+        {
+            center.Clicked += _ => throw new InvalidOperationException("handler failed");
+
+            backend.RaiseClicked("n1");
+        }
+        finally
+        {
+            HermesApplication.DispatcherUnhandledException -= sink;
+        }
+
+        Assert.IsType<InvalidOperationException>(routed);
+        Assert.Equal("handler failed", routed.Message);
+    }
+
+    [Fact]
+    public void Clicked_ThrowingHandler_DoesNotSuppressLaterHandlers()
+    {
+        var (center, backend, _) = Create();
+        Action<Exception> sink = _ => { };
+        HermesApplication.DispatcherUnhandledException += sink;
+        var secondRan = false;
+        try
+        {
+            center.Clicked += _ => throw new InvalidOperationException("first");
+            center.Clicked += _ => secondRan = true;
+
+            backend.RaiseClicked("n1");
+        }
+        finally
+        {
+            HermesApplication.DispatcherUnhandledException -= sink;
+        }
+
+        Assert.True(secondRan);
+    }
 }

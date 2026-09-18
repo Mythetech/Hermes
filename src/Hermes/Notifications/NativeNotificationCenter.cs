@@ -134,13 +134,19 @@ public sealed class NativeNotificationCenter : IDisposable
         if (handler is null)
             return;
 
-        try
+        var args = new NotificationClickedEventArgs(id, tag);
+
+        // Invoked one subscriber at a time so a handler that throws cannot swallow the ones behind it.
+        foreach (var subscriber in handler.GetInvocationList())
         {
-            handler(new NotificationClickedEventArgs(id, tag));
-        }
-        catch (Exception ex)
-        {
-            HermesApplication.RaiseDispatcherUnhandledException(ex);
+            try
+            {
+                ((Action<NotificationClickedEventArgs>)subscriber)(args);
+            }
+            catch (Exception ex)
+            {
+                HermesApplication.RaiseDispatcherUnhandledException(ex);
+            }
         }
     }
 

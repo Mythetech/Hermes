@@ -26,6 +26,7 @@ internal sealed class LinuxNotificationBackend : INotificationBackend
     internal LinuxNotificationBackend(NativeNotificationOptions options)
     {
         _clickCallback = OnNativeClicked;
+        // The daemon shows app_name to the user, so send DisplayName rather than the AppId.
         _handle = LinuxNative.NotificationsCreate(
             options.DisplayName ?? options.AppId ?? "Hermes",
             options.IconPath,

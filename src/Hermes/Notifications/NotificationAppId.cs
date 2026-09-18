@@ -3,7 +3,8 @@ namespace Hermes.Notifications;
 
 /// <summary>
 /// Normalises an app id into a valid Windows AppUserModelID: no whitespace, at most 128 characters.
-/// Used on every platform so behaviour is uniform and testable.
+/// Only the Windows backend calls it; it lives outside Platforms/Windows so the rule is unit-tested
+/// on every CI platform.
 /// </summary>
 internal static class NotificationAppId
 {
