@@ -19,6 +19,13 @@ namespace Hermes.Platforms.Windows;
 /// Registers the app's AppUserModelID under HKCU so an unpackaged exe may toast, and marshals
 /// Activated callbacks (WinRT thread pool) onto the UI thread through a message-only window,
 /// mirroring <see cref="WindowsStatusIconBackend"/>.
+/// <para>
+/// ToastNotifier and the toast objects are apartment-bound: created on the STA UI thread they reject
+/// calls from thread-pool threads with RPC_E_WRONG_THREAD, and a Blazor app calls ShowAsync from both.
+/// Every WinRT object therefore lives in the MTA, which all thread-pool threads share, and every WinRT
+/// call is routed there through <see cref="RunInMultithreadedApartment"/>. Only the message-only window
+/// stays on the constructing UI thread, because click delivery needs that thread's pump.
+/// </para>
 /// </summary>
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsNotificationBackend : INotificationBackend
@@ -68,20 +75,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
         try
         {
             RegisterAppUserModelId(_appId, options.DisplayName ?? _appId, options.IconPath);
-
-            var managerStatics = GetActivationFactory(ToastNotificationManagerClass, in IID_IToastNotificationManagerStatics);
-            try
-            {
-                using var appId = new HString(_appId);
-                _notifier = CreateToastNotifierWithId(managerStatics, appId.Handle);
-                _history = TryGetHistory(managerStatics);
-            }
-            finally
-            {
-                Release(managerStatics);
-            }
-
-            _toastFactory = GetActivationFactory(ToastNotificationClass, in IID_IToastNotificationFactory);
+            RunInMultithreadedApartment(CreateWinRtObjects);
             CreateMessageWindow();
             ToastActivatedHandler.Activated = OnToastActivated;
             IsSupported = true;
@@ -106,6 +100,11 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
         if (!IsSupported)
             return Task.FromException(new InvalidOperationException($"Toast notifications are unavailable: {UnsupportedReason}"));
 
+        return Task.Run(() => ShowCore(id, title, body, iconPath, silent));
+    }
+
+    private void ShowCore(string id, string title, string? body, string? iconPath, bool silent)
+    {
         try
         {
             var setting = GetNotifierSetting(_notifier);
@@ -157,13 +156,13 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             }
 
             ShowToast(_notifier, toast);
-            return Task.CompletedTask;
         }
         catch (Exception ex)
         {
-            return Task.FromException(new InvalidOperationException($"Windows rejected the notification: {ex.Message}", ex));
+            throw new InvalidOperationException($"Windows rejected the notification: {ex.Message}", ex);
         }
     }
+
 
     public void Dismiss(string id)
     {
@@ -172,6 +171,11 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
         if (!IsSupported)
             return;
 
+        RunInMultithreadedApartment(() => DismissCore(id));
+    }
+
+    private void DismissCore(string id)
+    {
         lock (_toastsLock)
         {
             if (_toastsById.Remove(id, out var entry))
@@ -194,6 +198,11 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
         if (!IsSupported)
             return;
 
+        RunInMultithreadedApartment(DismissAllCore);
+    }
+
+    private void DismissAllCore()
+    {
         lock (_toastsLock)
         {
             foreach (var entry in _toastsById.Values)
@@ -210,6 +219,29 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
     }
 
     #region Toast creation
+
+    private void CreateWinRtObjects()
+    {
+        var managerStatics = GetActivationFactory(ToastNotificationManagerClass, in IID_IToastNotificationManagerStatics);
+        try
+        {
+            using var appId = new HString(_appId);
+            _notifier = CreateToastNotifierWithId(managerStatics, appId.Handle);
+            _history = TryGetHistory(managerStatics);
+        }
+        finally
+        {
+            Release(managerStatics);
+        }
+
+        _toastFactory = GetActivationFactory(ToastNotificationClass, in IID_IToastNotificationFactory);
+    }
+
+    // .NET thread-pool threads are MTA, so a blocking join on a pool task is the cheapest way to reach
+    // that apartment from the STA UI thread. The join never depends on the UI pump, which keeps it safe
+    // to call from Dispose after the message loop has exited.
+    private static void RunInMultithreadedApartment(Action action) =>
+        Task.Run(action).GetAwaiter().GetResult();
 
     private IntPtr CreateToast(string xml)
     {
@@ -396,6 +428,21 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
         if (IsSupported)
             ToastActivatedHandler.Activated = null;
 
+        RunInMultithreadedApartment(ReleaseWinRtObjects);
+
+        if (!_hwnd.IsNull)
+        {
+            lock (s_registrationLock)
+            {
+                s_hwndToInstance.Remove(_hwnd);
+            }
+            PInvoke.DestroyWindow(_hwnd);
+            _hwnd = HWND.Null;
+        }
+    }
+
+    private void ReleaseWinRtObjects()
+    {
         lock (_toastsLock)
         {
             foreach (var entry in _toastsById.Values)
@@ -410,16 +457,6 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
         _toastFactory = IntPtr.Zero;
         Release(_notifier);
         _notifier = IntPtr.Zero;
-
-        if (!_hwnd.IsNull)
-        {
-            lock (s_registrationLock)
-            {
-                s_hwndToInstance.Remove(_hwnd);
-            }
-            PInvoke.DestroyWindow(_hwnd);
-            _hwnd = HWND.Null;
-        }
     }
 
     public void Dispose()
