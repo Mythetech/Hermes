@@ -27,6 +27,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
     private const uint WM_NOTIFICATION_CLICKED = PInvoke.WM_APP + 2;
     private const string ToastGroup = "hermes";
     private const int NotificationSettingEnabled = 0;
+    private const int TrackedToastCapacity = 256;
 
     private static readonly WNDPROC s_wndProc = NotificationWindowProc;
     private static readonly object s_registrationLock = new();
@@ -37,6 +38,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
     private readonly string _appId;
     private readonly ConcurrentQueue<string> _pendingClicks = new();
     private readonly Dictionary<string, (IntPtr Toast, long Token)> _toastsById = new();
+    private readonly Queue<string> _toastOrder = new();
     private readonly object _toastsLock = new();
     private HWND _hwnd;
     private IntPtr _notifier;
@@ -134,9 +136,21 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
 
             lock (_toastsLock)
             {
-                if (_toastsById.Remove(id, out var previous))
+                var replaced = _toastsById.Remove(id, out var previous);
+                if (replaced)
                     ReleaseToast(previous);
                 _toastsById[id] = (toast, token);
+                if (!replaced)
+                    _toastOrder.Enqueue(id);
+
+                // An evicted toast stays on screen and only loses its click callback, which matches the
+                // 256-entry tag map the notification center itself keeps.
+                while (_toastOrder.Count > TrackedToastCapacity)
+                {
+                    var evicted = _toastOrder.Dequeue();
+                    if (_toastsById.Remove(evicted, out var old))
+                        ReleaseToast(old);
+                }
             }
 
             ShowToast(_notifier, toast);
@@ -182,6 +196,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             foreach (var entry in _toastsById.Values)
                 ReleaseToast(entry);
             _toastsById.Clear();
+            _toastOrder.Clear();
         }
 
         if (_history == IntPtr.Zero)
@@ -383,6 +398,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             foreach (var entry in _toastsById.Values)
                 ReleaseToast(entry);
             _toastsById.Clear();
+            _toastOrder.Clear();
         }
 
         Release(_history);
