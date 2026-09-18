@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **Native notifications** on all platforms via `HermesApplication.Notifications` and the `INativeNotifications` DI contract in `Hermes.Blazor`. Title, body, icon, silent flag, and a `Clicked` event carrying an app-supplied `Tag` for navigation. macOS uses UNUserNotificationCenter (bundle required), Windows uses WinRT toasts through hand-rolled COM with no new packages, Linux uses `org.freedesktop.Notifications` over GDBus with no new native dependencies. Unsupported hosts are a logged no-op, never an exception
+- `HermesApplication.ConfigureNotifications` for the app id, display name and icon used by the platform notification center
+- `NotificationsDemo` sample with a macOS bundling script for manual verification
+
 ## [1.3.1] - 2026-09-11
 
 ### Fixed

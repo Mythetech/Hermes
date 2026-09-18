@@ -20,6 +20,7 @@ Designed for .NET 10 and modern development workflows, Hermes prioritizes AOT co
 - **Native Menus** Full menu bar support with keyboard accelerators and runtime modification for plugin systems
 - **Context Menus** Native right-click menus with screen coordinate positioning
 - **File Dialogs** Native open, save, and folder selection dialogs with file filters
+- **Native Notifications** Notification-center integration on every platform with click-to-navigate payloads
 - **AOT Compatible**,Designed for Native AOT from day one using `LibraryImport` instead of `DllImport`
 - **Blazor Integration** First-class support for Blazor applications via `Hermes.Blazor`
 - **Blazor Hot Reload** Zero-config CSS and component hot reload via `dotnet watch`, no setup required
