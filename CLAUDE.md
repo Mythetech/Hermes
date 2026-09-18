@@ -28,7 +28,7 @@ macOS is stricter: closing the last window makes AppKit call `[NSApp terminate:]
 ## Verification commands
 
 - Unit suite: `dotnet test tests/Hermes.Tests` (also builds the benchmark apps for the guard tests)
-- Integration scenarios: `HERMES_INTEGRATION_TEST=1 HERMES_INTEGRATION_TEST_EXIT=1 dotnet run --project samples/IntegrationTestApp` (expects 12/12 PASS, exit 0)
+- Integration scenarios: `HERMES_INTEGRATION_TEST=1 HERMES_INTEGRATION_TEST_EXIT=1 dotnet run --project samples/IntegrationTestApp` (expects 13/13 PASS, exit 0)
 - Benchmark smoke, same thing PR CI runs: build the three apps and the harness in Release, then `dotnet run --project benchmarks/Hermes.Benchmarks.Harness -c Release -- --iterations 1 --warmup 0` (exit code is the verdict)
 
 Run the unit suite after every change. Run the integration scenarios before declaring framework changes done.
