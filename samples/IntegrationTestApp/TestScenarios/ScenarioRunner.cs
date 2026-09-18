@@ -512,6 +512,9 @@ public sealed class ScenarioRunner : IDisposable
         TestReporter.Start(testName);
         try
         {
+            // Backends create thread-affine resources on first access, and this runner is on a thread-pool thread.
+            _app.MainWindow.Invoke(() => _ = HermesApplication.Notifications.IsSupported);
+
             var notifications = _app.Services.GetRequiredService<INativeNotifications>();
             var notification = new NativeNotification
             {
