@@ -12,6 +12,7 @@ struct _HermesNotifications {
     guint action_subscription;
     guint closed_subscription;
     GHashTable* ids_by_daemon_id;   // guint32 daemon id -> char* Hermes id (owned)
+    GCancellable* cancellable;      // cancels in-flight calls so replies cannot outlive the struct
     char* app_name;
     char* icon_path;
     NotificationClickedCallback click_callback;

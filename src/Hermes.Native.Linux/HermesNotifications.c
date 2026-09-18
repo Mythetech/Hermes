@@ -55,6 +55,7 @@ HermesNotifications* hermes_notifications_new(const char* appName, const char* i
     HermesNotifications* n = calloc(1, sizeof(HermesNotifications));
     if (!n) return NULL;
 
+    n->cancellable = g_cancellable_new();
     n->click_callback = clickCallback;
     n->app_name = g_strdup(appName && *appName ? appName : "Hermes");
     n->icon_path = g_strdup(iconPath ? iconPath : "");
@@ -93,6 +94,10 @@ HermesNotifications* hermes_notifications_new(const char* appName, const char* i
 void hermes_notifications_destroy(HermesNotifications* n) {
     if (!n) return;
 
+    // A Notify reply can arrive after this call frees n, so cancel before tearing anything down:
+    // cancelled calls complete through the error branch, which never touches call->notifications.
+    g_cancellable_cancel(n->cancellable);
+
     if (n->connection) {
         if (n->action_subscription) g_dbus_connection_signal_unsubscribe(n->connection, n->action_subscription);
         if (n->closed_subscription) g_dbus_connection_signal_unsubscribe(n->connection, n->closed_subscription);
@@ -103,6 +108,7 @@ void hermes_notifications_destroy(HermesNotifications* n) {
     g_free(n->app_name);
     g_free(n->icon_path);
     g_free(n->unsupported_reason);
+    g_object_unref(n->cancellable);
     free(n);
 }
 
@@ -208,7 +214,7 @@ void Hermes_Notifications_Show(void* center, const char* id, const char* title, 
         NOTIFY_BUS_NAME, NOTIFY_OBJECT_PATH, NOTIFY_INTERFACE, "Notify",
         g_variant_new("(susssasa{sv}i)",
             n->app_name, (guint32)0, n->icon_path, title, body ? body : "", &actions, &hints, (gint32)-1),
-        G_VARIANT_TYPE("(u)"), G_DBUS_CALL_FLAGS_NONE, -1, NULL, on_notify_reply, call);
+        G_VARIANT_TYPE("(u)"), G_DBUS_CALL_FLAGS_NONE, -1, n->cancellable, on_notify_reply, call);
 }
 
 void Hermes_Notifications_Dismiss(void* center, const char* id) {
