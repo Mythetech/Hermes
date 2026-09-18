@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Hermes Notifications Demo</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 24px; color: #222; }
+  h1 { font-size: 20px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  button { padding: 8px 14px; font-size: 14px; }
+  #status { margin: 8px 0; font-weight: 600; }
+  #log { background: #111; color: #9f9; font: 12px/1.5 monospace; padding: 12px; height: 320px; overflow: auto; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>Hermes Notifications Demo</h1>
+<div id="status">Checking support...</div>
+<div class="row">
+  <button data-cmd="permission">Request Permission</button>
+  <button data-cmd="show">Show</button>
+  <button data-cmd="show-silent">Show Silent</button>
+  <button data-cmd="show-icon">Show With Icon</button>
+  <button data-cmd="dismiss-last">Dismiss Last</button>
+  <button data-cmd="dismiss-all">Dismiss All</button>
+</div>
+<p>Click a notification after it appears. The log below prints the click with its tag, which is what an app would use to navigate.</p>
+<div id="log"></div>
+<script>
+  const log = document.getElementById('log');
+  const status = document.getElementById('status');
+  function append(line) {
+    log.textContent += new Date().toLocaleTimeString() + '  ' + line + '\n';
+    log.scrollTop = log.scrollHeight;
+  }
+  document.querySelectorAll('button[data-cmd]').forEach(b =>
+    b.addEventListener('click', () => window.external.sendMessage(b.dataset.cmd)));
+  window.external.receiveMessage(message => {
+    if (message.startsWith('status:')) {
+      status.textContent = message.substring(7);
+    } else {
+      append(message);
+    }
+  });
+  window.external.sendMessage('ready');
+</script>
+</body>
+</html>
