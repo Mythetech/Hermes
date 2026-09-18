@@ -391,8 +391,8 @@ public static class HermesApplication
             //     return new Platforms.Windows.WindowsNotificationBackend(options); // enabled in Task 6
 #endif
 #if MACOS
-            // if (OperatingSystem.IsMacOS())
-            //     return new Platforms.macOS.MacNotificationBackend(options); // enabled in Task 7
+            if (OperatingSystem.IsMacOS())
+                return new Platforms.macOS.MacNotificationBackend(options); // enabled in Task 7
 #endif
 #if LINUX
             // if (OperatingSystem.IsLinux())

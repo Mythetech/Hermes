@@ -366,4 +366,31 @@ internal static partial class MacNative
     internal static partial void FreeStringArray(IntPtr array, int count);
 
     #endregion
+
+    #region Notifications
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Notifications_Create", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial IntPtr NotificationsCreate(string appName, string? iconPath, IntPtr clickCallback);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Notifications_IsSupported")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static partial bool NotificationsIsSupported(IntPtr center, out IntPtr reasonPtr);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Notifications_RequestPermission")]
+    internal static partial void NotificationsRequestPermission(IntPtr center, IntPtr callback, IntPtr context);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Notifications_Show", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void NotificationsShow(IntPtr center, string id, string title, string? body, string? iconPath,
+        [MarshalAs(UnmanagedType.U1)] bool silent, IntPtr callback, IntPtr context);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Notifications_Dismiss", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void NotificationsDismiss(IntPtr center, string id);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Notifications_DismissAll")]
+    internal static partial void NotificationsDismissAll(IntPtr center);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Notifications_Destroy")]
+    internal static partial void NotificationsDestroy(IntPtr center);
+
+    #endregion
 }
