@@ -55,6 +55,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
     private IntPtr _toastFactory;
     private IntPtr _history;
     private bool _disposed;
+    private bool _settingProbed;
 
     public event Action<string>? Clicked;
 
@@ -107,10 +108,6 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
     {
         try
         {
-            var setting = GetNotifierSetting(_notifier);
-            if (setting != NotificationSettingEnabled)
-                HermesLogger.Info($"Toast notifications are disabled by the user (setting {setting}); the toast will be queued but may not display.");
-
             var toast = CreateToast(ToastXmlBuilder.Build(id, title, body, iconPath, silent));
             long token;
             try
@@ -159,7 +156,31 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"Windows rejected the notification: {ex.Message}", ex);
+            throw new InvalidOperationException($"Windows rejected the notification for app id '{_appId}': {ex.Message}", ex);
+        }
+
+        ProbeSettingAfterFirstShow();
+    }
+
+    // Unpackaged apps cannot read ToastNotifier.Setting (or use the history API) until they have sent
+    // one toast; Windows answers ERROR_NOT_FOUND before that, which the first Windows run hit when the
+    // probe ran ahead of Show. The Community Toolkit works around the same rule with a hidden toast.
+    // Reading it once after a successful Show keeps the "toasts are disabled" hint without that cost.
+    private void ProbeSettingAfterFirstShow()
+    {
+        if (_settingProbed)
+            return;
+
+        _settingProbed = true;
+        try
+        {
+            var setting = GetNotifierSetting(_notifier);
+            if (setting != NotificationSettingEnabled)
+                HermesLogger.Info($"Toast notifications are disabled for '{_appId}' (setting {setting}); toasts are queued but will not display.");
+        }
+        catch (Exception ex)
+        {
+            HermesLogger.Info($"Could not read the toast notification setting for '{_appId}': {ex.Message}");
         }
     }
 
@@ -185,10 +206,19 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
         if (_history == IntPtr.Zero)
             return;
 
-        using var tag = new HString(ToastTag.FromId(id));
-        using var group = new HString(ToastGroup);
-        using var appId = new HString(_appId);
-        RemoveGroupedTagWithId(_history, tag.Handle, group.Handle, appId.Handle);
+        try
+        {
+            using var tag = new HString(ToastTag.FromId(id));
+            using var group = new HString(ToastGroup);
+            using var appId = new HString(_appId);
+            RemoveGroupedTagWithId(_history, tag.Handle, group.Handle, appId.Handle);
+        }
+        catch (Exception ex)
+        {
+            // The history API is subject to the same send-first rule as Setting (see ProbeSettingAfterFirstShow),
+            // and a dismiss that finds nothing to remove is not an error for the caller.
+            HermesLogger.Info($"Could not remove toast '{id}' from the notification history: {ex.Message}");
+        }
     }
 
     public void DismissAll()
@@ -214,8 +244,15 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
         if (_history == IntPtr.Zero)
             return;
 
-        using var appId = new HString(_appId);
-        ClearWithId(_history, appId.Handle);
+        try
+        {
+            using var appId = new HString(_appId);
+            ClearWithId(_history, appId.Handle);
+        }
+        catch (Exception ex)
+        {
+            HermesLogger.Info($"Could not clear the notification history for '{_appId}': {ex.Message}");
+        }
     }
 
     #region Toast creation
