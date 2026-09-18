@@ -12,6 +12,7 @@ internal static class Program
     private static readonly Channel<string> s_commands = Channel.CreateUnbounded<string>();
     private static HermesWindow? s_window;
     private static string? s_lastId;
+    private static volatile bool s_closing;
 
     // Windows requires the main thread to be STA for WebView2; the attribute
     // only works on an explicit synchronous Main, never top-level statements.
@@ -33,6 +34,11 @@ internal static class Program
             .Center()
             .SetDevToolsEnabled(true)
             .LoadHtml(ReadEmbeddedHtml())
+            .OnClosing(() =>
+            {
+                s_closing = true;
+                s_commands.Writer.TryComplete();
+            })
             .OnWebMessage(message => s_commands.Writer.TryWrite(message));
 
         // First access on the UI thread, before the message loop starts.
@@ -41,13 +47,15 @@ internal static class Program
 
         // Web messages arrive on the UI thread, and on Linux ShowAsync completes on that same
         // thread, so awaiting inside the handler would deadlock. Commands are queued and consumed
-        // off the UI thread; the consumer is joined after the loop exits.
+        // off the UI thread. Once the window starts closing the pump is about to die, so logging
+        // becomes a no-op and the join is capped: a blocking Invoke after the loop exits would hang.
         var consumer = Task.Run(ConsumeCommandsAsync);
 
         s_window.WaitForClose();
 
-        s_commands.Writer.Complete();
-        consumer.GetAwaiter().GetResult();
+        s_commands.Writer.TryComplete();
+        if (!consumer.Wait(TimeSpan.FromSeconds(2)))
+            Console.Error.WriteLine("Command consumer did not finish within 2 seconds; exiting anyway.");
         notifications.Clicked -= OnClicked;
         HermesApplication.Shutdown();
     }
@@ -128,9 +136,19 @@ internal static class Program
         Log($"shown id={notification.Id} tag={notification.Tag} silent={silent}");
     }
 
-    private static void Log(string line) => s_window?.Invoke(() => s_window.SendMessage(line));
+    private static void Log(string line)
+    {
+        if (s_closing || s_window is null)
+            return;
+        s_window.Invoke(() => s_window.SendMessage(line));
+    }
 
-    private static void Status(string text) => s_window?.Invoke(() => s_window.SendMessage("status:" + text));
+    private static void Status(string text)
+    {
+        if (s_closing || s_window is null)
+            return;
+        s_window.Invoke(() => s_window.SendMessage("status:" + text));
+    }
 
     private static string ReadEmbeddedHtml()
     {
