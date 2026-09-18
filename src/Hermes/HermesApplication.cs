@@ -395,8 +395,8 @@ public static class HermesApplication
                 return new Platforms.macOS.MacNotificationBackend(options); // enabled in Task 7
 #endif
 #if LINUX
-            // if (OperatingSystem.IsLinux())
-            //     return new Platforms.Linux.LinuxNotificationBackend(options); // enabled in Task 8
+            if (OperatingSystem.IsLinux())
+                return new Platforms.Linux.LinuxNotificationBackend(options); // enabled in Task 7
 #endif
         }
         catch (DllNotFoundException ex)
