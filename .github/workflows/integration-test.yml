@@ -110,6 +110,7 @@ jobs:
         run: |
           $env:HERMES_INTEGRATION_TEST = "1"
           $env:HERMES_INTEGRATION_TEST_EXIT = "1"
+          $env:HERMES_CI = "1"
           $env:HERMES_SMOKE_TEST = "1"
           $env:HERMES_SMOKE_TEST_EXIT = "1"
 
@@ -126,6 +127,7 @@ jobs:
           $psi.CreateNoWindow = $false
           $psi.Environment["HERMES_INTEGRATION_TEST"] = "1"
           $psi.Environment["HERMES_INTEGRATION_TEST_EXIT"] = "1"
+          $psi.Environment["HERMES_CI"] = "1"
           $psi.Environment["HERMES_SMOKE_TEST"] = "1"
           $psi.Environment["HERMES_SMOKE_TEST_EXIT"] = "1"
 
@@ -195,6 +197,7 @@ jobs:
         run: |
           export HERMES_INTEGRATION_TEST=1
           export HERMES_INTEGRATION_TEST_EXIT=1
+          export HERMES_CI=1
           export HERMES_SMOKE_TEST=1
           export HERMES_SMOKE_TEST_EXIT=1
 
@@ -298,6 +301,7 @@ jobs:
         run: |
           export HERMES_INTEGRATION_TEST=1
           export HERMES_INTEGRATION_TEST_EXIT=1
+          export HERMES_CI=1
           export HERMES_SMOKE_TEST=1
           export HERMES_SMOKE_TEST_EXIT=1
           export DISPLAY=:99

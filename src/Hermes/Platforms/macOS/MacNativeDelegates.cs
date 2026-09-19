@@ -67,4 +67,22 @@ internal static class MacNativeDelegates
     /// </summary>
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void WebViewCrashCallback();
+
+    /// <summary>
+    /// Called on the main thread when the user clicks a notification.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void NotificationClickedCallback(IntPtr notificationIdPtr);
+
+    /// <summary>
+    /// Completion for a permission request. Arrives on an arbitrary thread.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void NotificationPermissionCallback(IntPtr context, [MarshalAs(UnmanagedType.U1)] bool granted);
+
+    /// <summary>
+    /// Completion for a show request. errorPtr is null on success. Arrives on an arbitrary thread.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void NotificationCompletionCallback(IntPtr context, IntPtr errorPtr);
 }

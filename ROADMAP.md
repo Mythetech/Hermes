@@ -8,24 +8,25 @@ This document tracks planned features and improvements for the Hermes framework.
 
 ### Native Notifications
 
-**Status:** Not started
+**Status:** Shipped (core)
 **Platforms:** All
 
 Desktop notifications that integrate with each platform's notification center.
 
-| Platform | API                                                                 |
-| -------- | ------------------------------------------------------------------- |
-| macOS    | NSUserNotificationCenter / UNUserNotificationCenter (macOS 10.14+)  |
-| Windows  | ToastNotificationManager (Windows 10+) or Shell_NotifyIcon balloons |
-| Linux    | libnotify / D-Bus org.freedesktop.Notifications                     |
+| Platform | API                                                     |
+| -------- | ------------------------------------------------------- |
+| macOS    | UNUserNotificationCenter (requires an app bundle)       |
+| Windows  | WinRT ToastNotificationManager via COM (Windows 10+)    |
+| Linux    | org.freedesktop.Notifications over D-Bus (GIO)          |
 
 **Features needed:**
 
-- [ ] Show simple notification (title + body)
-- [ ] Notification with icon
-- [ ] Notification click handling
+- [x] Show simple notification (title + body)
+- [x] Notification with icon
+- [x] Notification click handling (with app-supplied tag)
 - [ ] Action buttons
 - [ ] Notification categories/channels
+- [ ] Click delivery after the process has exited
 
 ---
 

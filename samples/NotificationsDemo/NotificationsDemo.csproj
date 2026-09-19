@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>NotificationsDemo</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Hermes\Hermes.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="index.html" LogicalName="index.html" />
+    <Content Include="../../icon.png" Link="icon.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="CopyNativeLibrary" AfterTargets="Build" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)..\..\src\Hermes.Native.macOS\lib\libHermes.Native.macOS.dylib"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyNativeLibraryOnPublish" AfterTargets="Publish" Condition="$([MSBuild]::IsOSPlatform('OSX')) OR $(RuntimeIdentifier.StartsWith('osx'))">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)..\..\src\Hermes.Native.macOS\lib\libHermes.Native.macOS.dylib"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>
