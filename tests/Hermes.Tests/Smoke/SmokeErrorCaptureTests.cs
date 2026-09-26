@@ -64,6 +64,17 @@ public class SmokeErrorCaptureTests
     }
 
     [Fact]
+    public void HermesErrors_WithException_AreRecordedWithTypeAndMessage()
+    {
+        var session = _harness.CreateSession(exitWhenDone: false);
+
+        using (SmokeErrorCapture.Attach(session))
+            HermesLogger.Error("Hosted services failed to start", new InvalidOperationException("boom"));
+
+        Assert.Contains("HERMES_SMOKE_ERROR: hermes: InvalidOperationException: Hosted services failed to start: boom", _harness.Lines);
+    }
+
+    [Fact]
     public void AfterDispose_NothingIsRecorded()
     {
         var session = _harness.CreateSession(exitWhenDone: false);
