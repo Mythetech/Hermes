@@ -5,6 +5,7 @@ using Hermes.Abstractions;
 using Hermes.Blazor.Diagnostics;
 using Hermes.Blazor.Threading;
 using Hermes.Diagnostics;
+using Hermes.Diagnostics.Smoke;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebView;
@@ -32,6 +33,7 @@ internal sealed class HermesWebViewManager : WebViewManager
     private readonly Task _messagePumpTask;
     private readonly CancellationTokenSource _cts = new();
     private volatile bool _disposed;
+    private readonly SmokeSession? _smokeSession;
 
     public HermesWebViewManager(
         IHermesWindowBackend backend,
@@ -53,12 +55,14 @@ internal sealed class HermesWebViewManager : WebViewManager
         string hostPageRelativePath,
         string? baseUri,
         bool isDevMode,
-        DeferredSchemeHandler? deferredHandler = null)
+        DeferredSchemeHandler? deferredHandler = null,
+        SmokeSession? smokeSession = null)
         : base(services, dispatcher, new Uri(baseUri ?? AppBaseUri), fileProvider, jsComponents, hostPageRelativePath)
     {
         _backend = backend;
         _baseUri = new Uri(baseUri ?? AppBaseUri);
         _isDevMode = isDevMode;
+        _smokeSession = smokeSession;
 
         // Unbounded with SingleReader gets the runtime's zero-allocation
         // SingleConsumerUnboundedChannel; Blazor's render-batch acknowledgment
@@ -100,6 +104,11 @@ internal sealed class HermesWebViewManager : WebViewManager
     {
         if (_disposed)
             return;
+
+        // Blazor tells the page about render and interop crashes with this message, then rethrows into a
+        // task nothing awaits, so this is the one reliable place a smoke run can see them.
+        if (_smokeSession is not null && SmokeIpcInspector.TryReadUnhandledException(message, out var error, out var stackTrace))
+            _smokeSession.RecordError("blazor", "UnhandledException", error, stackTrace);
 
         // Unbounded TryWrite only fails once the writer is completed during shutdown
         _messageChannel.Writer.TryWrite(message);
