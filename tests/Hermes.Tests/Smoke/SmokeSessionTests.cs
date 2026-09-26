@@ -301,7 +301,13 @@ public class SmokeSessionTests
         SmokeHarness.Boot(session);
         var stuck = new TaskCompletionSource();
         var registrationRan = false;
+        var queue = new QueueingSynchronizationContext();
 
+        // Installed only long enough for RunToVerdictAsync's synchronous portion to run: everything down
+        // to the check's first genuinely incomplete await happens on this thread before the call
+        // returns, so every continuation in that chain captures this context rather than the test's own.
+        var previousContext = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(queue);
         var run = session.RunToVerdictAsync([
             SmokeHarness.Check("app/throws-on-cancel", ct =>
             {
@@ -313,15 +319,24 @@ public class SmokeSessionTests
                 return stuck.Task;
             }, TimeSpan.FromSeconds(30)),
         ]);
-        // Off the test's own thread: on the test thread, the check's WaitAsync continuation and the
-        // linked token's disposal run inline ahead of this callback, so the registration never fires.
-        await Task.Run(() => _harness.Time.Advance(TimeSpan.FromSeconds(10)));
-        await run;
+        SynchronizationContext.SetSynchronizationContext(previousContext);
+
+        // A separate, joined thread: Cancel() must run all of its own registrations to completion,
+        // including the one that cancels the check's linked token, before the check's own completion
+        // continuation (queued above rather than run inline) gets a chance to dispose that token first.
+        var advancer = new Thread(() => _harness.Time.Advance(TimeSpan.FromSeconds(10)));
+        advancer.Start();
+        advancer.Join();
 
         Assert.True(registrationRan);
         Assert.Contains(_harness.Lines, line => line.StartsWith("HERMES_SMOKE_RESULT:", StringComparison.Ordinal));
         Assert.Equal(new[] { 1 }, _harness.ExitCodes);
         Assert.Equal(1, _harness.CloseRequests);
+
+        // Leaves nothing pending: the check's own queued continuation still needs to run to observe the
+        // budget cancellation and let RunToVerdictAsync's Task complete.
+        queue.PumpAll();
+        await run;
     }
 
     [Fact]
