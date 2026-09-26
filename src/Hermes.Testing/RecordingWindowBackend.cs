@@ -136,6 +136,11 @@ public sealed class RecordingWindowBackend : IHermesWindowBackend
         }
     }
 
+    public void SetTheme(HermesWindowTheme theme)
+    {
+        Recording.RecordMethodCall(nameof(SetTheme), theme);
+    }
+
     public void InitializeApplication()
     {
         Recording.RecordMethodCall(nameof(InitializeApplication));

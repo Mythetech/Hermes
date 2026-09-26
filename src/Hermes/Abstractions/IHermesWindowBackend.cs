@@ -99,6 +99,16 @@ public interface IHermesWindowBackend : IDisposable
     /// </summary>
     bool IsCustomTitleBarActive { get; }
 
+    /// <summary>
+    /// Apply a light or dark appearance to the native window chrome and WebView.
+    /// Called on the UI thread after initialization; the initial theme arrives via
+    /// <see cref="HermesWindowOptions.Theme"/>. Backends without per-window theme
+    /// support ignore it.
+    /// </summary>
+    void SetTheme(HermesWindowTheme theme)
+    {
+    }
+
     #endregion
 
     #region WebView

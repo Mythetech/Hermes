@@ -132,6 +132,16 @@ public sealed class HermesWindowOptions
     public bool Transparent { get; set; }
 
     /// <summary>
+    /// Light or dark appearance for the native window chrome and the WebView.
+    /// Set this to match the app's own theme so native controls stay legible over the content,
+    /// for example the macOS traffic lights drawn over a custom title bar.
+    /// On macOS: Sets the window appearance, which also drives the WebView's prefers-color-scheme.
+    /// On Windows: Sets the DWM dark title bar attribute and the WebView2 preferred color scheme.
+    /// On Linux: Not supported. This option is ignored.
+    /// </summary>
+    public HermesWindowTheme Theme { get; set; }
+
+    /// <summary>
     /// Key used to persist window state. If set to non-null, window position, size, and
     /// maximized state are saved on close and restored on next launch.
     /// Use empty string to auto-derive key from window title.
@@ -156,6 +166,7 @@ public sealed class HermesWindowOptions
         window.SetContextMenuEnabled(options.ContextMenuEnabled);
         window.SetCustomTitleBar(options.CustomTitleBar);
         window.SetTransparent(options.Transparent);
+        window.SetTheme(options.Theme);
 
         if (options.Maximized)
             window.Maximize();

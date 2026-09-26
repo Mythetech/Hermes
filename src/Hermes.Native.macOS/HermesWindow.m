@@ -350,6 +350,22 @@
     }
 }
 
+- (void)setTheme:(WindowTheme)theme {
+    // The WKWebView inherits the window appearance, so this also drives prefers-color-scheme
+    switch (theme) {
+        case WindowTheme_Light:
+            [_window setAppearance:[NSAppearance appearanceNamed:NSAppearanceNameAqua]];
+            break;
+        case WindowTheme_Dark:
+            [_window setAppearance:[NSAppearance appearanceNamed:NSAppearanceNameDarkAqua]];
+            break;
+        default:
+            // nil returns the window to inheriting the system appearance
+            [_window setAppearance:nil];
+            break;
+    }
+}
+
 #pragma mark - WebView
 
 - (void)navigateToUrl:(NSString*)url {

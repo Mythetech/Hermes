@@ -98,6 +98,11 @@
                     if (msg === 'ping' || msg.type === 'ping') {
                         window.external.sendMessage(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
                     }
+
+                    if (msg === 'color-scheme-query' || msg.type === 'color-scheme-query') {
+                        var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                        window.external.sendMessage(JSON.stringify({ type: 'color-scheme', value: dark ? 'dark' : 'light' }));
+                    }
                 });
 
                 // Signal that JS message handler is ready

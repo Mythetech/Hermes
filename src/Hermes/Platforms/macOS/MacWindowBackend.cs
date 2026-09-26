@@ -110,6 +110,9 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
             if (_windowHandle == IntPtr.Zero)
                 throw new InvalidOperationException("Failed to create native window.");
 
+            if (options.Theme != HermesWindowTheme.System)
+                MacNative.WindowSetTheme(_windowHandle, (int)options.Theme);
+
             _initialized = true;
         }
         finally
@@ -260,6 +263,12 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
     public HermesPlatform Platform => HermesPlatform.macOS;
 
     public bool IsCustomTitleBarActive { get; private set; }
+
+    public void SetTheme(HermesWindowTheme theme)
+    {
+        EnsureInitialized();
+        MacNative.WindowSetTheme(_windowHandle, (int)theme);
+    }
 
     #endregion
 

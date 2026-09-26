@@ -73,6 +73,7 @@
 - (void)setIsMaximized:(BOOL)maximized;
 - (BOOL)isMinimized;
 - (void)setIsMinimized:(BOOL)minimized;
+- (void)setTheme:(WindowTheme)theme;
 
 // WebView
 - (void)navigateToUrl:(NSString*)url;
