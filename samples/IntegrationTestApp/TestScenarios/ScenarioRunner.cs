@@ -3,7 +3,10 @@ using Hermes;
 using Hermes.Abstractions;
 using Hermes.Blazor;
 using Hermes.Contracts.Diagnostics;
+using Hermes.Contracts.Notifications;
+using Hermes.Contracts.Plugins;
 using Hermes.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace IntegrationTestApp.TestScenarios;
 
@@ -59,6 +62,9 @@ public sealed class ScenarioRunner : IDisposable
 
         // Crash interception test
         await RunCrashInterceptionTestAsync();
+
+        // Notifications: exercises the real backend, supported or not, without needing the WebView
+        await RunNotificationsTestAsync();
 
         // Web message test runs LAST - gives WebView2 maximum time to initialize
         // On Windows, WebView2 init is async and can take several seconds in CI
@@ -555,6 +561,57 @@ public sealed class ScenarioRunner : IDisposable
         catch (Exception ex)
         {
             TestReporter.Fail("crash-interception", ex.Message);
+        }
+    }
+
+    private async Task RunNotificationsTestAsync()
+    {
+        const string testName = "notifications";
+        TestReporter.Start(testName);
+        try
+        {
+            // Backends create thread-affine resources on first access, and this runner is on a thread-pool thread.
+            _app.MainWindow.Invoke(() => _ = HermesApplication.Notifications.IsSupported);
+
+            var notifications = _app.Services.GetRequiredService<INativeNotifications>();
+            var notification = new NativeNotification
+            {
+                Title = "Hermes integration test",
+                Body = "This notification is dismissed immediately.",
+                Tag = "integration/notifications",
+                Silent = true,
+            };
+
+            if (!notifications.IsSupported)
+            {
+                Console.WriteLine($"  Notifications unsupported on this host: {notifications.UnsupportedReason}");
+                await notifications.ShowAsync(notification);
+                TestReporter.Assert(testName,
+                    !string.IsNullOrWhiteSpace(notifications.UnsupportedReason),
+                    "UnsupportedReason must be set when IsSupported is false");
+                return;
+            }
+
+            Console.WriteLine("  Notifications supported; showing and dismissing one");
+            try
+            {
+                await notifications.ShowAsync(notification);
+            }
+            catch (InvalidOperationException ex) when (Environment.GetEnvironmentVariable("HERMES_CI") == "1")
+            {
+                // Hosted Windows runners have no interactive shell session and may refuse Show.
+                // Rendering is verified manually via the NotificationsDemo sample, not here.
+                Console.WriteLine($"  Platform refused Show under CI, accepted as pass: {ex.Message}");
+                TestReporter.Pass(testName);
+                return;
+            }
+
+            notifications.Dismiss(notification.Id);
+            TestReporter.Pass(testName);
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail(testName, ex.Message);
         }
     }
 

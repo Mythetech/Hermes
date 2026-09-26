@@ -286,6 +286,33 @@ void Hermes_Free(void* ptr);
 /// Free an array of strings allocated by Hermes
 void Hermes_FreeStringArray(char** array, int count);
 
+// ============================================================================
+// Notifications
+// ============================================================================
+
+/// Create the notification center wrapper. appName and iconPath are ignored on macOS (the bundle supplies them).
+void* Hermes_Notifications_Create(const char* appName, const char* iconPath, NotificationClickedCallback clickCallback);
+
+/// Whether notifications can be shown. When false, *reason points at a UTF-8 string the caller must copy before returning to the run loop.
+bool Hermes_Notifications_IsSupported(void* center, const char** reason);
+
+/// Request authorization. The callback fires once on an arbitrary thread with the result.
+void Hermes_Notifications_RequestPermission(void* center, NotificationPermissionCallback callback, void* context);
+
+/// Show a notification. The callback fires once with NULL on success or an error message.
+void Hermes_Notifications_Show(void* center, const char* id, const char* title, const char* body,
+                               const char* iconPath, bool silent,
+                               NotificationCompletionCallback callback, void* context);
+
+/// Remove a delivered or pending notification by id.
+void Hermes_Notifications_Dismiss(void* center, const char* id);
+
+/// Remove every delivered and pending notification.
+void Hermes_Notifications_DismissAll(void* center);
+
+/// Destroy the wrapper.
+void Hermes_Notifications_Destroy(void* center);
+
 #ifdef __cplusplus
 }
 #endif

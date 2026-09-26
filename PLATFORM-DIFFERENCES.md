@@ -222,20 +222,50 @@ Writes an XDG-compliant `.desktop` file to `~/.config/autostart/`. Respects the 
 
 ---
 
+## Notifications
+
+`HermesApplication.Notifications` posts native notifications and raises `Clicked` with the app-supplied tag.
+
+| Feature | macOS | Windows | Linux |
+|---------|-------|---------|-------|
+| API | UNUserNotificationCenter | WinRT toasts via COM | `org.freedesktop.Notifications` (GDBus) |
+| Requirement | Running from a `.app` with a bundle identifier | Windows 10+; AppUserModelID registered under HKCU | A notification daemon on the session bus |
+| Permission prompt | Yes, first `ShowAsync` or explicit `RequestPermissionAsync` | No | No |
+| Icon | Attachment (copied to a temp file) | `appLogoOverride` image | `image-path` hint, daemon dependent |
+| Click while process alive | Yes | Yes | Yes, if the daemon supports actions |
+| Click after process exit | No | No | No |
+
+### macOS Notes
+
+Unbundled processes (`dotnet run`, CI) report `IsSupported == false` with the reason "process is not running from an app bundle"; `ShowAsync` logs once and returns. The framework crashes on unbundled processes otherwise, so this guard is load-bearing. Notifications are presented even when the app is frontmost.
+
+### Windows Notes
+
+First use writes `HKCU\Software\Classes\AppUserModelId\<AppId>` with `DisplayName` and `IconUri`, which is what allows an unpackaged exe to toast. Set `AppId` and `DisplayName` via `HermesApplication.ConfigureNotifications` before first use; the default is the entry assembly name. Clicks are delivered through a message-only window on the UI thread. Background activation (clicks after exit) needs a COM server and is not implemented.
+
+### Linux Notes
+
+`IsSupported` is false when the session bus or the daemon cannot be reached (the `GetCapabilities` probe has a 2 second timeout). GNOME and KDE deliver clicks through the `default` action; minimal daemons with actions disabled never report clicks.
+
+---
+
 ## Known Limitations
 
 ### macOS
 - DevTools requires macOS 13.3+ for `inspectable` property
 - Some WKPreferences are private API and may fail silently on older versions
+- Notifications require an app bundle; unbundled processes cannot notify
 
 ### Windows
 - WebView2 must be installed on the target machine
 - First window creation has cold-start latency (use Prewarm to mitigate)
+- Notification clicks are only delivered while the process is running
 
 ### Linux
 - Requires GTK 3.x and WebKit2GTK 4.x runtime libraries
 - Some desktop environments may not support all GTK features
 - AppIndicator support varies by desktop environment
+- Notification click delivery depends on the daemon supporting actions
 
 ---
 

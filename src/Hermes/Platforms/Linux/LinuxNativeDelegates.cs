@@ -73,4 +73,22 @@ internal static class LinuxNativeDelegates
     /// </summary>
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void PageLoadedCallback();
+
+    /// <summary>
+    /// Called on the GLib main context when the user clicks a notification.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void NotificationClickedCallback(IntPtr notificationIdPtr);
+
+    /// <summary>
+    /// Completion for a permission request.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void NotificationPermissionCallback(IntPtr context, [MarshalAs(UnmanagedType.U1)] bool granted);
+
+    /// <summary>
+    /// Completion for a show request. errorPtr is null on success.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void NotificationCompletionCallback(IntPtr context, IntPtr errorPtr);
 }

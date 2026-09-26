@@ -5,6 +5,7 @@
 #import "HermesContextMenu.h"
 #import "HermesDockMenu.h"
 #import "HermesStatusIcon.h"
+#import "HermesNotifications.h"
 #import "HermesDialogs.h"
 #import "HermesAppDelegate.h"
 #import <Cocoa/Cocoa.h>
@@ -811,6 +812,68 @@ void Hermes_StatusIcon_ClearSubmenu(void* statusIcon, const char* submenuId) {
     @autoreleasepool {
         HermesStatusIcon* icon = (__bridge HermesStatusIcon*)statusIcon;
         [icon clearSubmenu:[NSString stringWithUTF8String:submenuId]];
+    }
+}
+
+#pragma mark - Notifications
+
+void* Hermes_Notifications_Create(const char* appName, const char* iconPath, NotificationClickedCallback clickCallback) {
+    (void)appName;
+    (void)iconPath;
+    @autoreleasepool {
+        HermesNotifications* notifications = [[HermesNotifications alloc] initWithClickCallback:clickCallback];
+        return (__bridge_retained void*)notifications;
+    }
+}
+
+bool Hermes_Notifications_IsSupported(void* center, const char** reason) {
+    HermesNotifications* notifications = (__bridge HermesNotifications*)center;
+    if (reason) {
+        *reason = notifications.supported ? NULL : notifications.unsupportedReason.UTF8String;
+    }
+    return notifications.supported;
+}
+
+void Hermes_Notifications_RequestPermission(void* center, NotificationPermissionCallback callback, void* context) {
+    @autoreleasepool {
+        HermesNotifications* notifications = (__bridge HermesNotifications*)center;
+        [notifications requestPermission:callback context:context];
+    }
+}
+
+void Hermes_Notifications_Show(void* center, const char* id, const char* title, const char* body,
+                               const char* iconPath, bool silent,
+                               NotificationCompletionCallback callback, void* context) {
+    @autoreleasepool {
+        HermesNotifications* notifications = (__bridge HermesNotifications*)center;
+        [notifications showWithIdentifier:[NSString stringWithUTF8String:id]
+                                    title:[NSString stringWithUTF8String:title]
+                                     body:body ? [NSString stringWithUTF8String:body] : nil
+                                 iconPath:iconPath ? [NSString stringWithUTF8String:iconPath] : nil
+                                   silent:silent
+                               completion:callback
+                                  context:context];
+    }
+}
+
+void Hermes_Notifications_Dismiss(void* center, const char* id) {
+    @autoreleasepool {
+        HermesNotifications* notifications = (__bridge HermesNotifications*)center;
+        [notifications dismiss:[NSString stringWithUTF8String:id]];
+    }
+}
+
+void Hermes_Notifications_DismissAll(void* center) {
+    @autoreleasepool {
+        HermesNotifications* notifications = (__bridge HermesNotifications*)center;
+        [notifications dismissAll];
+    }
+}
+
+void Hermes_Notifications_Destroy(void* center) {
+    @autoreleasepool {
+        HermesNotifications* notifications = (__bridge_transfer HermesNotifications*)center;
+        [notifications shutdown];
     }
 }
 

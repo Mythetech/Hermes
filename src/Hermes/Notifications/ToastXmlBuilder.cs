@@ -1,0 +1,54 @@
+// Copyright (c) Mythetech. Licensed under the MIT License.
+using System.Security;
+using System.Text;
+
+namespace Hermes.Notifications;
+
+/// <summary>
+/// Builds the ToastGeneric XML consumed by Windows toast notifications. Kept platform-neutral so the
+/// escaping rules are unit-tested on every CI platform.
+/// </summary>
+internal static class ToastXmlBuilder
+{
+    public static string Build(string id, string title, string? body, string? iconPath, bool silent)
+    {
+        var sb = new StringBuilder(256);
+        sb.Append("<toast launch=\"").Append(SecurityElement.Escape(StripXmlIllegalCharacters(id))).Append("\">");
+        sb.Append("<visual><binding template=\"ToastGeneric\">");
+        sb.Append("<text>").Append(SecurityElement.Escape(StripXmlIllegalCharacters(title))).Append("</text>");
+        if (!string.IsNullOrEmpty(body))
+            sb.Append("<text>").Append(SecurityElement.Escape(StripXmlIllegalCharacters(body))).Append("</text>");
+        if (!string.IsNullOrEmpty(iconPath))
+            sb.Append("<image placement=\"appLogoOverride\" src=\"").Append(ToFileUri(iconPath)).Append("\"/>");
+        sb.Append("</binding></visual>");
+        if (silent)
+            sb.Append("<audio silent=\"true\"/>");
+        sb.Append("</toast>");
+        return sb.ToString();
+    }
+
+    private static string ToFileUri(string path)
+    {
+        var normalized = path.Replace('\\', '/');
+        var escaped = Uri.EscapeDataString(normalized).Replace("%2F", "/").Replace("%3A", ":");
+        return "file:///" + escaped.TrimStart('/');
+    }
+
+    private static string StripXmlIllegalCharacters(string text)
+    {
+        var sb = new StringBuilder(text.Length);
+        foreach (var ch in text)
+        {
+            if (ch == '\t' || ch == '\n' || ch == '\r')
+                sb.Append(ch);
+            else if ((ch >= '\0' && ch <= '\b') ||
+                     (ch >= '\v' && ch <= '\f') ||
+                     (ch >= '\u000E' && ch <= '\u001F') ||
+                     ch == '\uFFFE' || ch == '\uFFFF')
+                continue;
+            else
+                sb.Append(ch);
+        }
+        return sb.ToString();
+    }
+}

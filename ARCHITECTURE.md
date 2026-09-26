@@ -52,12 +52,14 @@ Hermes/
 │   │   │   ├── Linux/            # P/Invoke to libHermes.Native.Linux.so
 │   │   │   └── macOS/            # P/Invoke to libHermes.Native.macOS.dylib
 │   │   ├── Menu/                 # NativeMenuBar, NativeContextMenu
+│   │   ├── Notifications/        # NativeNotificationCenter, options, toast XML
 │   │   └── HermesWindow.cs       # Facade over platform backends
 │   │
 │   ├── Hermes.Native.macOS/      # ONLY native code needed (~3,100 LOC Obj-C)
 │   │   ├── HermesWindow.m        # NSWindow + WKWebView
 │   │   ├── HermesMenu.m          # NSMenu
 │   │   ├── HermesDialogs.m       # NSOpenPanel, NSSavePanel
+│   │   ├── HermesNotifications.m # UNUserNotificationCenter
 │   │   └── Makefile              # Simple clang build
 │   │
 │   └── Hermes.Blazor/            # Blazor integration

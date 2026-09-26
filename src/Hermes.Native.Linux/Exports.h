@@ -310,6 +310,33 @@ void Hermes_Free(void* ptr);
 /// Free an array of strings allocated by Hermes
 void Hermes_FreeStringArray(char** array, int count);
 
+// ============================================================================
+// Notifications
+// ============================================================================
+
+/// Create the notification client. appName is sent as the D-Bus app_name; iconPath is the default app_icon.
+void* Hermes_Notifications_Create(const char* appName, const char* iconPath, NotificationClickedCallback clickCallback);
+
+/// Whether notifications can be shown. When false, *reason describes why (valid while the client lives).
+bool Hermes_Notifications_IsSupported(void* center, const char** reason);
+
+/// Linux has no permission prompt; the callback fires immediately with the supported flag.
+void Hermes_Notifications_RequestPermission(void* center, NotificationPermissionCallback callback, void* context);
+
+/// Show a notification. The callback fires once on the GLib main context with NULL on success or an error message.
+void Hermes_Notifications_Show(void* center, const char* id, const char* title, const char* body,
+                               const char* iconPath, bool silent,
+                               NotificationCompletionCallback callback, void* context);
+
+/// Close a notification by Hermes id.
+void Hermes_Notifications_Dismiss(void* center, const char* id);
+
+/// Close every notification this client has shown.
+void Hermes_Notifications_DismissAll(void* center);
+
+/// Destroy the client.
+void Hermes_Notifications_Destroy(void* center);
+
 #ifdef __cplusplus
 }
 #endif

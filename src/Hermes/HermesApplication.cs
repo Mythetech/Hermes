@@ -1,6 +1,7 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using Hermes.Abstractions;
 using Hermes.DockMenu;
+using Hermes.Notifications;
 using Hermes.SingleInstance;
 using Hermes.StatusIcon;
 
@@ -17,6 +18,10 @@ public static class HermesApplication
     private static readonly object _statusIconsLock = new();
     private static bool _accessoryMode;
     private static bool _windowCreated;
+    private static NativeNotificationCenter? _notifications;
+    private static NativeNotificationOptions? _notificationOptions;
+    private static Func<NativeNotificationOptions, INotificationBackend>? _notificationBackendFactoryOverride;
+    private static readonly object _notificationsLock = new();
 
     /// <summary>
     /// Gets information about the current operating system.
@@ -140,6 +145,68 @@ public static class HermesApplication
     }
 
     /// <summary>
+    /// Sets the identity used when registering with the platform notification system.
+    /// Optional; defaults derive from the entry assembly name. Must be called before the first
+    /// access of <see cref="Notifications"/>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when <see cref="Notifications"/> was already created.</exception>
+    public static void ConfigureNotifications(NativeNotificationOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        lock (_notificationsLock)
+        {
+            if (_notifications is not null)
+                throw new InvalidOperationException(
+                    "ConfigureNotifications() must be called before HermesApplication.Notifications is first accessed.");
+
+            _notificationOptions = options;
+        }
+    }
+
+    /// <summary>
+    /// The native notification center. Created on first access, never null. On hosts that cannot show
+    /// notifications, <see cref="NativeNotificationCenter.IsSupported"/> is false and showing is a logged no-op.
+    /// First access should happen on the UI thread; the Windows backend creates a message-only window
+    /// on the calling thread and relies on that thread pumping messages for click delivery.
+    /// Disposed by <see cref="Shutdown"/>.
+    /// </summary>
+    public static NativeNotificationCenter Notifications
+    {
+        get
+        {
+            lock (_notificationsLock)
+            {
+                if (_notifications is null)
+                {
+                    var options = (_notificationOptions ?? new NativeNotificationOptions()).Resolve();
+                    _notifications = new NativeNotificationCenter(CreateNotificationBackend(options));
+                }
+
+                return _notifications;
+            }
+        }
+    }
+
+    internal static void SetNotificationBackendFactoryForTesting(Func<NativeNotificationOptions, INotificationBackend>? factory)
+    {
+        lock (_notificationsLock)
+        {
+            _notificationBackendFactoryOverride = factory;
+        }
+    }
+
+    internal static void ResetNotificationsForTesting()
+    {
+        lock (_notificationsLock)
+        {
+            _notifications?.Dispose();
+            _notifications = null;
+            _notificationOptions = null;
+        }
+    }
+
+    /// <summary>
     /// Shuts down application-level resources.
     /// Call this when the application is exiting to clean up native resources.
     /// </summary>
@@ -158,6 +225,13 @@ public static class HermesApplication
         {
             _dockMenu?.Dispose();
             _dockMenu = null;
+        }
+
+        lock (_notificationsLock)
+        {
+            _notifications?.Dispose();
+            _notifications = null;
+            _notificationOptions = null;
         }
     }
 
@@ -302,5 +376,38 @@ public static class HermesApplication
         }
 #endif
         return null;
+    }
+
+    private static INotificationBackend CreateNotificationBackend(NativeNotificationOptions options)
+    {
+        var factoryOverride = _notificationBackendFactoryOverride;
+        if (factoryOverride is not null)
+            return factoryOverride(options);
+
+        try
+        {
+#if WINDOWS
+            if (OperatingSystem.IsWindows())
+                return new Platforms.Windows.WindowsNotificationBackend(options);
+#endif
+#if MACOS
+            if (OperatingSystem.IsMacOS())
+                return new Platforms.macOS.MacNotificationBackend(options);
+#endif
+#if LINUX
+            if (OperatingSystem.IsLinux())
+                return new Platforms.Linux.LinuxNotificationBackend(options);
+#endif
+        }
+        catch (DllNotFoundException ex)
+        {
+            return new UnsupportedNotificationBackend($"native library not found: {ex.Message}");
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            return new UnsupportedNotificationBackend($"native library is out of date: {ex.Message}");
+        }
+
+        return new UnsupportedNotificationBackend("notifications are not implemented for this platform");
     }
 }
