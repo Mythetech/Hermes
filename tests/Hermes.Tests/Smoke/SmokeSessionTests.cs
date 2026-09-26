@@ -263,4 +263,85 @@ public class SmokeSessionTests
         Assert.StartsWith("HERMES_SMOKE_RESULT: FAILED", _harness.Lines[^1]);
         Assert.True(session.IsFinished);
     }
+
+    [Fact]
+    public async Task BudgetExpiringWhileACheckIsRunning_RecordsTheCheckOnce_AndNamesTheChecksPhase()
+    {
+        var session = _harness.CreateSession(timeout: TimeSpan.FromSeconds(10));
+        SmokeHarness.Boot(session);
+
+        var run = session.RunToVerdictAsync([
+            SmokeHarness.Check("app/slow", ct => Task.Delay(Timeout.InfiniteTimeSpan, ct), TimeSpan.FromSeconds(30)),
+        ]);
+        _harness.Time.Advance(TimeSpan.FromSeconds(10));
+        await run;
+
+        Assert.Contains("HERMES_SMOKE_CHECK_FAIL: app/slow 10000ms - Stopped when the run budget ran out", _harness.Lines);
+        Assert.Equal("HERMES_SMOKE_RESULT: FAILED (1/1 checks failed, 0 errors, timed out waiting for checks)", _harness.Lines[^1]);
+        Assert.Single(session.Report!.Checks);
+    }
+
+    [Fact]
+    public async Task AdvancingTimePastTheBudget_AfterAPassingVerdict_ChangesNothing()
+    {
+        var session = _harness.CreateSession(timeout: TimeSpan.FromSeconds(10));
+        SmokeHarness.Boot(session);
+
+        await session.RunToVerdictAsync([]);
+        _harness.Time.Advance(TimeSpan.FromSeconds(10));
+
+        Assert.Single(_harness.Lines, line => line.StartsWith("HERMES_SMOKE_RESULT:", StringComparison.Ordinal));
+        Assert.Equal(new[] { 0 }, _harness.ExitCodes);
+    }
+
+    [Fact]
+    public async Task CheckTokenRegistrationThatThrows_UnderAnExpiringBudget_StillCompletesTheExitSequence()
+    {
+        var session = _harness.CreateSession(timeout: TimeSpan.FromSeconds(10));
+        SmokeHarness.Boot(session);
+        var stuck = new TaskCompletionSource();
+
+        var run = session.RunToVerdictAsync([
+            SmokeHarness.Check("app/throws-on-cancel", ct =>
+            {
+                ct.Register(() => throw new InvalidOperationException("callback"));
+                return stuck.Task;
+            }, TimeSpan.FromSeconds(30)),
+        ]);
+        _harness.Time.Advance(TimeSpan.FromSeconds(10));
+        await run;
+
+        Assert.Contains(_harness.Lines, line => line.StartsWith("HERMES_SMOKE_RESULT:", StringComparison.Ordinal));
+        Assert.Equal(new[] { 1 }, _harness.ExitCodes);
+        Assert.True(_harness.CloseRequests == 1 || _harness.HardExits.Count > 0);
+    }
+
+    [Fact]
+    public async Task CloseHandlerThatThrows_HardExitsWithTheExitCode()
+    {
+        var session = _harness.CreateSession();
+        session.AttachCloseHandler(() => throw new InvalidOperationException("close failed"));
+        SmokeHarness.Boot(session);
+
+        await session.RunToVerdictAsync([]);
+
+        Assert.Equal(new[] { 0 }, _harness.HardExits);
+    }
+
+    [Fact]
+    public async Task CheckWithOutOfRangeTimeout_IsReportedAsFailed_AndRemainingChecksStillRun()
+    {
+        var session = _harness.CreateSession();
+        SmokeHarness.Boot(session);
+
+        await session.RunToVerdictAsync([
+            SmokeHarness.Check("app/bad-timeout", timeout: TimeSpan.MaxValue),
+            SmokeHarness.Check("app/after"),
+        ]);
+
+        var badTimeout = session.Report!.Checks.Single(c => c.Name == "app/bad-timeout");
+        var after = session.Report!.Checks.Single(c => c.Name == "app/after");
+        Assert.Equal(SmokeCheckStatus.Failed, badTimeout.Status);
+        Assert.Equal(SmokeCheckStatus.Passed, after.Status);
+    }
 }

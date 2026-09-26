@@ -44,6 +44,12 @@ public class SmokeTestSettingsTests
     }
 
     [Fact]
+    public void Timeout_ClampsToOneDay_WhenLarger()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(86400), Parse(("HERMES_SMOKE_TEST_TIMEOUT", "99999999")).Timeout);
+    }
+
+    [Fact]
     public void ResultPath_IsNull_WhenBlank()
     {
         Assert.Null(Parse(("HERMES_SMOKE_TEST_RESULT", "  ")).ResultPath);

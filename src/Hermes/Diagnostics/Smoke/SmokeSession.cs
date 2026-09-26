@@ -188,25 +188,42 @@ internal sealed class SmokeSession
             _runningCheckStarted = started;
         }
 
-        using var timeout = new CancellationTokenSource(check.Timeout, _context.Time);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(budget, timeout.Token);
         try
         {
-            // WaitAsync bounds checks that ignore their token, so one stuck check cannot stall the run.
-            await check.RunAsync(linked.Token).WaitAsync(check.Timeout, _context.Time, budget);
-            return Outcome(check.Name, started, SmokeCheckStatus.Passed, null);
-        }
-        catch (OperationCanceledException) when (budget.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex) when (ex is TimeoutException || (ex is OperationCanceledException && timeout.IsCancellationRequested))
-        {
-            return Outcome(check.Name, started, SmokeCheckStatus.Failed, $"Timed out after {FormatSeconds(check.Timeout)}");
-        }
-        catch (Exception ex)
-        {
-            return Outcome(check.Name, started, SmokeCheckStatus.Failed, $"{ex.GetType().Name}: {ex.Message}");
+            CancellationTokenSource timeout;
+            try
+            {
+                timeout = new CancellationTokenSource(check.Timeout, _context.Time);
+            }
+            catch (Exception ex)
+            {
+                // An out-of-range check.Timeout (for example TimeSpan.MaxValue) must fail only this
+                // check; RunToVerdictAsync promises never to throw.
+                return Outcome(check.Name, started, SmokeCheckStatus.Failed, $"{ex.GetType().Name}: {ex.Message}");
+            }
+
+            using (timeout)
+            using (var linked = CancellationTokenSource.CreateLinkedTokenSource(budget, timeout.Token))
+            {
+                try
+                {
+                    // WaitAsync bounds checks that ignore their token, so one stuck check cannot stall the run.
+                    await check.RunAsync(linked.Token).WaitAsync(check.Timeout, _context.Time, budget);
+                    return Outcome(check.Name, started, SmokeCheckStatus.Passed, null);
+                }
+                catch (OperationCanceledException) when (budget.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex) when (ex is TimeoutException || (ex is OperationCanceledException && timeout.IsCancellationRequested))
+                {
+                    return Outcome(check.Name, started, SmokeCheckStatus.Failed, $"Timed out after {FormatSeconds(check.Timeout)}");
+                }
+                catch (Exception ex)
+                {
+                    return Outcome(check.Name, started, SmokeCheckStatus.Failed, $"{ex.GetType().Name}: {ex.Message}");
+                }
+            }
         }
         finally
         {
@@ -217,13 +234,13 @@ internal sealed class SmokeSession
 
     private void OnBudgetExpired()
     {
-        string waitingFor;
+        SmokeReport? report;
         lock (_lock)
         {
-            if (IsFinished)
+            if (_finished == 1)
                 return;
 
-            waitingFor = WaitingForLocked();
+            var waitingFor = WaitingForLocked();
             if (_runningCheck is { } running)
             {
                 var outcome = Outcome(running, _runningCheckStarted, SmokeCheckStatus.Failed, "Stopped when the run budget ran out");
@@ -231,58 +248,86 @@ internal sealed class SmokeSession
                 WriteLineLocked(SmokeOutput.Check(outcome));
                 _runningCheck = null;
             }
+
+            // The running check's outcome and the finished claim share this locked section: otherwise
+            // the check's own task could complete in the gap and be recorded a second time, or an
+            // error recorded in that same gap could be dropped even though it was not really too late.
+            report = FinishLocked(waitingFor);
         }
 
-        Finish(waitingFor);
+        if (report is not null)
+            RunExitSequence(report);
     }
 
     private void Finish(string? timedOutWaitingFor)
     {
-        if (Interlocked.Exchange(ref _finished, 1) == 1)
-            return;
+        SmokeReport? report;
+        lock (_lock)
+            report = FinishLocked(timedOutWaitingFor);
 
+        if (report is not null)
+            RunExitSequence(report);
+    }
+
+    /// <summary>
+    /// Must be called with <see cref="_lock"/> held. Claims <see cref="_finished"/> and builds the
+    /// snapshot in the same locked section as the caller's own bookkeeping, so nothing can be added to
+    /// the checks or errors between deciding to finish and taking the snapshot.
+    /// </summary>
+    private SmokeReport? FinishLocked(string? timedOutWaitingFor)
+    {
+        if (_finished == 1)
+            return null;
+
+        Volatile.Write(ref _finished, 1);
         _budgetTimer?.Dispose();
 
-        SmokeReport report;
-        lock (_lock)
+        foreach (var planned in _plannedChecks)
         {
-            foreach (var planned in _plannedChecks)
-            {
-                if (!_checks.Exists(c => c.Name == planned.Name))
-                    _checks.Add(new SmokeCheckOutcome(planned.Name, SmokeCheckStatus.NotRun, 0, null));
-            }
-
-            var passed = timedOutWaitingFor is null
-                && HasMilestoneLocked(WindowShownMilestone)
-                && HasMilestoneLocked(FirstRenderMilestone)
-                && _checks.TrueForAll(c => c.Status == SmokeCheckStatus.Passed)
-                && _errors.Count == 0;
-
-            report = new SmokeReport(
-                _context.App,
-                passed,
-                (long)_context.Time.GetElapsedTime(_startTimestamp).TotalMilliseconds,
-                timedOutWaitingFor,
-                _milestones.ToArray(),
-                _checks.ToArray(),
-                _errors.ToArray());
-            Report = report;
-            WriteLineLocked(SmokeOutput.Result(report));
+            if (!_checks.Exists(c => c.Name == planned.Name))
+                _checks.Add(new SmokeCheckOutcome(planned.Name, SmokeCheckStatus.NotRun, 0, null));
         }
 
-        // Outside the lock: cancelling resumes the waiters, which then see the session finished.
-        _budget.Cancel();
+        var passed = timedOutWaitingFor is null
+            && HasMilestoneLocked(WindowShownMilestone)
+            && HasMilestoneLocked(FirstRenderMilestone)
+            && _checks.TrueForAll(c => c.Status == SmokeCheckStatus.Passed)
+            && _errors.Count == 0;
 
+        var report = new SmokeReport(
+            _context.App,
+            passed,
+            (long)_context.Time.GetElapsedTime(_startTimestamp).TotalMilliseconds,
+            timedOutWaitingFor,
+            _milestones.ToArray(),
+            _checks.ToArray(),
+            _errors.ToArray());
+        Report = report;
+        WriteLineLocked(SmokeOutput.Result(report));
+        return report;
+    }
+
+    /// <summary>
+    /// Runs once, after <see cref="FinishLocked"/> has produced the report. Order matters here: cancelling
+    /// the budget runs every registration on a check's linked token inline and can throw or block, so it
+    /// must never come before the result file, the exit code and the backstop are already in place.
+    /// </summary>
+    private void RunExitSequence(SmokeReport report)
+    {
         WriteResultFile(report);
 
         if (!_settings.ExitWhenDone)
+        {
+            CancelBudgetSafely();
             return;
+        }
 
         var exitCode = report.Passed ? 0 : 1;
         _context.SetExitCode(exitCode);
 
         // Closing the last window on macOS makes AppKit terminate with exit code 0, which would turn a
-        // failed run into a pass for anything reading the exit code.
+        // failed run into a pass for anything reading the exit code. Exit immediately in this case, and
+        // when there is nothing to close, rather than risk a throwing or blocking cancel first.
         if ((_context.IsMacOS && !report.Passed) || _requestClose is null)
         {
             _context.HardExit(exitCode);
@@ -290,7 +335,34 @@ internal sealed class SmokeSession
         }
 
         BackstopTimer = _context.Time.CreateTimer(_ => _context.HardExit(exitCode), null, CloseBackstop, Timeout.InfiniteTimeSpan);
-        _requestClose();
+        CancelBudgetSafely();
+
+        try
+        {
+            _requestClose();
+        }
+        catch (Exception)
+        {
+            // The close handler belongs to the app; an escaping exception must not crash the process
+            // with a nonzero code on what may be a passed run. The backstop above already covers a hang.
+            _context.HardExit(exitCode);
+        }
+    }
+
+    /// <summary>
+    /// Cancelling resumes any waiter blocked on the budget token (gates, checks). A registration on a
+    /// check's own token can throw when that happens; those callbacks belong to app checks and must
+    /// never block or crash the exit path.
+    /// </summary>
+    private void CancelBudgetSafely()
+    {
+        try
+        {
+            _budget.Cancel();
+        }
+        catch (AggregateException)
+        {
+        }
     }
 
     private void WriteResultFile(SmokeReport report)
