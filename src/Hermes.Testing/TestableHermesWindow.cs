@@ -120,6 +120,15 @@ public sealed class TestableHermesWindow : IDisposable
     }
 
     /// <summary>
+    /// Set the initial light or dark appearance.
+    /// </summary>
+    public TestableHermesWindow SetTheme(HermesWindowTheme theme)
+    {
+        _window.SetTheme(theme);
+        return this;
+    }
+
+    /// <summary>
     /// Enable window state persistence.
     /// </summary>
     public TestableHermesWindow RememberWindowState(string? key = null)

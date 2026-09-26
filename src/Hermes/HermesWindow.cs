@@ -270,6 +270,17 @@ public sealed class HermesWindow : IDisposable
     }
 
     /// <summary>
+    /// Set the initial light or dark appearance for the native window chrome and WebView.
+    /// Use <see cref="Theme"/> to change it after the window is shown.
+    /// </summary>
+    public HermesWindow SetTheme(HermesWindowTheme theme)
+    {
+        ThrowIfInitialized();
+        _options.Theme = theme;
+        return this;
+    }
+
+    /// <summary>
     /// Enable window state persistence. Window position, size, and maximized state
     /// will be saved on close and restored on next launch.
     /// </summary>
@@ -647,6 +658,29 @@ public sealed class HermesWindow : IDisposable
                 _options.X = value.X;
                 _options.Y = value.Y;
             }
+        }
+    }
+
+    /// <summary>
+    /// Get or set the light or dark appearance for the native window chrome and WebView.
+    /// Can be changed at runtime to follow the app's theme. Safe to set from any thread;
+    /// the change is applied on the UI thread.
+    /// </summary>
+    public HermesWindowTheme Theme
+    {
+        get => _options.Theme;
+        set
+        {
+            _options.Theme = value;
+            if (!_initialized)
+                return;
+
+            // Theme changes typically come from settings handlers off the UI thread, and
+            // native window appearance can only be touched on the UI thread.
+            if (_backend.CheckAccess())
+                _backend.SetTheme(value);
+            else
+                _backend.BeginInvoke(() => _backend.SetTheme(value));
         }
     }
 

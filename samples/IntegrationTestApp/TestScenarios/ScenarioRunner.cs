@@ -17,6 +17,7 @@ public sealed class ScenarioRunner : IDisposable
     private readonly VirtualizeProbe _virtualizeProbe;
     private readonly bool _autoExit;
     private bool _disposed;
+    private volatile string? _latestColorScheme;
 
     public ScenarioRunner(HermesBlazorApp app, VirtualizeProbe virtualizeProbe, bool autoExit = false)
     {
@@ -67,6 +68,9 @@ public sealed class ScenarioRunner : IDisposable
         // to be up; by this point the home page has long since rendered, so the probe is normally
         // already resolved and this returns immediately.
         await RunVirtualizeInteropTestAsync();
+
+        // Theme reads prefers-color-scheme back from the page, so it also needs the WebView up
+        await RunWindowThemeTestAsync();
 
         // Print summary
         TestReporter.PrintSummary();
@@ -282,6 +286,60 @@ public sealed class ScenarioRunner : IDisposable
         {
             TestReporter.Fail("blazor-virtualize-interop", ex.Message);
         }
+    }
+
+    private async Task RunWindowThemeTestAsync()
+    {
+        TestReporter.Start("window-theme");
+        try
+        {
+            var window = _app.MainWindow;
+
+            // Linux has no per-window theme support, so only verify that setting it is harmless there
+            if (window.Platform == HermesPlatform.Linux)
+            {
+                window.Theme = HermesWindowTheme.Dark;
+                window.Theme = HermesWindowTheme.System;
+                TestReporter.Pass("window-theme");
+                return;
+            }
+
+            window.OnWebMessage(msg =>
+            {
+                if (msg.Contains("\"color-scheme\""))
+                    _latestColorScheme = msg.Contains("\"dark\"") ? "dark" : "light";
+            });
+
+            // Checking both directions keeps the scenario meaningful whatever the runner's OS
+            // appearance is. The theme is set from this background thread on purpose, since the
+            // setter must marshal to the UI thread itself.
+            var lightScheme = await ApplyThemeAndWaitForColorSchemeAsync(HermesWindowTheme.Light, "light");
+            var darkScheme = await ApplyThemeAndWaitForColorSchemeAsync(HermesWindowTheme.Dark, "dark");
+            window.Theme = HermesWindowTheme.System;
+
+            TestReporter.Assert("window-theme",
+                lightScheme == "light" && darkScheme == "dark",
+                $"prefers-color-scheme was '{lightScheme}' after Light and '{darkScheme}' after Dark");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail("window-theme", ex.Message);
+        }
+    }
+
+    private async Task<string?> ApplyThemeAndWaitForColorSchemeAsync(HermesWindowTheme theme, string expected)
+    {
+        _app.MainWindow.Theme = theme;
+
+        // The web content process picks up the new color scheme asynchronously
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTime.UtcNow < deadline && _latestColorScheme != expected)
+        {
+            _app.MainWindow.Invoke(() => _app.MainWindow.SendMessage("color-scheme-query"));
+            await Task.Delay(200);
+        }
+
+        return _latestColorScheme;
     }
 
     private async Task RunResizeEventTestAsync()

@@ -84,6 +84,9 @@ void Hermes_Window_SetIsMaximized(void* window, bool maximized);
 /// Set whether the window is minimized
 void Hermes_Window_SetIsMinimized(void* window, bool minimized);
 
+/// Set the light or dark appearance (a WindowTheme value)
+void Hermes_Window_SetTheme(void* window, int theme);
+
 // ============================================================================
 // WebView Operations
 // ============================================================================

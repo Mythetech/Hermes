@@ -90,6 +90,9 @@ internal static partial class MacNative
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Window_SetIsMinimized")]
     internal static partial void WindowSetIsMinimized(IntPtr window, [MarshalAs(UnmanagedType.U1)] bool minimized);
 
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Window_SetTheme")]
+    internal static partial void WindowSetTheme(IntPtr window, int theme);
+
     #endregion
 
     #region WebView Operations

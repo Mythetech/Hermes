@@ -62,6 +62,13 @@ typedef struct {
 
 } HermesWindowParams;
 
+// Window light/dark appearance, values must match HermesWindowTheme in managed code
+typedef enum {
+    WindowTheme_System = 0,
+    WindowTheme_Light = 1,
+    WindowTheme_Dark = 2
+} WindowTheme;
+
 // Dialog button configurations
 typedef enum {
     DialogButtons_Ok = 0,

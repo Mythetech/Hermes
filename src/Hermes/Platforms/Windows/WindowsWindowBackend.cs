@@ -45,6 +45,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
     private WindowsMenuBackend? _menuBackend;
     private WindowsCustomTitlebar? _customTitlebar;
+    private HermesWindowTheme _theme;
 
     public event Action? Closing;
     public event Action<int, int>? Resized;
@@ -123,6 +124,10 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
             _customTitlebar = new WindowsCustomTitlebar(_hwnd);
             _customTitlebar.Initialize();
         }
+
+        _theme = options.Theme;
+        if (_theme != HermesWindowTheme.System)
+            WindowsTheme.ApplyDarkModeToWindow(_hwnd, _theme == HermesWindowTheme.Dark);
 
         if (!string.IsNullOrEmpty(options.IconPath))
             SetIcon(options.IconPath);
@@ -301,6 +306,31 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     public HermesPlatform Platform => HermesPlatform.Windows;
 
     public bool IsCustomTitleBarActive => _options.CustomTitleBar;
+
+    public void SetTheme(HermesWindowTheme theme)
+    {
+        ThrowIfNotInitialized();
+        _theme = theme;
+
+        // System restores what Initialize does: only custom title bar windows follow the OS setting
+        var useDarkMode = theme switch
+        {
+            HermesWindowTheme.Dark => true,
+            HermesWindowTheme.Light => false,
+            _ => _customTitlebar is not null && WindowsTheme.IsDarkMode
+        };
+        WindowsTheme.ApplyDarkModeToWindow(_hwnd, useDarkMode);
+
+        if (_webView is not null)
+            _webView.Profile.PreferredColorScheme = ToPreferredColorScheme(theme);
+    }
+
+    private static CoreWebView2PreferredColorScheme ToPreferredColorScheme(HermesWindowTheme theme) => theme switch
+    {
+        HermesWindowTheme.Light => CoreWebView2PreferredColorScheme.Light,
+        HermesWindowTheme.Dark => CoreWebView2PreferredColorScheme.Dark,
+        _ => CoreWebView2PreferredColorScheme.Auto
+    };
 
     public void NavigateToUrl(string url)
     {
@@ -653,6 +683,9 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
             settings.AreDevToolsEnabled = _options.DevToolsEnabled;
             settings.IsScriptEnabled = true;
             settings.IsWebMessageEnabled = true;
+
+            if (_theme != HermesWindowTheme.System)
+                _webView.Profile.PreferredColorScheme = ToPreferredColorScheme(_theme);
 
             await _webView.AddScriptToExecuteOnDocumentCreatedAsync(
                 """

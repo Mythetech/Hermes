@@ -233,6 +233,13 @@ void Hermes_Window_SetIsMinimized(void* window, bool minimized) {
     }
 }
 
+void Hermes_Window_SetTheme(void* window, int theme) {
+    @autoreleasepool {
+        HermesWindow* hermesWindow = (__bridge HermesWindow*)window;
+        [hermesWindow setTheme:(WindowTheme)theme];
+    }
+}
+
 #pragma mark - WebView Operations
 
 void Hermes_Window_NavigateToUrl(void* window, const char* url) {
