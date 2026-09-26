@@ -234,10 +234,10 @@ internal sealed class SmokeSession
 
     private void OnBudgetExpired()
     {
-        SmokeReport? report;
+        SmokeReport report;
         lock (_lock)
         {
-            if (_finished == 1)
+            if (!TryClaimFinishedLocked())
                 return;
 
             var waitingFor = WaitingForLocked();
@@ -249,39 +249,50 @@ internal sealed class SmokeSession
                 _runningCheck = null;
             }
 
-            // The running check's outcome and the finished claim share this locked section: otherwise
-            // the check's own task could complete in the gap and be recorded a second time, or an
-            // error recorded in that same gap could be dropped even though it was not really too late.
-            report = FinishLocked(waitingFor);
+            report = BuildReportLocked(waitingFor);
         }
 
-        if (report is not null)
-            RunExitSequence(report);
+        RunExitSequence(report);
     }
 
     private void Finish(string? timedOutWaitingFor)
     {
-        SmokeReport? report;
+        SmokeReport report;
         lock (_lock)
-            report = FinishLocked(timedOutWaitingFor);
+        {
+            if (!TryClaimFinishedLocked())
+                return;
 
-        if (report is not null)
-            RunExitSequence(report);
+            report = BuildReportLocked(timedOutWaitingFor);
+        }
+
+        RunExitSequence(report);
     }
 
     /// <summary>
-    /// Must be called with <see cref="_lock"/> held. Claims <see cref="_finished"/> and builds the
-    /// snapshot in the same locked section as the caller's own bookkeeping, so nothing can be added to
-    /// the checks or errors between deciding to finish and taking the snapshot.
+    /// Must be called with <see cref="_lock"/> held. Claims <see cref="_finished"/> as the very first
+    /// step, before any recording (for example OnBudgetExpired's "Stopped" line) that could otherwise
+    /// re-enter through a writer that synchronously completes the running check: the lock is reentrant
+    /// per thread, so without the claim landing first, such a re-entry could still see itself as not
+    /// finished and double-record.
     /// </summary>
-    private SmokeReport? FinishLocked(string? timedOutWaitingFor)
+    private bool TryClaimFinishedLocked()
     {
         if (_finished == 1)
-            return null;
+            return false;
 
         Volatile.Write(ref _finished, 1);
         _budgetTimer?.Dispose();
+        return true;
+    }
 
+    /// <summary>
+    /// Must be called with <see cref="_lock"/> held, after <see cref="TryClaimFinishedLocked"/> has
+    /// already claimed the finish, so nothing can be added to the checks or errors between deciding to
+    /// finish and taking this snapshot.
+    /// </summary>
+    private SmokeReport BuildReportLocked(string? timedOutWaitingFor)
+    {
         foreach (var planned in _plannedChecks)
         {
             if (!_checks.Exists(c => c.Name == planned.Name))
@@ -344,7 +355,9 @@ internal sealed class SmokeSession
         catch (Exception)
         {
             // The close handler belongs to the app; an escaping exception must not crash the process
-            // with a nonzero code on what may be a passed run. The backstop above already covers a hang.
+            // with a nonzero code on what may be a passed run. Dispose the backstop first so a
+            // non-terminal HardExit (as in tests) is not invoked a second time when it later fires.
+            BackstopTimer?.Dispose();
             _context.HardExit(exitCode);
         }
     }

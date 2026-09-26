@@ -300,20 +300,28 @@ public class SmokeSessionTests
         var session = _harness.CreateSession(timeout: TimeSpan.FromSeconds(10));
         SmokeHarness.Boot(session);
         var stuck = new TaskCompletionSource();
+        var registrationRan = false;
 
         var run = session.RunToVerdictAsync([
             SmokeHarness.Check("app/throws-on-cancel", ct =>
             {
-                ct.Register(() => throw new InvalidOperationException("callback"));
+                ct.Register(() =>
+                {
+                    registrationRan = true;
+                    throw new InvalidOperationException("callback");
+                });
                 return stuck.Task;
             }, TimeSpan.FromSeconds(30)),
         ]);
-        _harness.Time.Advance(TimeSpan.FromSeconds(10));
+        // Off the test's own thread: on the test thread, the check's WaitAsync continuation and the
+        // linked token's disposal run inline ahead of this callback, so the registration never fires.
+        await Task.Run(() => _harness.Time.Advance(TimeSpan.FromSeconds(10)));
         await run;
 
+        Assert.True(registrationRan);
         Assert.Contains(_harness.Lines, line => line.StartsWith("HERMES_SMOKE_RESULT:", StringComparison.Ordinal));
         Assert.Equal(new[] { 1 }, _harness.ExitCodes);
-        Assert.True(_harness.CloseRequests == 1 || _harness.HardExits.Count > 0);
+        Assert.Equal(1, _harness.CloseRequests);
     }
 
     [Fact]
