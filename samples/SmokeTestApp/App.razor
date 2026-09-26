@@ -1,0 +1,25 @@
+@inject SmokeFault Fault
+@inject ILogger<App> Logger
+@inject HermesWindow Window
+
+<h1>Hermes Smoke Test App</h1>
+<p>Fault: @Fault.Kind</p>
+
+@if (Fault.Kind == SmokeFaultKind.Render)
+{
+    <ThrowingComponent />
+}
+
+@code {
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        if (Fault.Kind == SmokeFaultKind.Log)
+            Logger.LogError("Deliberate smoke sample error log");
+
+        if (Fault.Kind == SmokeFaultKind.Dialog)
+            Window.Dialogs.ShowMessage("Deliberate smoke sample dialog", "This never appears in smoke mode.", DialogButtons.Ok, DialogIcon.Info);
+    }
+}
