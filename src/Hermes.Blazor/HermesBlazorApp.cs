@@ -338,6 +338,8 @@ public sealed class HermesRootComponents
         _webViewManager = webViewManager;
     }
 
+    internal IReadOnlyList<Type> PendingComponentTypes => _pendingComponents.ConvertAll(c => c.ComponentType);
+
     /// <summary>
     /// Adds a root component to be rendered in the specified selector.
     /// </summary>
