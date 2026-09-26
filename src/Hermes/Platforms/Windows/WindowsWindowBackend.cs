@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text.Json;
 using Hermes.Abstractions;
+using Hermes.Contracts.Diagnostics;
 using Hermes.Infrastructure;
 using Microsoft.Web.WebView2.Core;
 using Windows.Win32;
@@ -173,7 +174,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
     public void WaitForClose()
     {
-        var isSmokeTest = Environment.GetEnvironmentVariable("HERMES_SMOKE_TEST") == "1";
+        var isSmokeTest = HermesSmokeTest.IsEnabled;
 
         Show();
 
@@ -655,7 +656,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     private async Task InitializeWebViewAsync()
     {
         _webViewReady = new TaskCompletionSource();
-        var isSmokeTest = Environment.GetEnvironmentVariable("HERMES_SMOKE_TEST") == "1";
+        var isSmokeTest = HermesSmokeTest.IsEnabled;
 
         try
         {
@@ -756,7 +757,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
     private void HandleWebResourceRequested(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
     {
-        var isSmokeTest = Environment.GetEnvironmentVariable("HERMES_SMOKE_TEST") == "1";
+        var isSmokeTest = HermesSmokeTest.IsEnabled;
         if (isSmokeTest) Console.WriteLine($"RESOURCE_REQUEST:{e.Request.Uri}");
 
         try

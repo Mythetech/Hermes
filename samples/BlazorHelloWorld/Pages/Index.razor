@@ -1,5 +1,4 @@
 @page "/"
-@using Hermes.Blazor.Diagnostics
 @inject StartupMetrics Metrics
 
 <h1>Hermes Blazor</h1>
@@ -23,7 +22,6 @@
         {
             _renderTime = Metrics.Elapsed;
             Metrics.ReportFirstRender();
-            SmokeTestReporter.ReportFirstRender(_renderTime.TotalMilliseconds);
             StateHasChanged();
         }
     }
