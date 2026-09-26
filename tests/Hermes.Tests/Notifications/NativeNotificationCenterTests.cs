@@ -313,4 +313,28 @@ public sealed class NativeNotificationCenterTests
 
         Assert.True(secondRan);
     }
+
+    [Fact]
+    public async Task RequestPermissionAsync_InSmokeMode_AnswersDeniedWithoutPrompting()
+    {
+        var backend = new RecordingNotificationBackend();
+        var center = new NativeNotificationCenter(backend, _ => { }, suppressPermissionPrompts: true);
+
+        var granted = await center.RequestPermissionAsync();
+
+        Assert.False(granted);
+        Assert.Equal(0, backend.PermissionRequests);
+    }
+
+    [Fact]
+    public async Task ShowAsync_InSmokeMode_SkipsWithoutPrompting()
+    {
+        var backend = new RecordingNotificationBackend();
+        var center = new NativeNotificationCenter(backend, _ => { }, suppressPermissionPrompts: true);
+
+        await center.ShowAsync(new NativeNotification { Title = "T" });
+
+        Assert.Empty(backend.Shown);
+        Assert.Equal(0, backend.PermissionRequests);
+    }
 }
