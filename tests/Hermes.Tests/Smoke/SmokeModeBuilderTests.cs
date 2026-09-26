@@ -43,11 +43,14 @@ public class SmokeModeBuilderTests
     [Fact]
     public async Task WrapsEachRootComponent()
     {
-        var app = Build();
+        // Two roots so a deleted SetExpectedRootCount call (defaulting to 1) cannot pass this test
+        // by coincidence the way a single-root count of 1 would.
+        var app = Build(configure: b => b.RootComponents.Add<SecondProbe>("#second"));
         try
         {
-            Assert.Equal(new[] { typeof(SmokeRoot) }, app.RootComponents.PendingComponentTypes);
-            Assert.Equal(1, app.Services.GetRequiredService<HermesSmokeRuntime>().ExpectedRootCount);
+            Assert.Equal(2, app.RootComponents.PendingComponentTypes.Count);
+            Assert.All(app.RootComponents.PendingComponentTypes, t => Assert.Equal(typeof(SmokeRoot), t));
+            Assert.Equal(2, app.Services.GetRequiredService<HermesSmokeRuntime>().ExpectedRootCount);
         }
         finally
         {
@@ -63,6 +66,8 @@ public class SmokeModeBuilderTests
         {
             Assert.Equal(new[] { typeof(Probe) }, app.RootComponents.PendingComponentTypes);
             Assert.False(app.Services.GetRequiredService<IHermesSmokeSession>().IsEnabled);
+            Assert.Null(app.Services.GetService<HermesSmokeRuntime>());
+            Assert.DoesNotContain(app.Services.GetServices<ILoggerProvider>(), p => p is SmokeLoggerProvider);
         }
         finally
         {
@@ -136,6 +141,10 @@ public class SmokeModeBuilderTests
     }
 
     private sealed class Probe : ComponentBase
+    {
+    }
+
+    private sealed class SecondProbe : ComponentBase
     {
     }
 }
