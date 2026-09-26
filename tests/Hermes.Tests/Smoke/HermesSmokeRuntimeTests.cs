@@ -56,6 +56,38 @@ public class HermesSmokeRuntimeTests
     }
 
     [Fact]
+    public async Task MoreRootsRenderingThanExpected_StillProducesExactlyOneVerdict()
+    {
+        // A root that renders again after the verdict has already started (for example a
+        // re-render triggered by something else) must not restart or duplicate the run.
+        var runtime = CreateRuntime(roots: 2);
+        using var provider = new ServiceCollection().BuildServiceProvider();
+
+        await runtime.OnRootRenderedAsync(provider);
+        await runtime.OnRootRenderedAsync(provider);
+        await runtime.OnRootRenderedAsync(provider);
+        await runtime.OnRootRenderedAsync(provider);
+
+        var verdictLines = _harness.Lines.Where(line => line.StartsWith("HERMES_SMOKE_RESULT:", StringComparison.Ordinal)).ToArray();
+        Assert.Single(verdictLines);
+    }
+
+    [Fact]
+    public async Task Checks_AreResolvedFromTheFirstRootsScope()
+    {
+        var runtime = CreateRuntime(roots: 2);
+        var firstRootServices = new ServiceCollection();
+        firstRootServices.AddHermesSmokeCheck<DirectCheck>();
+        using var firstRootProvider = firstRootServices.BuildServiceProvider();
+        using var secondRootProvider = new ServiceCollection().BuildServiceProvider();
+
+        await runtime.OnRootRenderedAsync(firstRootProvider);
+        await runtime.OnRootRenderedAsync(secondRootProvider);
+
+        Assert.Contains("HERMES_SMOKE_CHECK_PASS: test/direct 0ms", _harness.Lines);
+    }
+
+    [Fact]
     public async Task ACheckThatCannotBeCreated_IsRecorded_AndStillEndsInAVerdict()
     {
         var runtime = CreateRuntime();
