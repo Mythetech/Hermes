@@ -809,6 +809,10 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
     private void HandleWebViewProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs e)
     {
+        // Logged before the interceptor check so smoke mode records the crash as a hermes error and
+        // ordinary apps get a logged error even without crash interception.
+        Diagnostics.HermesLogger.Error("WebView content process terminated");
+
         if (!Diagnostics.HermesCrashInterceptor.IsEnabled)
             return;
 

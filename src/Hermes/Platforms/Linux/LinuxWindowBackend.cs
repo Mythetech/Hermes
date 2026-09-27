@@ -527,6 +527,10 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
     private void OnNativeWebViewCrash()
     {
+        // Logged before the interceptor check so smoke mode records the crash as a hermes error and
+        // ordinary apps get a logged error even without crash interception.
+        Diagnostics.HermesLogger.Error("WebView content process terminated");
+
         if (!Diagnostics.HermesCrashInterceptor.IsEnabled)
             return;
 
