@@ -184,8 +184,31 @@ public class SmokeSessionTests
         await session.RunToVerdictAsync([]);
         session.RecordError("log", "Error", "after the verdict", null);
 
-        Assert.Equal("HERMES_SMOKE_RESULT: FAILED (0/0 checks failed, 1 error)", _harness.Lines[^1]);
+        // The later error still prints a warning after the verdict, so the verdict is not the last line.
+        Assert.Equal(
+            "HERMES_SMOKE_RESULT: FAILED (0/0 checks failed, 1 error)",
+            Assert.Single(_harness.Lines, line => line.StartsWith("HERMES_SMOKE_RESULT:", StringComparison.Ordinal)));
         Assert.Single(session.Report!.Errors);
+    }
+
+    [Fact]
+    public async Task ErrorAfterTheVerdict_IsPrintedAsAWarning_AndChangesNothingElse()
+    {
+        var session = _harness.CreateSession(resultPath: "/tmp/smoke/result.json");
+        SmokeHarness.Boot(session);
+        await session.RunToVerdictAsync([]);
+        var report = session.Report;
+        var resultFile = _harness.Files["/tmp/smoke/result.json"];
+
+        session.RecordError("dispatcher", new InvalidOperationException("shutdown fault\nsecond line"));
+
+        Assert.Equal("HERMES_SMOKE_WARNING: after the verdict: dispatcher: InvalidOperationException: shutdown fault", _harness.Lines[^1]);
+        Assert.Equal("HERMES_SMOKE_RESULT: PASSED (0 checks)", _harness.Lines[^2]);
+        Assert.DoesNotContain(_harness.Lines, line => line.StartsWith("HERMES_SMOKE_ERROR:", StringComparison.Ordinal));
+        Assert.Same(report, session.Report);
+        Assert.Empty(session.Report!.Errors);
+        Assert.Equal(resultFile, _harness.Files["/tmp/smoke/result.json"]);
+        Assert.Equal(new[] { 0 }, _harness.ExitCodes);
     }
 
     [Fact]

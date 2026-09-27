@@ -114,7 +114,13 @@ internal sealed class SmokeSession
         lock (_lock)
         {
             if (IsFinished)
+            {
+                // The verdict is already out, so this cannot change it. It is still printed because the
+                // error capture replaces Hermes's own fallback logging, and a shutdown fault would
+                // otherwise leave nothing in the CI log.
+                WriteLineLocked(SmokeOutput.Warning($"after the verdict: {source}: {type}: {message}"));
                 return;
+            }
 
             var error = new SmokeError(source, type, message, stackTrace);
             _errors.Add(error);
