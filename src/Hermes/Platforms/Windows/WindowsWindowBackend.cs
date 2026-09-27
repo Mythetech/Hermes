@@ -809,16 +809,25 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
     private void HandleWebViewProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs e)
     {
+        var message = $"WebView2 process failed: {e.ProcessFailedKind} ({e.Reason})";
+
         // Logged before the interceptor check so smoke mode records the crash as a hermes error and
-        // ordinary apps get a logged error even without crash interception.
-        Diagnostics.HermesLogger.Error("WebView content process terminated");
+        // ordinary apps get a logged error even without crash interception. Only the kinds that mean
+        // the content process itself is gone are errors; WebView2 recovers transparently from the
+        // others (e.g. a GPU or utility process restart), so those are just a warning.
+        if (e.ProcessFailedKind is CoreWebView2ProcessFailedKind.BrowserProcessExited
+            or CoreWebView2ProcessFailedKind.RenderProcessExited
+            or CoreWebView2ProcessFailedKind.RenderProcessUnresponsive)
+        {
+            Diagnostics.HermesLogger.Error(message);
+        }
+        else
+        {
+            Diagnostics.HermesLogger.Warning(message);
+        }
 
         if (!Diagnostics.HermesCrashInterceptor.IsEnabled)
             return;
-
-        var reason = e.ProcessFailedKind.ToString();
-        var description = e.Reason.ToString();
-        var message = $"WebView2 process failed: {reason} ({description})";
 
         var context = Diagnostics.HermesCrashInterceptor.BuildCrashContext(
             new InvalidOperationException(message), Contracts.Diagnostics.CrashSource.WebViewCrash);
