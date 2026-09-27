@@ -1,6 +1,7 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using Hermes.Abstractions;
 using Hermes.Diagnostics;
+using Hermes.Diagnostics.Smoke;
 using Hermes.Menu;
 using Hermes.Storage;
 
@@ -16,6 +17,7 @@ public sealed class HermesWindow : IDisposable
     private readonly HermesWindowOptions _options = new();
     private NativeMenuBar? _nativeMenuBar;
     private IDialogBackend? _dialogBackend;
+    private SmokeSession? _smokeSession;
     private string? _windowStateKey;
     private bool _initialized;
     private bool _disposed;
@@ -457,7 +459,10 @@ public sealed class HermesWindow : IDisposable
     {
         get
         {
-            _dialogBackend ??= CreatePlatformDialogBackend();
+            // In smoke mode a native dialog would block a headless run forever, so it fails the run instead.
+            _dialogBackend ??= _smokeSession is not null
+                ? new SmokeDialogBackend(_smokeSession)
+                : CreatePlatformDialogBackend();
             return _dialogBackend;
         }
     }
@@ -774,6 +779,11 @@ public sealed class HermesWindow : IDisposable
     /// Gets the underlying platform backend. Used by Hermes.Blazor for threading.
     /// </summary>
     internal IHermesWindowBackend Backend => _backend;
+
+    /// <summary>
+    /// Puts this window under a smoke session. Set by Hermes.Blazor before the window is shown.
+    /// </summary>
+    internal void AttachSmokeSession(SmokeSession session) => _smokeSession = session;
 
     #endregion
 

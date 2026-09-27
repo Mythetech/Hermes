@@ -1,5 +1,4 @@
 @page "/"
-@using Hermes.Blazor.Diagnostics
 @inject TestContext Context
 @inject VirtualizeProbe Probe
 
@@ -81,9 +80,6 @@
         {
             _renderTime = TimeSpan.FromMilliseconds(100); // Placeholder
             _firstRenderReported = true;
-
-            // Report to smoke test infrastructure
-            SmokeTestReporter.ReportFirstRender(_renderTime.TotalMilliseconds);
 
             // Report JS module loading test (Fluent UI uses JS interop)
             TestReporter.Start("blazor-first-render");

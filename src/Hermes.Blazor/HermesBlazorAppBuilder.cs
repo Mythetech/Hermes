@@ -1,13 +1,17 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using System.Diagnostics.CodeAnalysis;
 using Hermes.Abstractions;
+using Hermes.Blazor.Diagnostics;
 using Hermes.Blazor.Threading;
+using Hermes.Contracts.Diagnostics;
 using Hermes.Contracts.Plugins;
+using Hermes.Diagnostics.Smoke;
 using Hermes.Plugins;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.Metrics;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
@@ -30,6 +34,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
     private string? _loadingHtml;
     private bool _deferWindowShow;
     private bool? _forceDevServer;
+    private HermesSmokeRuntime? _smokeRuntime;
 
     private HermesBlazorAppBuilder(string[]? args, bool addDefaultConfiguration)
     {
@@ -60,6 +65,20 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             options.ServicesStartConcurrently = true;
             options.ShutdownTimeout = TimeSpan.FromSeconds(5);
         });
+
+        if (HermesSmokeTest.IsEnabled)
+        {
+            var session = new SmokeSession(HermesSmokeTest.Settings, SmokeSessionContext.ForCurrentProcess());
+            EnableSmokeMode(session);
+
+            // Never detached, even when HERMES_SMOKE_TEST_EXIT=0 keeps the app running: the session ignores
+            // errors after the verdict for the result and only prints them as warnings.
+            SmokeErrorCapture.Attach(session);
+        }
+        else
+        {
+            _hostBuilder.Services.TryAddSingleton<IHermesSmokeSession>(NoOpHermesSmokeSession.Instance);
+        }
     }
 
     /// <summary>
@@ -201,6 +220,25 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
     }
 
     /// <summary>
+    /// Runs this builder in smoke mode with a caller-supplied session, so tests can drive a smoke run.
+    /// </summary>
+    internal HermesBlazorAppBuilder UseSmokeSessionForTest(SmokeSession session)
+    {
+        EnableSmokeMode(session);
+        return this;
+    }
+
+    private void EnableSmokeMode(SmokeSession session)
+    {
+        session.Start();
+        _smokeRuntime = new HermesSmokeRuntime(session);
+        _hostBuilder.Services.RemoveAll<IHermesSmokeSession>();
+        _hostBuilder.Services.AddSingleton<IHermesSmokeSession>(new ActiveHermesSmokeSession(session));
+        _hostBuilder.Services.AddSingleton(_smokeRuntime);
+        _hostBuilder.Logging.AddProvider(new SmokeLoggerProvider(session));
+    }
+
+    /// <summary>
     /// Builds the application.
     /// </summary>
     [RequiresDynamicCode("Blazor WebView requires dynamic code for component rendering")]
@@ -228,6 +266,13 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         }
 
         var backend = GetBackend(window);
+        if (_smokeRuntime is { } smoke)
+        {
+            window.AttachSmokeSession(smoke.Session);
+            window.Shown += () => smoke.Session.MarkMilestone(SmokeSession.WindowShownMilestone);
+            smoke.Session.AttachCloseHandler(() => backend.BeginInvoke(window.Close));
+        }
+
         var syncContext = new HermesSynchronizationContext(backend);
         var dispatcher = new HermesDispatcher(syncContext);
 
@@ -292,6 +337,12 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
 
         var composition = compositionTask.GetAwaiter().GetResult();
 
+        if (_smokeRuntime is not null)
+        {
+            foreach (var gate in composition.ServiceProvider.GetServices<SmokeGateRegistration>())
+                _smokeRuntime.Session.RequireGate(gate.Name);
+        }
+
         var jsComponents = new JSComponentConfigurationStore();
 
         var webViewManager = new HermesWebViewManager(
@@ -303,13 +354,20 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             _hostPage,
             baseUri: composition.DevBaseUri,
             isDevMode: composition.DevServer is not null,
-            deferredHandler: deferredHandler);
+            deferredHandler: deferredHandler,
+            smokeSession: _smokeRuntime?.Session);
 
         var app = new HermesBlazorApp(composition.ServiceProvider, _hostBuilder.Configuration, window, webViewManager, syncContext, _loadingHtml, windowShownDuringBuild: !_deferWindowShow, devServer: composition.DevServer, host: composition.Host, navigatedDuringBuild: navigatedDuringBuild);
 
-        foreach (var component in RootComponents.GetComponents())
+        var components = RootComponents.GetComponents().ToList();
+        _smokeRuntime?.SetExpectedRootCount(components.Count);
+
+        foreach (var component in components)
         {
-            app.RootComponents.Add(component.Type, component.Selector, component.Parameters);
+            if (_smokeRuntime is not null)
+                app.RootComponents.Add(typeof(SmokeRoot), component.Selector, SmokeRoot.CreateParameters(component.Type, component.Parameters));
+            else
+                app.RootComponents.Add(component.Type, component.Selector, component.Parameters);
         }
 
         return app;

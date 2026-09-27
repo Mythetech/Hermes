@@ -111,8 +111,6 @@ jobs:
           $env:HERMES_INTEGRATION_TEST = "1"
           $env:HERMES_INTEGRATION_TEST_EXIT = "1"
           $env:HERMES_CI = "1"
-          $env:HERMES_SMOKE_TEST = "1"
-          $env:HERMES_SMOKE_TEST_EXIT = "1"
 
           $appPath = "samples/IntegrationTestApp/bin/Release/net11.0/IntegrationTestApp.exe"
           $timeout = 120
@@ -128,8 +126,6 @@ jobs:
           $psi.Environment["HERMES_INTEGRATION_TEST"] = "1"
           $psi.Environment["HERMES_INTEGRATION_TEST_EXIT"] = "1"
           $psi.Environment["HERMES_CI"] = "1"
-          $psi.Environment["HERMES_SMOKE_TEST"] = "1"
-          $psi.Environment["HERMES_SMOKE_TEST_EXIT"] = "1"
 
           $process = [System.Diagnostics.Process]::Start($psi)
           $stdoutTask = $process.StandardOutput.ReadToEndAsync()
@@ -198,8 +194,6 @@ jobs:
           export HERMES_INTEGRATION_TEST=1
           export HERMES_INTEGRATION_TEST_EXIT=1
           export HERMES_CI=1
-          export HERMES_SMOKE_TEST=1
-          export HERMES_SMOKE_TEST_EXIT=1
 
           APP_PATH="samples/IntegrationTestApp/bin/Release/net11.0/IntegrationTestApp"
           APP_DIR=$(dirname "$APP_PATH")
@@ -302,8 +296,6 @@ jobs:
           export HERMES_INTEGRATION_TEST=1
           export HERMES_INTEGRATION_TEST_EXIT=1
           export HERMES_CI=1
-          export HERMES_SMOKE_TEST=1
-          export HERMES_SMOKE_TEST_EXIT=1
           export DISPLAY=:99
           export GDK_BACKEND=x11
 

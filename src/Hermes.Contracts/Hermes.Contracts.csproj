@@ -28,4 +28,10 @@
     <None Include="../../README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Hermes" />
+    <InternalsVisibleTo Include="Hermes.Blazor" />
+    <InternalsVisibleTo Include="Hermes.Tests" />
+  </ItemGroup>
+
 </Project>

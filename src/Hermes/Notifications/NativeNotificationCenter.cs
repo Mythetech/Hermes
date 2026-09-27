@@ -16,6 +16,7 @@ public sealed class NativeNotificationCenter : IDisposable
 
     private readonly INotificationBackend _backend;
     private readonly Action<string> _warn;
+    private readonly bool _suppressPermissionPrompts;
     private readonly Dictionary<string, string?> _tagsById = new();
     private readonly Queue<string> _tagOrder = new();
     private readonly object _tagLock = new();
@@ -25,10 +26,11 @@ public sealed class NativeNotificationCenter : IDisposable
     private bool _deniedWarned;
     private bool _disposed;
 
-    internal NativeNotificationCenter(INotificationBackend backend, Action<string>? warningSink = null)
+    internal NativeNotificationCenter(INotificationBackend backend, Action<string>? warningSink = null, bool suppressPermissionPrompts = false)
     {
         _backend = backend;
         _warn = warningSink ?? HermesLogger.Warning;
+        _suppressPermissionPrompts = suppressPermissionPrompts;
         _backend.Clicked += OnBackendClicked;
     }
 
@@ -50,6 +52,14 @@ public sealed class NativeNotificationCenter : IDisposable
         ThrowIfDisposed();
         if (!_backend.IsSupported)
             return false;
+
+        // A permission prompt would block a headless smoke run, so smoke mode answers "denied" without asking.
+        if (_suppressPermissionPrompts)
+        {
+            _permissionRequested = true;
+            _permissionGranted = false;
+            return false;
+        }
 
         ct.ThrowIfCancellationRequested();
         _permissionGranted = await _backend.RequestPermissionAsync();

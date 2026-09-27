@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text.Json;
 using Hermes.Abstractions;
+using Hermes.Contracts.Diagnostics;
 using Hermes.Infrastructure;
 using Microsoft.Web.WebView2.Core;
 using Windows.Win32;
@@ -173,7 +174,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
     public void WaitForClose()
     {
-        var isSmokeTest = Environment.GetEnvironmentVariable("HERMES_SMOKE_TEST") == "1";
+        var isSmokeTest = HermesSmokeTest.IsEnabled;
 
         Show();
 
@@ -655,7 +656,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     private async Task InitializeWebViewAsync()
     {
         _webViewReady = new TaskCompletionSource();
-        var isSmokeTest = Environment.GetEnvironmentVariable("HERMES_SMOKE_TEST") == "1";
+        var isSmokeTest = HermesSmokeTest.IsEnabled;
 
         try
         {
@@ -756,7 +757,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
     private void HandleWebResourceRequested(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
     {
-        var isSmokeTest = Environment.GetEnvironmentVariable("HERMES_SMOKE_TEST") == "1";
+        var isSmokeTest = HermesSmokeTest.IsEnabled;
         if (isSmokeTest) Console.WriteLine($"RESOURCE_REQUEST:{e.Request.Uri}");
 
         try
@@ -808,12 +809,25 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
     private void HandleWebViewProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs e)
     {
+        var message = $"WebView2 process failed: {e.ProcessFailedKind} ({e.Reason})";
+
+        // Logged before the interceptor check so smoke mode records the crash as a hermes error and
+        // ordinary apps get a logged error even without crash interception. Only the kinds that mean
+        // the content process itself is gone are errors; WebView2 recovers transparently from the
+        // others (e.g. a GPU or utility process restart), so those are just a warning.
+        if (e.ProcessFailedKind is CoreWebView2ProcessFailedKind.BrowserProcessExited
+            or CoreWebView2ProcessFailedKind.RenderProcessExited
+            or CoreWebView2ProcessFailedKind.RenderProcessUnresponsive)
+        {
+            Diagnostics.HermesLogger.Error(message);
+        }
+        else
+        {
+            Diagnostics.HermesLogger.Warning(message);
+        }
+
         if (!Diagnostics.HermesCrashInterceptor.IsEnabled)
             return;
-
-        var reason = e.ProcessFailedKind.ToString();
-        var description = e.Reason.ToString();
-        var message = $"WebView2 process failed: {reason} ({description})";
 
         var context = Diagnostics.HermesCrashInterceptor.BuildCrashContext(
             new InvalidOperationException(message), Contracts.Diagnostics.CrashSource.WebViewCrash);

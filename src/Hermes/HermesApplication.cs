@@ -1,5 +1,6 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using Hermes.Abstractions;
+using Hermes.Contracts.Diagnostics;
 using Hermes.DockMenu;
 using Hermes.Notifications;
 using Hermes.SingleInstance;
@@ -180,7 +181,9 @@ public static class HermesApplication
                 if (_notifications is null)
                 {
                     var options = (_notificationOptions ?? new NativeNotificationOptions()).Resolve();
-                    _notifications = new NativeNotificationCenter(CreateNotificationBackend(options));
+                    _notifications = new NativeNotificationCenter(
+                        CreateNotificationBackend(options),
+                        suppressPermissionPrompts: HermesSmokeTest.IsEnabled);
                 }
 
                 return _notifications;

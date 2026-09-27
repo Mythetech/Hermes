@@ -36,8 +36,16 @@ public static class HermesLogger
     /// </summary>
     public static Action<string>? LogDebug { get; set; }
 
+    /// <summary>
+    /// Raised for every Hermes error before it is logged. Smoke mode uses it to fail the run on
+    /// errors Hermes itself reports, such as hosted services failing to start.
+    /// </summary>
+    internal static event Action<string, Exception?>? ErrorObserved;
+
     internal static void Error(string message, Exception? exception = null)
     {
+        ErrorObserved?.Invoke(message, exception);
+
         if (LogError is not null)
         {
             LogError(message, exception);

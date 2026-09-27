@@ -101,8 +101,6 @@ run_integration() {
 
     export HERMES_INTEGRATION_TEST=1
     export HERMES_INTEGRATION_TEST_EXIT=1
-    export HERMES_SMOKE_TEST=1
-    export HERMES_SMOKE_TEST_EXIT=1
 
     echo "Running: $app_path (timeout: ${TIMEOUT}s)"
 
