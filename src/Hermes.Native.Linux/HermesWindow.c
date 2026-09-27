@@ -111,6 +111,20 @@ void Hermes_App_ActivateProcessWindow(int pid) {
 // Internal Event Handlers
 // ============================================================================
 
+// Every path that tears the window down (Close's idle, GTK's default delete-event handler,
+// hermes_window_destroy) emits "destroy", so forgetting the pointer here is what stops a later
+// hermes_window_destroy from destroying the freed window a second time. That use-after-free printed a
+// Gtk-CRITICAL on most closes and segfaulted on others (seen on arm64 CI after a passed smoke run).
+static void on_window_destroyed(GtkWidget* widget, gpointer user_data) {
+    HermesWindow* hw = (HermesWindow*)user_data;
+    hw->window = NULL;
+}
+
+static gboolean destroy_widget_idle(gpointer data) {
+    gtk_widget_destroy(GTK_WIDGET(data));
+    return G_SOURCE_REMOVE;
+}
+
 static gboolean on_window_delete(GtkWidget* widget, GdkEvent* event, gpointer user_data) {
     HermesWindow* hw = (HermesWindow*)user_data;
     if (hw->onClosing) {
@@ -573,6 +587,7 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
     }
 
     // Wire up window events
+    g_signal_connect(hw->window, "destroy", G_CALLBACK(on_window_destroyed), hw);
     g_signal_connect(hw->window, "delete-event", G_CALLBACK(on_window_delete), hw);
     g_signal_connect(hw->window, "configure-event", G_CALLBACK(on_window_configure), hw);
     g_signal_connect(hw->window, "focus-in-event", G_CALLBACK(on_window_focus_in), hw);
@@ -791,7 +806,11 @@ void Hermes_Window_Close(void* window) {
     HermesWindow* hw = (HermesWindow*)window;
     if (!hw) return;
 
-    g_idle_add((GSourceFunc)gtk_widget_destroy, hw->window);
+    // The idle owns a reference, so the widget stays valid if hermes_window_destroy runs before the
+    // idle does; destroying an already destroyed widget is then harmless.
+    if (hw->window) {
+        g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, destroy_widget_idle, g_object_ref(hw->window), g_object_unref);
+    }
     g_idle_add((GSourceFunc)gtk_main_quit, NULL);
 }
 
