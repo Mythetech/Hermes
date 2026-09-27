@@ -21,6 +21,12 @@ internal sealed class SmokeHarness
 
     public Dictionary<string, string> Files { get; } = new();
 
+    /// <summary>
+    /// Completes when the session writes its result file, which happens after the result line is printed,
+    /// so tests whose verdict arrives on another thread can await it instead of polling the output.
+    /// </summary>
+    public TaskCompletionSource ResultFileWritten { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     public Exception? WriteFailure { get; set; }
 
     public int CloseRequests { get; private set; }
@@ -48,6 +54,7 @@ internal sealed class SmokeHarness
                 if (WriteFailure is not null)
                     throw WriteFailure;
                 Files[path] = contents;
+                ResultFileWritten.TrySetResult();
             },
         });
 

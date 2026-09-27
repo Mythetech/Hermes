@@ -15,7 +15,7 @@ public class SmokeRootTests : BunitContext
 
     public SmokeRootTests()
     {
-        var session = _harness.CreateSession(exitWhenDone: false);
+        var session = _harness.CreateSession(resultPath: "result.json", exitWhenDone: false);
         session.MarkMilestone(SmokeSession.WindowShownMilestone);
         Services.AddSingleton(new HermesSmokeRuntime(session));
     }
@@ -31,11 +31,14 @@ public class SmokeRootTests : BunitContext
     }
 
     [Fact]
-    public void ReportsTheFirstRender_AndRunsToAVerdict()
+    public async Task ReportsTheFirstRender_AndRunsToAVerdict()
     {
-        var cut = Render<SmokeRoot>(parameters => parameters.Add(p => p.ComponentType, typeof(Greeting)));
+        Render<SmokeRoot>(parameters => parameters.Add(p => p.ComponentType, typeof(Greeting)));
 
-        cut.WaitForAssertion(() => Assert.Equal("HERMES_SMOKE_RESULT: PASSED (0 checks)", _harness.Lines[^1]));
+        // The verdict runs on a thread-pool continuation that never re-renders the component, so bUnit's
+        // WaitForAssertion (which re-checks only on renders) cannot observe it; await the result file instead.
+        await _harness.ResultFileWritten.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal("HERMES_SMOKE_RESULT: PASSED (0 checks)", _harness.Lines[^1]);
         Assert.Contains("HERMES_SMOKE_MILESTONE: first-render 0ms", _harness.Lines);
     }
 
