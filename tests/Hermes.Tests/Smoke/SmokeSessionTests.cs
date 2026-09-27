@@ -91,6 +91,18 @@ public class SmokeSessionTests
     }
 
     [Fact]
+    public async Task CheckThatThrowsItsOwnTimeoutException_IsReportedAsThatException_NotAsATimeout()
+    {
+        var session = _harness.CreateSession();
+        SmokeHarness.Boot(session);
+
+        await session.RunToVerdictAsync([SmokeHarness.Check("app/pipe", _ => throw new TimeoutException("pipe connect"))]);
+
+        Assert.Contains("HERMES_SMOKE_CHECK_FAIL: app/pipe 0ms - TimeoutException: pipe connect", _harness.Lines);
+        Assert.Equal("HERMES_SMOKE_RESULT: FAILED (1/1 checks failed, 0 errors)", _harness.Lines[^1]);
+    }
+
+    [Fact]
     public void BudgetExpiringBeforeFirstRender_FailsWithTheMissingMilestone()
     {
         var session = _harness.CreateSession(timeout: TimeSpan.FromSeconds(10));

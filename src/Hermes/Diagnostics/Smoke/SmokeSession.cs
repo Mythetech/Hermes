@@ -208,14 +208,16 @@ internal sealed class SmokeSession
                 try
                 {
                     // WaitAsync bounds checks that ignore their token, so one stuck check cannot stall the run.
-                    await check.RunAsync(linked.Token).WaitAsync(check.Timeout, _context.Time, budget);
+                    // It waits on the linked token instead of a timer of its own, so only the per-check
+                    // timeout reads as "Timed out" and a TimeoutException the check throws is reported as is.
+                    await check.RunAsync(linked.Token).WaitAsync(linked.Token);
                     return Outcome(check.Name, started, SmokeCheckStatus.Passed, null);
                 }
                 catch (OperationCanceledException) when (budget.IsCancellationRequested)
                 {
                     throw;
                 }
-                catch (Exception ex) when (ex is TimeoutException || (ex is OperationCanceledException && timeout.IsCancellationRequested))
+                catch (OperationCanceledException) when (timeout.IsCancellationRequested)
                 {
                     return Outcome(check.Name, started, SmokeCheckStatus.Failed, $"Timed out after {FormatSeconds(check.Timeout)}");
                 }
