@@ -8,7 +8,7 @@
 
   <!-- NuGet Package Metadata -->
   <PropertyGroup>
-    <VersionPrefix>1.4.0</VersionPrefix>
+    <VersionPrefix>1.4.1</VersionPrefix>
     <PackageId>Mythetech.Hermes.Contracts</PackageId>
     <Authors>Mythetech</Authors>
     <Description>Shared contract types for Hermes crash reporting and diagnostics</Description>

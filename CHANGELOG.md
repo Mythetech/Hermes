@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.1] - 2026-09-27
+
+### Added
+
+- **Window theme** via `HermesWindowTheme` (`System`, `Light`, `Dark`) for the light or dark appearance of the native window chrome and the WebView. Set it before the window is shown with `HermesWindow.SetTheme` or `HermesWindowOptions.Theme`, or change it at runtime through `HermesWindow.Theme`, which is safe to set from any thread. macOS applies it to the window appearance, so the traffic lights stay visible on light app themes and the WebView's `prefers-color-scheme` follows. Windows applies it to the title bar and the WebView2 preferred color scheme. Linux ignores it for now
+- **Smoke mode**: with `HERMES_SMOKE_TEST=1`, a Hermes Blazor app smoke tests itself and reports a verdict. Hermes records the `window-shown` and `first-render` milestones, captures unhandled Blazor exceptions, error logs, unhandled and unobserved task exceptions and attempts to open native dialogs, runs the app's registered checks, prints `HERMES_SMOKE_RESULT: PASSED` or `FAILED` with the reason, and exits with 0 or 1. Without the variable nothing is created or run
+  - `AddHermesSmokeCheck<T>()` registers an `IHermesSmokeCheck`, resolved from the page's service scope after the first render; `AddHermesSmokeCheckSource<T>()` lets a layer such as an app framework supply checks through its own interface
+  - `AddHermesSmokeGate(name)` makes the checks wait until the app calls `IHermesSmokeSession.CompleteGate(name)` or `FailGate`, for example after asynchronous initialization
+  - `HERMES_SMOKE_TEST_TIMEOUT` (seconds, default 60), `HERMES_SMOKE_TEST_RESULT` (path for a JSON result file) and `HERMES_SMOKE_TEST_EXIT=0` (keep running after the verdict) tune a run; `HermesSmokeTest` in `Hermes.Contracts` exposes the parsed settings
+  - `SmokeTestApp` sample showing checks and a gate, with `SMOKE_SAMPLE_FAULT` to inject each kind of failure
+
+### Changed
+
+- `HERMES_SMOKE_TEST=1` now ends the app after the verdict. Before, it printed `HERMES_READY` and kept running unless `HERMES_SMOKE_TEST_EXIT=1` was set; set `HERMES_SMOKE_TEST_EXIT=0` for the old behaviour. `HERMES_READY` is still printed
+- `SmokeTestReporter` is obsolete; smoke mode reports the first render and the verdict itself, so remove calls to it
+- In smoke mode, native dialogs are not shown (each attempt fails the run and returns the answer that commits to nothing) and notification permission prompts are suppressed, so neither can block an unattended run
+- CI runs `SmokeTestApp` once per failure kind on Windows, macOS and Linux, and the NuGet publish workflow smoke tests it on all four runtimes before packing. Integration test runs no longer enable smoke mode
+
+### Fixed
+
+- Linux: closing a window destroyed the native GTK window twice, once on close and again on dispose. Most closes printed `Gtk-CRITICAL: gtk_widget_destroy: assertion 'GTK_IS_WIDGET (widget)' failed`; some crashed the process with a segmentation fault after the app had finished (seen on arm64)
+- WebView content process crashes are logged through the Hermes logger on every platform, even when crash interception is off. On Windows only browser and renderer process failures are errors; GPU, utility and other WebView2 process failures, which WebView2 recovers from, are warnings
+
 ## [1.4.0] - 2026-09-18
 
 ### Added
