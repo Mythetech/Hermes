@@ -327,7 +327,8 @@ internal sealed class SmokeSession
     }
 
     /// <summary>
-    /// Runs once, after <see cref="FinishLocked"/> has produced the report. Order matters here: cancelling
+    /// Runs once, after <see cref="Finish"/> or <see cref="OnBudgetExpired"/> has claimed the finish and
+    /// <see cref="BuildReportLocked"/> has produced the report. Order matters here: cancelling
     /// the budget runs every registration on a check's linked token inline and can throw or block, so it
     /// must never come before the result file, the exit code and the backstop are already in place.
     /// </summary>

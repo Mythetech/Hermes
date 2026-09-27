@@ -40,37 +40,26 @@ internal sealed class SmokeRoot(HermesSmokeRuntime runtime, IServiceProvider sco
         if (!firstRender)
             return;
 
-        // Children render in the same batch but get their after-render callbacks after this one. A
-        // Task.Yield here would not reliably defer: its continuation is scheduled by calling
-        // SynchronizationContext.Post synchronously, on this same UI thread call stack, and
-        // HermesSynchronizationContext.Post runs inline whenever it is called from the UI thread and
-        // the context is not already marked busy, which is exactly the state after the renderer's
-        // after-render loop invokes this method directly (not through a nested Post/Send). That would
-        // let this method's continuation, and the verdict, run before the other roots' after-render
-        // callbacks in the same batch.
+        // Children render in the same batch but get their after-render callbacks after this one, so the
+        // verdict has to wait for the batch to finish. Task.Yield would not: it posts from this UI
+        // thread, and BeginInvoke called on the UI thread runs its callback inline on Windows, Linux and
+        // the recording backend whatever the context's busy state. Only a post from a non-UI thread is
+        // guaranteed to queue.
         await DeferPastCurrentRenderBatchAsync();
         await runtime.OnRootRenderedAsync(scopedServices);
     }
 
     /// <summary>
-    /// Defers past the rest of the current render batch so that resuming here always re-enters the
-    /// calling SynchronizationContext from off the UI thread, guaranteeing
-    /// HermesSynchronizationContext.Post queues the continuation instead of running it inline.
+    /// Defers past the rest of the current render batch by posting the continuation to the calling
+    /// SynchronizationContext from a thread-pool thread. A post from the UI thread can run inline:
+    /// BeginInvoke called on the UI thread runs its callback directly on Windows, Linux and the
+    /// recording backend, whatever the context's busy state. Only a post from a non-UI thread is
+    /// guaranteed to queue.
     /// <para>
-    /// Anything awaitable whose completion is a race (a completed-or-not <see cref="Task"/>, including
-    /// <c>Task.Run(() => {})</c> and even <c>Task.Delay</c> under enough scheduler contention) is not
-    /// safe here: the compiler-generated await only posts through the SynchronizationContext when the
-    /// antecedent is still incomplete at the moment it is checked, and if the calling thread is ever
-    /// delayed past that point (a busy thread pool, a loaded CI runner), the work can finish first and
-    /// the whole continuation, including the eventual verdict, runs inline on the UI thread anyway.
-    /// </para>
-    /// <para>
-    /// <see cref="DeferredAwaitable"/> instead reports <c>IsCompleted</c> as a hard-coded
-    /// <see langword="false"/>, so the compiler can never take that shortcut: it always calls
-    /// <c>OnCompleted</c>, and that registration schedules the resumption on the thread pool rather
-    /// than invoking it (or posting through the SynchronizationContext) there and then. The eventual
-    /// <c>SynchronizationContext.Post</c> call is therefore always made from that thread-pool callback,
-    /// never from the UI thread, with no timing race involved.
+    /// <see cref="DeferredAwaitable"/> reports <c>IsCompleted</c> as <see langword="false"/> so the
+    /// await always goes through <c>OnCompleted</c>: an awaitable that may already be complete when it
+    /// is awaited, such as a finished <see cref="Task"/>, would resume inline on the UI thread without
+    /// posting at all.
     /// </para>
     /// </summary>
     internal static DeferredAwaitable DeferPastCurrentRenderBatchAsync() => default;

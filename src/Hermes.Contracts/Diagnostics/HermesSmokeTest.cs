@@ -22,5 +22,7 @@ public static class HermesSmokeTest
     /// <summary>Whether the app exits after printing the verdict. False only when HERMES_SMOKE_TEST_EXIT=0.</summary>
     public static bool ExitWhenDone => _settings.Value.ExitWhenDone;
 
+    // Consumed by the separately versioned Hermes and Hermes.Blazor packages through InternalsVisibleTo,
+    // so it must stay additive-only: never renamed or removed without releasing all three packages together.
     internal static SmokeTestSettings Settings => _settings.Value;
 }

@@ -1,6 +1,9 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 namespace Hermes.Contracts.Diagnostics;
 
+// Consumed by the separately versioned Hermes and Hermes.Blazor packages through InternalsVisibleTo, so
+// it and its members must stay additive-only: never renamed or removed without releasing all three
+// packages together.
 internal sealed record SmokeTestSettings(bool IsEnabled, TimeSpan Timeout, string? ResultPath, bool ExitWhenDone)
 {
     internal static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(60);

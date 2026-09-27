@@ -71,7 +71,8 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             var session = new SmokeSession(HermesSmokeTest.Settings, SmokeSessionContext.ForCurrentProcess());
             EnableSmokeMode(session);
 
-            // The capture lives for the rest of the process: a smoke run always ends by exiting.
+            // Never detached, even when HERMES_SMOKE_TEST_EXIT=0 keeps the app running: the session ignores
+            // errors after the verdict for the result and only prints them as warnings.
             SmokeErrorCapture.Attach(session);
         }
         else
