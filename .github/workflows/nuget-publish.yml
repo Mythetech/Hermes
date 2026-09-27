@@ -147,23 +147,46 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev cmake
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev cmake xvfb
 
       - name: Build Native Library (Linux)
         if: runner.os == 'Linux'
         run: ./build.sh
         working-directory: src/Hermes.Native.Linux
 
+      - name: Start Virtual Display (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          Xvfb :99 -screen 0 1920x1080x24 &
+          sleep 2
+
       - name: Restore
         run: dotnet restore
 
       - name: Build Sample App
-        run: dotnet build samples/BlazorHelloWorld -c Release --no-restore
+        run: dotnet build samples/SmokeTestApp -c Release --no-restore
 
-      - name: Run Smoke Test
-        uses: ./.github/actions/smoke-test
+      - name: Checkout shared smoke verdict
+        uses: actions/checkout@v4
         with:
-          app_path: samples/BlazorHelloWorld/bin/Release/net11.0/${{ runner.os == 'Windows' && 'BlazorHelloWorld.exe' || 'BlazorHelloWorld' }}
+          repository: Mythetech/workflows
+          ref: 586f3f549771d0d523007ee4bb8b7cf3fa9d39a9
+          path: .workflows
+
+      - name: Run every smoke fault
+        shell: pwsh
+        env:
+          DISPLAY: ':99'
+          GDK_BACKEND: x11
+        run: ./.github/scripts/Test-SmokeFaults.ps1 -AppPath 'samples/SmokeTestApp/bin/Release/net11.0/${{ runner.os == 'Windows' && 'SmokeTestApp.exe' || 'SmokeTestApp' }}' -VerdictScript .workflows/actions/smoke-verdict/SmokeVerdict.ps1 -OutputDir smoke-output
+
+      - name: Upload smoke output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-output-${{ matrix.rid }}
+          path: smoke-output
+          retention-days: 14
 
   pack-and-publish:
     needs: [build, smoke-test]
