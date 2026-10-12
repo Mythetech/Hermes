@@ -3,6 +3,10 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net11.0</TargetFramework>
+    <!-- CI also boots this app on the oldest supported .NET, to prove the packages work there:
+         dotnet build -p:SmokeTargetFramework=net10.0. A property of its own is needed because
+         restore ignores TargetFramework passed on the command line. -->
+    <TargetFramework Condition="'$(SmokeTargetFramework)' != ''">$(SmokeTargetFramework)</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
