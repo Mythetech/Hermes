@@ -65,8 +65,34 @@ internal sealed class HermesSynchronizationContext : SynchronizationContext
         }
     }
 
+    /// <summary>
+    /// Whether the message loop has ended. Nothing drains the UI queue after that, so posted work runs on
+    /// the thread pool instead of being queued for a thread that will never take it.
+    /// </summary>
+    public bool LoopEnded
+    {
+        get => _state.LoopEnded;
+        set => _state.LoopEnded = value;
+    }
+
     public override void Post(SendOrPostCallback d, object? state)
     {
+        if (_state.LoopEnded)
+        {
+            ThreadPool.QueueUserWorkItem(static work =>
+            {
+                try
+                {
+                    work.d(work.state);
+                }
+                catch (Exception ex)
+                {
+                    HermesApplication.RaiseDispatcherUnhandledException(ex);
+                }
+            }, (d, state), preferLocal: false);
+            return;
+        }
+
         if (_backend.CheckAccess() && !_state.IsBusy)
         {
             // On UI thread and not busy - execute directly
@@ -102,6 +128,14 @@ internal sealed class HermesSynchronizationContext : SynchronizationContext
     /// </summary>
     private sealed class State
     {
+        private volatile bool _loopEnded;
+
         public bool IsBusy { get; set; }
+
+        public bool LoopEnded
+        {
+            get => _loopEnded;
+            set => _loopEnded = value;
+        }
     }
 }

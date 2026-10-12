@@ -23,9 +23,14 @@ Windows requires the main thread to be STA for WebView2. This has regressed twic
 
 Once `WaitForClose()` returns, the message pump is dead. Any await in a dispose path whose completion arrives on a non-UI thread posts its continuation into a queue nothing drains (macOS dead main queue; Windows UiInvokeQueue drops items after dispose). Teardown code must either complete synchronously on the UI thread or use blocking joins on thread-pool tasks. See `HermesBlazorApp.StopHost` for the pattern and rationale.
 
+App code is covered for it since 1.4.4, which fixed MudBlazor apps hanging in `DisposeAsync()` (a page service awaited thread-pool work). Two things hold it up, and both are load-bearing:
+
+- `HermesBlazorApp` sets `HermesSynchronizationContext.LoopEnded` when the loop returns, and from then on `Post` runs work on the thread pool instead of queueing it natively.
+- `DisposeAsync()` waits for startup and for the page's teardown with `FinishesWithinAsync`, which blocks once the loop has ended. The native window has to be destroyed on the UI thread (on macOS the WKWebView's dealloc waits for the main thread), so `DisposeAsync()` must not resume on the thread pool before `_window.Dispose()`. Never put a plain `await` of unfinished work ahead of it.
+
 macOS needs the native layer to keep AppKit out of the way: `[NSApp terminate:]` hard-exits the process with code 0 from inside the run loop, so `WaitForClose()` would never return and nothing after `Run()` would execute (no `DisposeAsync`, no hosted-service `StopAsync`, no exit code). That was an open gap until 1.4.2. Now the window that `waitForClose` is running for stops the run loop when it closes, `applicationShouldTerminateAfterLastWindowClosed` returns NO, and the `HermesApplication` override of `terminate:` turns a quit request (Cmd+Q, the Dock, a quit Apple event, logout) into a close of that window. Never route these paths back into AppKit's `terminate:`. A quit request does not raise `Closing` or ask `CloseRequestedHandler`.
 
-On every platform the loop ends when the window passed to `WaitForClose()` closes, not when the last window does. The integration run prints `HERMES_TEARDOWN: PASSED` after `Run()` returns and the app is disposed, and CI requires it on all three platforms; a missing marker means the process was ended from inside the message loop again.
+On every platform the loop ends when the window passed to `WaitForClose()` closes, not when the last window does. The integration run prints `HERMES_TEARDOWN: PASSED` after `Run()` returns and the app is disposed, and CI requires it on all three platforms; a missing marker means the process was ended from inside the message loop again, or that `DisposeAsync()` never got past `PageTeardownProbe`, a page service that finishes disposing on another thread.
 
 ## Verification commands
 
@@ -40,4 +45,4 @@ Run the unit suite after every change. Run the integration scenarios before decl
 ## Conventions
 
 - Planning and design docs go in `.internal/`, not `docs/`.
-- Tests: xUnit. In tests that call `app.Run()`, restore the `SynchronizationContext` afterward or later awaits post into the recording backend's queue, which nothing pumps (see the `RunApp` helper in `HostedServiceTests`).
+- Tests: xUnit. In tests that call `app.Run()`, restore the `SynchronizationContext` afterward so the Hermes context does not stay on the test thread (see the `RunApp` helper in `HostedServiceTests`). The recording backend never pumps, so after `Run()` returns it models the dead loop; `TeardownAfterLoopTests` relies on that.

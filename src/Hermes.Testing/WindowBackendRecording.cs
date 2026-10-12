@@ -20,6 +20,11 @@ public sealed record MethodCall
     /// When the method was called.
     /// </summary>
     public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// The managed thread the method was called on, to compare with the backend's UIThreadId.
+    /// </summary>
+    public int ManagedThreadId { get; init; } = Environment.CurrentManagedThreadId;
 }
 
 /// <summary>

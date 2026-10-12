@@ -122,7 +122,7 @@ public sealed class HermesBlazorApp : IAsyncDisposable
 
         BeginHostStart();
 
-        _window.WaitForClose();
+        RunMessageLoop();
     }
 
     /// <summary>
@@ -150,7 +150,21 @@ public sealed class HermesBlazorApp : IAsyncDisposable
         BeginHostStart();
 
         // Phase 3: Enter message loop (required for async continuations)
-        _window.WaitForClose();
+        RunMessageLoop();
+    }
+
+    private void RunMessageLoop()
+    {
+        _syncContext.LoopEnded = false;
+        try
+        {
+            _window.WaitForClose();
+        }
+        finally
+        {
+            // Teardown runs after this, and an await there must not wait on a loop that is gone.
+            _syncContext.LoopEnded = true;
+        }
     }
 
     private void BeginHostStart()
@@ -256,9 +270,7 @@ public sealed class HermesBlazorApp : IAsyncDisposable
             // can never complete, so cap the wait instead of hanging dispose.
             try
             {
-                var completed = await Task.WhenAny(_initializationTask, Task.Delay(TimeSpan.FromSeconds(2)));
-                if (completed == _initializationTask)
-                    await _initializationTask;
+                await FinishesWithinAsync(_initializationTask, TimeSpan.FromSeconds(2));
             }
             catch (Exception ex)
             {
@@ -269,7 +281,13 @@ public sealed class HermesBlazorApp : IAsyncDisposable
         if (_host is not null)
             StopHost();
 
-        await _webViewManager.DisposeAsync();
+        var shutdownTimeout = ShutdownTimeout;
+        if (!await FinishesWithinAsync(_webViewManager.DisposeAsync().AsTask(), shutdownTimeout))
+        {
+            HermesLogger.Error(
+                $"The page did not finish disposing within {shutdownTimeout.TotalSeconds:0.##}s; continuing teardown.");
+        }
+
         _window.Dispose();
 
         if (_devServer is not null)
@@ -319,8 +337,28 @@ public sealed class HermesBlazorApp : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Whether teardown work finished in time. Once the loop has ended this blocks instead of awaiting,
+    /// because no continuation can come back to this thread and the window must be destroyed on it.
+    /// </summary>
+    private async ValueTask<bool> FinishesWithinAsync(Task work, TimeSpan timeout)
+    {
+        if (_syncContext.LoopEnded)
+        {
+            if (Task.WaitAny([work], timeout) < 0)
+                return false;
+        }
+        else if (await Task.WhenAny(work, Task.Delay(timeout)) != work)
+        {
+            return false;
+        }
+
+        await work;
+        return true;
+    }
+
     private TimeSpan ShutdownTimeout =>
-        _host!.Services.GetService<IOptions<HostOptions>>()?.Value.ShutdownTimeout
+        _host?.Services.GetService<IOptions<HostOptions>>()?.Value.ShutdownTimeout
             ?? TimeSpan.FromSeconds(5);
 }
 
