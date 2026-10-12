@@ -69,6 +69,10 @@ Use platform-agnostic strings in your code. The framework translates them approp
 | **Windows** | Accelerators require proper accelerator table setup. Without it, shortcuts are display-only. |
 | **Linux** | Accelerators are handled via GTK AccelGroup. Should work automatically when properly configured. |
 
+### Unhandled Key Presses (macOS)
+
+AppKit beeps when a key press reaches the end of the responder chain, and WKWebView sends it every key the page did not call `preventDefault` on, whether or not a handler acted on it. Hermes windows swallow that beep, so Escape with nothing to cancel, or a shortcut nothing is mapped to, is silent. Native alerts and file dialogs still beep.
+
 ---
 
 ## CheckMenuItem (Toggleable Items)

@@ -10,8 +10,12 @@
 @class HermesUiDelegate;
 @class HermesUrlSchemeHandler;
 
-/// NSWindow subclass that allows borderless windows to become key (accept keyboard input).
-@interface HermesKeyableWindow : NSWindow
+/// The NSWindow every Hermes window is built on. A key press the page leaves unhandled does not beep.
+@interface HermesNSWindow : NSWindow
+@end
+
+/// HermesNSWindow that allows borderless windows to become key (accept keyboard input).
+@interface HermesKeyableWindow : HermesNSWindow
 @end
 
 @interface HermesWindow : NSObject

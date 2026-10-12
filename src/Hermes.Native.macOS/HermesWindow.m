@@ -6,6 +6,19 @@
 #import <pthread.h>
 #import <QuartzCore/QuartzCore.h>
 
+@implementation HermesNSWindow
+
+// WKWebView hands a key press the page did not handle back to AppKit, where it runs off the end of the
+// responder chain and NSWindow beeps. The page reports a key as unhandled unless it called
+// preventDefault, which includes keys the app did act on, so in a web UI the beep is noise: Escape with
+// nothing to cancel, a shortcut nobody mapped, a letter typed with no field focused.
+- (void)noResponderFor:(SEL)eventSelector {
+    if (eventSelector == @selector(keyDown:)) return;
+    [super noResponderFor:eventSelector];
+}
+
+@end
+
 @implementation HermesKeyableWindow
 
 - (BOOL)canBecomeKeyWindow {
@@ -50,7 +63,7 @@ static __weak HermesWindow* g_runLoopWindow = nil;
 
         NSRect frame = NSMakeRect(0, 0, params->Width, params->Height);
         // Use HermesKeyableWindow for borderless windows so they can accept keyboard input
-        Class windowClass = params->Chromeless ? [HermesKeyableWindow class] : [NSWindow class];
+        Class windowClass = params->Chromeless ? [HermesKeyableWindow class] : [HermesNSWindow class];
         _window = [[windowClass alloc] initWithContentRect:frame
                                                  styleMask:styleMask
                                                    backing:NSBackingStoreBuffered
