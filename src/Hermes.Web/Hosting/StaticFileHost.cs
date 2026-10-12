@@ -4,11 +4,13 @@ namespace Hermes.Web.Hosting;
 internal sealed class StaticFileHost
 {
     private readonly string _rootDirectory;
+    private readonly string _rootPrefix;
     private readonly bool _spaFallback;
 
     public StaticFileHost(string rootDirectory, bool spaFallback)
     {
         _rootDirectory = Path.GetFullPath(rootDirectory);
+        _rootPrefix = Path.TrimEndingDirectorySeparator(_rootDirectory) + Path.DirectorySeparatorChar;
         _spaFallback = spaFallback;
     }
 
@@ -35,10 +37,11 @@ internal sealed class StaticFileHost
 
     private string? ResolveFilePath(string urlPath)
     {
-        var relativePath = urlPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+        var relativePath = Uri.UnescapeDataString(urlPath).TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
         var fullPath = Path.GetFullPath(Path.Combine(_rootDirectory, relativePath));
 
-        if (!fullPath.StartsWith(_rootDirectory, StringComparison.Ordinal))
+        // The prefix ends in a separator, so a sibling such as "dist-private" does not pass for "dist".
+        if (!fullPath.StartsWith(_rootPrefix, StringComparison.Ordinal))
             return null;
 
         return fullPath;
