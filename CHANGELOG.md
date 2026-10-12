@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.3] - 2026-10-12
+
+### Added
+
+- `HermesTitleBar` publishes its height as the CSS variable `--hermes-titlebar-height` on `:root`. The bar is fixed and drawn above page content, dialogs included, so layout that has to start below it can read the height instead of repeating the number. The variable is only defined while the bar is rendered, so `var(--hermes-titlebar-height, 0px)` is 0 in a window without one
+
+### Fixed
+
+- macOS: a key press the page leaves unhandled no longer beeps. WKWebView hands such a key back to AppKit, which beeped when it ran off the end of the responder chain: Escape with nothing to cancel, a shortcut nothing is mapped to, a letter typed with no field focused, and any key a handler acted on without calling `preventDefault`. Native alerts and file dialogs beep as before
+
+### Changed
+
+- `IntegrationTestApp` and `BlazorHelloWorld` size their layout from `--hermes-titlebar-height` instead of repeating the bar's height
+
 ## [1.4.2] - 2026-10-11
 
 ### Fixed

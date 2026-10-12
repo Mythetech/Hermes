@@ -6,6 +6,10 @@
 @inject IHermesMenuProvider MenuProvider
 
 <style>
+    /* The bar is fixed and drawn above page content, dialogs included, so anything that has to start below
+       it reads this. It is only defined while the bar is rendered: use var(--hermes-titlebar-height, 0px). */
+    :root { --hermes-titlebar-height: @(Height)px; }
+
     .hermes-title-bar {
         display: flex;
         align-items: center;
@@ -148,7 +152,8 @@
     public RenderFragment? ChildContent { get; set; }
 
     /// <summary>
-    /// The height of the titlebar in pixels. Default is 32.
+    /// The height of the titlebar in pixels. Default is 32. Published to CSS as
+    /// <c>--hermes-titlebar-height</c> on <c>:root</c> for layout that has to clear the bar.
     /// </summary>
     [Parameter]
     public int Height { get; set; } = 32;
