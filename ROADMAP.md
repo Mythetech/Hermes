@@ -54,21 +54,28 @@ Programmatic clipboard access for copy/paste operations.
 
 ### Hermes.Web - JavaScript/TypeScript SPA Support
 
-**Status:** In progress (core implemented, packaging remaining)
+**Status:** In progress, targeted for 1.5 alongside .NET 11
 **Platforms:** All
 
 Enable React, Vue, Angular, Svelte and other JS/TS frameworks as an alternative to Blazor. The core infrastructure already supports this - the `window.external` bridge is injected at the native level.
 
 **Research & API Design:** [docs/plans/SpaAlternatives.md](docs/plans/SpaAlternatives.md)
 
-**New package:** `Hermes.Web` providing:
+**New package:** `Hermes.Web` (currently `0.2.0-preview.1`) providing:
 
 - [x] Static file serving with SPA fallback (`UseStaticFiles()`, `UseSpaFallback()`)
-- [x] Dev server proxy for Vite/Webpack HMR (`UseDevServer()`)
-- [x] Auto-detect mode (dev server if running, else static files)
-- [x] Type-safe C# ↔ JS interop bridge (`InteropBridge`)
-- [ ] TypeScript definitions package (`@hermes/bridge`)
-- [ ] Sample apps (React, Vue, Angular, Svelte)
+- [x] Dev server support for Vite/Webpack HMR (`UseDevServer()`)
+- [x] C# ↔ JS interop bridge (`InteropBridge`): invoke with a result, events in both directions
+- [x] TypeScript packages in `packages/`: `@hermes/bridge`, `@hermes/react`, `@hermes/svelte`
+- [x] Sample apps: vanilla TypeScript, React, Svelte
+
+**Remaining for 1.5:**
+
+- [ ] CI builds the npm packages and boots the web samples on every platform
+- [ ] Publish the npm packages (scope name to be confirmed) from a workflow
+- [ ] Bridge: complex result and payload types, more than one argument, logging through the Hermes logger
+- [ ] Auto-detect mode (dev server if running, else static files), replacing `#if DEBUG` in the samples
+- [ ] Host parity with `Hermes.Blazor`: dependency injection, hosted services, smoke mode
 
 **Enterprise value:**
 
@@ -76,6 +83,20 @@ Enable React, Vue, Angular, Svelte and other JS/TS frameworks as an alternative 
 - Electron migration path for existing web apps
 - Smaller bundle size (no Blazor runtime)
 - Mature JS tooling ecosystem (Vite, ESLint, etc.)
+
+---
+
+### .NET LTS Support (Multi-Targeting)
+
+**Status:** Planned for 1.5
+**Platforms:** All
+
+Publish every package for each .NET version in the LTS support window, not only the newest release. The floor is .NET 10, so 1.5 targets `net10.0` and `net11.0`. The source already compiles for `net10.0` unchanged; the work is in packaging.
+
+- [ ] Multi-target `Hermes`, `Hermes.Contracts`, `Hermes.Blazor`, `Hermes.Web` and `Hermes.Testing`
+- [ ] Per-framework `Microsoft.AspNetCore.Components.WebView` version in `Hermes.Blazor`, matching each shared framework
+- [ ] Per-framework package layout (`runtimes/<rid>/lib/<tfm>`, `build/` and `buildTransitive/` targets) in the nuspec and the publish workflow
+- [ ] CI builds and tests both frameworks, and a preview publish validates the package before release
 
 ---
 

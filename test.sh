@@ -138,6 +138,12 @@ run_integration() {
     fi
 
     check_markers "$output_file" "Integration"
+
+    if ! grep -q "HERMES_TEARDOWN: PASSED" "$output_file"; then
+        print_fail "Teardown after Run() did not complete (no HERMES_TEARDOWN: PASSED marker)"
+        return 1
+    fi
+
     print_pass "Integration tests completed"
 }
 

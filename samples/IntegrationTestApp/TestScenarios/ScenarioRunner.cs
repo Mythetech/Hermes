@@ -48,9 +48,6 @@ public sealed class ScenarioRunner : IDisposable
         RunMenuCreationTest();
         RunMenuAcceleratorTest();
 
-        // Custom titlebar tests (will be validated by component)
-        TestReporter.Start("custom-titlebar-rendered");
-
         // Platform visibility tests - these verify real backend behavior
         // Run resize/move/focus FIRST - they don't need WebView to be ready
         await RunResizeEventTestAsync();
@@ -93,21 +90,10 @@ public sealed class ScenarioRunner : IDisposable
             var exitCode = TestReporter.AllPassed ? 0 : 1;
             Environment.ExitCode = exitCode;
 
-            // On macOS, closing the last window makes AppKit call
-            // [NSApp terminate:], which hard-exits the process with code 0
-            // before Main's epilogue runs, masking any failure. A failing run
-            // must therefore exit managed before initiating the native close.
-            if (OperatingSystem.IsMacOS() && exitCode != 0)
-            {
-                Console.WriteLine("Exiting before close: macOS native terminate would mask the failure exit code.");
-                Environment.Exit(exitCode);
-            }
-
             // Close must happen on the UI thread
             _app.MainWindow.Invoke(() => _app.MainWindow.Close());
 
             // Backstop: if Close() doesn't terminate the app within 5 seconds, force exit.
-            // On some platforms (e.g. macOS) Close may not fully stop the run loop.
             _ = Task.Run(async () =>
             {
                 await Task.Delay(5000);

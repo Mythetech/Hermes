@@ -78,6 +78,18 @@ static guint parse_accelerator(const char* accelerator, GdkModifierType* mods) {
     return key;
 }
 
+// The menu bar is packed into the window, so closing the window destroys it and every item the tables
+// point at. Forgetting them here is what keeps a later menu call, or hermes_menu_destroy, off the freed
+// widgets.
+static void on_menu_bar_destroyed(GtkWidget* widget, gpointer user_data) {
+    HermesMenu* hm = (HermesMenu*)user_data;
+    hm->menuBar = NULL;
+    hm->window = NULL;
+    hm->container = NULL;
+    g_hash_table_remove_all(hm->menuItems);
+    g_hash_table_remove_all(hm->topLevelMenus);
+}
+
 static GtkWidget* find_menu_by_label(HermesMenu* hm, const char* label) {
     return g_hash_table_lookup(hm->topLevelMenus, label);
 }
@@ -100,6 +112,7 @@ HermesMenu* hermes_menu_new(GtkWidget* window, GtkWidget* container, MenuItemCal
 
     // Create menu bar
     hm->menuBar = gtk_menu_bar_new();
+    g_signal_connect(hm->menuBar, "destroy", G_CALLBACK(on_menu_bar_destroyed), hm);
     gtk_box_pack_start(GTK_BOX(container), hm->menuBar, FALSE, FALSE, 0);
     gtk_box_reorder_child(GTK_BOX(container), hm->menuBar, 0);
     gtk_widget_show(hm->menuBar);
@@ -110,12 +123,13 @@ HermesMenu* hermes_menu_new(GtkWidget* window, GtkWidget* container, MenuItemCal
 void hermes_menu_destroy(HermesMenu* hm) {
     if (!hm) return;
 
-    g_hash_table_destroy(hm->menuItems);
-    g_hash_table_destroy(hm->topLevelMenus);
-
+    // Destroyed first: its destroy handler still empties the tables.
     if (hm->menuBar) {
         gtk_widget_destroy(hm->menuBar);
     }
+
+    g_hash_table_destroy(hm->menuItems);
+    g_hash_table_destroy(hm->topLevelMenus);
 
     g_free(hm);
 }
@@ -126,7 +140,7 @@ void hermes_menu_destroy(HermesMenu* hm) {
 
 void* Hermes_Menu_Create(void* window, MenuItemCallback callback) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw) return NULL;
+    if (!hw || !hw->window) return NULL;
 
     return hermes_menu_new(hw->window, hw->container, callback);
 }
@@ -144,7 +158,7 @@ void Hermes_Menu_Hide(void* menu) {
 
 void Hermes_Menu_AddMenu(void* menu, const char* label, int insertIndex) {
     HermesMenu* hm = (HermesMenu*)menu;
-    if (!hm || !label) return;
+    if (!hm || !hm->menuBar || !label) return;
 
     // Check if menu already exists
     if (find_menu_by_label(hm, label)) return;
@@ -185,7 +199,7 @@ void Hermes_Menu_RemoveMenu(void* menu, const char* label) {
 void Hermes_Menu_AddItem(void* menu, const char* menuLabel, const char* itemId,
                          const char* itemLabel, const char* accelerator) {
     HermesMenu* hm = (HermesMenu*)menu;
-    if (!hm || !menuLabel || !itemId || !itemLabel) return;
+    if (!hm || !hm->menuBar || !menuLabel || !itemId || !itemLabel) return;
 
     GtkWidget* subMenu = find_menu_by_label(hm, menuLabel);
     if (!subMenu) return;
@@ -222,7 +236,7 @@ void Hermes_Menu_AddItem(void* menu, const char* menuLabel, const char* itemId,
 void Hermes_Menu_InsertItem(void* menu, const char* menuLabel, const char* afterItemId,
                             const char* itemId, const char* itemLabel, const char* accelerator) {
     HermesMenu* hm = (HermesMenu*)menu;
-    if (!hm || !menuLabel || !itemId || !itemLabel) return;
+    if (!hm || !hm->menuBar || !menuLabel || !itemId || !itemLabel) return;
 
     GtkWidget* subMenu = find_menu_by_label(hm, menuLabel);
     if (!subMenu) return;

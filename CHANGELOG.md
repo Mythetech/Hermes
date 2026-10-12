@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.2] - 2026-10-11
+
+### Fixed
+
+- macOS: closing the window, or quitting with Cmd+Q, the Dock or a quit Apple event, no longer ends the process from inside the run loop. AppKit's `terminate:` called `exit(0)` there, so `Run()` and `WaitForClose()` never returned: hosted services were not stopped, `DisposeAsync` and any code after `Run()` did not run, and the exit code was always 0. The window that `WaitForClose()` is running for now ends the loop when it closes, and a quit request closes that window, so shutdown runs the same way as on Windows and Linux and `Environment.ExitCode` is honored. As before, a quit request does not raise `Closing` or ask `CloseRequestedHandler`
+- macOS: accessory mode (tray) apps end when their window is closed with `Close()`. Nothing stopped the run loop before, so the process kept running with no window
+- macOS: a closed window is no longer released while the managed side still owns it. Using or disposing a window after it had closed could touch freed memory
+- Linux: closing a window from the title bar now ends `WaitForClose()`. Only `Close()` ended the loop, so the process kept running with no window
+- Linux: calls on a closed window or its menu bar no longer touch freed GTK widgets, and the WebView's script message handler is released with the window
+- Linux: `Close()` no longer schedules `gtk_main_quit` as an idle callback, where its missing return value decided whether it ran again
+
+### Changed
+
+- The message loop ends when the window passed to `WaitForClose()` closes, on every platform. On macOS an app with several windows used to keep running until the last one closed; on Linux `Close()` on any window ended the loop
+- Linux: the native library no longer prints every navigation, custom scheme registration and custom scheme request to stdout
+- `IntegrationTestApp` prints `HERMES_TEARDOWN: PASSED` after `Run()` returns and the app is disposed, and CI requires it on Windows, macOS and Linux
+
 ## [1.4.1] - 2026-09-27
 
 ### Added

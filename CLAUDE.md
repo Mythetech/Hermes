@@ -23,13 +23,15 @@ Windows requires the main thread to be STA for WebView2. This has regressed twic
 
 Once `WaitForClose()` returns, the message pump is dead. Any await in a dispose path whose completion arrives on a non-UI thread posts its continuation into a queue nothing drains (macOS dead main queue; Windows UiInvokeQueue drops items after dispose). Teardown code must either complete synchronously on the UI thread or use blocking joins on thread-pool tasks. See `HermesBlazorApp.StopHost` for the pattern and rationale.
 
-macOS is stricter: closing the last window makes AppKit call `[NSApp terminate:]`, which hard-exits the process with code 0. `WaitForClose()` never returns, so nothing after `Run()` executes on a real macOS close (no `DisposeAsync`, no hosted-service `StopAsync`, no exit code). Do not put must-run logic after `Run()` and expect it to work on macOS; `ScenarioRunner` documents the workaround for test drivers. Known open framework gap as of 2026-08-25.
+macOS needs the native layer to keep AppKit out of the way: `[NSApp terminate:]` hard-exits the process with code 0 from inside the run loop, so `WaitForClose()` would never return and nothing after `Run()` would execute (no `DisposeAsync`, no hosted-service `StopAsync`, no exit code). That was an open gap until 1.4.2. Now the window that `waitForClose` is running for stops the run loop when it closes, `applicationShouldTerminateAfterLastWindowClosed` returns NO, and the `HermesApplication` override of `terminate:` turns a quit request (Cmd+Q, the Dock, a quit Apple event, logout) into a close of that window. Never route these paths back into AppKit's `terminate:`. A quit request does not raise `Closing` or ask `CloseRequestedHandler`.
+
+On every platform the loop ends when the window passed to `WaitForClose()` closes, not when the last window does. The integration run prints `HERMES_TEARDOWN: PASSED` after `Run()` returns and the app is disposed, and CI requires it on all three platforms; a missing marker means the process was ended from inside the message loop again.
 
 ## Verification commands
 
 - Unit suite: `dotnet test tests/Hermes.Tests` (also builds the benchmark apps for the guard tests)
-- Integration scenarios: `HERMES_INTEGRATION_TEST=1 HERMES_INTEGRATION_TEST_EXIT=1 dotnet run --project samples/IntegrationTestApp` (expects 15/15 PASS, exit 0)
-  - The documented count was 12 before the notifications scenario landed, but the runner already reported 13: custom-titlebar-rendered is started by the runner and only passed from TitlebarPage, which the automated run never visits, so it never appears in the totals.
+- Integration scenarios: `HERMES_INTEGRATION_TEST=1 HERMES_INTEGRATION_TEST_EXIT=1 dotnet run --project samples/IntegrationTestApp` (expects 15/15 PASS, `HERMES_TEARDOWN: PASSED`, exit 0)
+  - custom-titlebar-rendered is only reported from TitlebarPage, which the automated run never visits, so it is not one of the 15.
 - Smoke mode: `HERMES_SMOKE_TEST=1 dotnet run --project samples/SmokeTestApp` (expects `HERMES_SMOKE_RESULT: PASSED`, exit 0). With `SMOKE_SAMPLE_FAULT=check|render|gate|log|dialog` every run must end `FAILED`. Integration runs do not enable smoke mode.
 - Benchmark smoke, same thing PR CI runs: build the three apps and the harness in Release, then `dotnet run --project benchmarks/Hermes.Benchmarks.Harness -c Release -- --iterations 1 --warmup 0` (exit code is the verdict)
 

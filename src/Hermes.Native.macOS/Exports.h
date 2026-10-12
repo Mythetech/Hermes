@@ -15,7 +15,7 @@ extern "C" {
 /// Register the application with NSApplication (call once at startup)
 void Hermes_App_Register(void);
 
-/// Set the application to accessory mode (no dock icon, no auto-terminate on last window close)
+/// Set the application to accessory mode (no dock icon)
 void Hermes_App_SetAccessoryMode(void);
 
 /// Activate (bring to front) the main window of another process by its PID

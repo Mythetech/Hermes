@@ -21,14 +21,14 @@ void Hermes_App_Register(void) {
     g_appRegistered = YES;
 
     @autoreleasepool {
-        [NSApplication sharedApplication];
+        // The first sharedApplication call decides the class of NSApp.
+        [HermesApplication sharedApplication];
 
         g_appDelegate = [[HermesAppDelegate alloc] init];
         [NSApp setDelegate:g_appDelegate];
 
         if (g_accessoryMode) {
             [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
-            g_appDelegate.accessoryMode = YES;
         } else {
             [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
         }
@@ -89,7 +89,6 @@ void Hermes_App_SetAccessoryMode(void) {
     g_accessoryMode = YES;
     if (g_appRegistered) {
         [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
-        g_appDelegate.accessoryMode = YES;
     }
 }
 

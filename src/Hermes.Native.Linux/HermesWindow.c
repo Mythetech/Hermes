@@ -23,6 +23,10 @@ static pthread_t g_uiThreadId = 0;
 static gboolean g_gtkInitialized = FALSE;
 static bool g_accessoryMode = false;
 
+// The window whose WaitForClose is running gtk_main. Kept outside HermesWindow so WaitForClose never
+// touches hw after gtk_main returns: the window may have been disposed from inside the loop.
+static HermesWindow* g_loopWindow = NULL;
+
 // ============================================================================
 // Application Lifecycle
 // ============================================================================
@@ -112,12 +116,22 @@ void Hermes_App_ActivateProcessWindow(int pid) {
 // ============================================================================
 
 // Every path that tears the window down (Close's idle, GTK's default delete-event handler,
-// hermes_window_destroy) emits "destroy", so forgetting the pointer here is what stops a later
-// hermes_window_destroy from destroying the freed window a second time. That use-after-free printed a
-// Gtk-CRITICAL on most closes and segfaulted on others (seen on arm64 CI after a passed smoke run).
+// hermes_window_destroy) emits "destroy", so forgetting the pointers here is what stops a later
+// hermes_window_destroy from destroying the freed window a second time, and the exports from touching
+// the freed WebView. That use-after-free printed a Gtk-CRITICAL on most closes and segfaulted on others
+// (seen on arm64 CI after a passed smoke run).
+//
+// Quitting here rather than in Close is what ends WaitForClose when the user closes the window from the
+// title bar: GTK's default delete-event handler destroys the window without going through Close.
 static void on_window_destroyed(GtkWidget* widget, gpointer user_data) {
     HermesWindow* hw = (HermesWindow*)user_data;
     hw->window = NULL;
+    hw->container = NULL;
+    hw->webView = NULL;
+
+    if (hw == g_loopWindow && gtk_main_level() > 0) {
+        gtk_main_quit();
+    }
 }
 
 static gboolean destroy_widget_idle(gpointer data) {
@@ -404,9 +418,6 @@ static void on_uri_scheme_request(WebKitURISchemeRequest* request, gpointer user
     HermesWindow* hw = (HermesWindow*)user_data;
     const char* uri = webkit_uri_scheme_request_get_uri(request);
 
-    printf("[Hermes] URI scheme handler called for: %s\n", uri);
-    fflush(stdout);
-
     if (!hw->onCustomScheme) {
         // Return empty response
         GInputStream* stream = g_memory_input_stream_new();
@@ -628,7 +639,6 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
         webkit_security_manager_register_uri_scheme_as_secure(securityManager, scheme);
         webkit_security_manager_register_uri_scheme_as_cors_enabled(securityManager, scheme);
         webkit_web_context_register_uri_scheme(context, scheme, on_uri_scheme_request, hw, NULL);
-        printf("[Hermes] Registered URI scheme: %s\n", scheme);
     }
 
     // Configure WebView settings
@@ -770,6 +780,12 @@ void hermes_window_destroy(HermesWindow* hw) {
         gtk_widget_destroy(hw->window);
     }
 
+    // The WebView holds its own reference, so this one is ours; its script message handler points at hw.
+    if (hw->userContentManager) {
+        g_signal_handlers_disconnect_by_data(hw->userContentManager, hw);
+        g_object_unref(hw->userContentManager);
+    }
+
     g_free(hw);
 }
 
@@ -783,7 +799,7 @@ void* Hermes_Window_Create(const HermesWindowParams* params) {
 
 void Hermes_Window_Show(void* window) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw) return;
+    if (!hw || !hw->window) return;
 
     hw->isShown = TRUE;
     gtk_widget_show_all(hw->window);
@@ -797,7 +813,7 @@ void Hermes_Window_Show(void* window) {
 
 void Hermes_Window_Hide(void* window) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw) return;
+    if (!hw || !hw->window) return;
 
     gtk_widget_hide(hw->window);
 }
@@ -807,19 +823,23 @@ void Hermes_Window_Close(void* window) {
     if (!hw) return;
 
     // The idle owns a reference, so the widget stays valid if hermes_window_destroy runs before the
-    // idle does; destroying an already destroyed widget is then harmless.
+    // idle does; destroying an already destroyed widget is then harmless. The destroy handler ends the
+    // loop, so there is no separate quit to schedule.
     if (hw->window) {
         g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, destroy_widget_idle, g_object_ref(hw->window), g_object_unref);
     }
-    g_idle_add((GSourceFunc)gtk_main_quit, NULL);
 }
 
 void Hermes_Window_WaitForClose(void* window) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw) return;
+    if (!hw || !hw->window) return;
 
     Hermes_Window_Show(window);
+
+    HermesWindow* outerLoopWindow = g_loopWindow;
+    g_loopWindow = hw;
     gtk_main();
+    g_loopWindow = outerLoopWindow;
 }
 
 void Hermes_Window_Destroy(void* window) {
@@ -832,7 +852,11 @@ void Hermes_Window_Destroy(void* window) {
 
 void Hermes_Window_GetTitle(void* window, char* buffer, int bufferSize) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw || !buffer || bufferSize <= 0) return;
+    if (!buffer || bufferSize <= 0) return;
+    if (!hw || !hw->window) {
+        buffer[0] = '\0';
+        return;
+    }
 
     const char* title = gtk_window_get_title(GTK_WINDOW(hw->window));
     if (title) {
@@ -845,28 +869,28 @@ void Hermes_Window_GetTitle(void* window, char* buffer, int bufferSize) {
 
 void Hermes_Window_GetSize(void* window, int* width, int* height) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw) return;
+    if (!hw || !hw->window) return;
 
     gtk_window_get_size(GTK_WINDOW(hw->window), width, height);
 }
 
 void Hermes_Window_GetPosition(void* window, int* x, int* y) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw) return;
+    if (!hw || !hw->window) return;
 
     gtk_window_get_position(GTK_WINDOW(hw->window), x, y);
 }
 
 bool Hermes_Window_GetIsMaximized(void* window) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw) return false;
+    if (!hw || !hw->window) return false;
 
     return gtk_window_is_maximized(GTK_WINDOW(hw->window));
 }
 
 bool Hermes_Window_GetIsMinimized(void* window) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw) return false;
+    if (!hw || !hw->window) return false;
 
     GdkWindow* gdkWindow = gtk_widget_get_window(hw->window);
     if (!gdkWindow) return false;
@@ -887,28 +911,28 @@ int64_t Hermes_Window_GetUIThreadId(void* window) {
 
 void Hermes_Window_SetTitle(void* window, const char* title) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw) return;
+    if (!hw || !hw->window) return;
 
     gtk_window_set_title(GTK_WINDOW(hw->window), title);
 }
 
 void Hermes_Window_SetSize(void* window, int width, int height) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw) return;
+    if (!hw || !hw->window) return;
 
     gtk_window_resize(GTK_WINDOW(hw->window), width, height);
 }
 
 void Hermes_Window_SetPosition(void* window, int x, int y) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw) return;
+    if (!hw || !hw->window) return;
 
     gtk_window_move(GTK_WINDOW(hw->window), x, y);
 }
 
 void Hermes_Window_SetIsMaximized(void* window, bool maximized) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw) return;
+    if (!hw || !hw->window) return;
 
     if (maximized) {
         gtk_window_maximize(GTK_WINDOW(hw->window));
@@ -919,7 +943,7 @@ void Hermes_Window_SetIsMaximized(void* window, bool maximized) {
 
 void Hermes_Window_SetIsMinimized(void* window, bool minimized) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw) return;
+    if (!hw || !hw->window) return;
 
     if (minimized) {
         gtk_window_iconify(GTK_WINDOW(hw->window));
@@ -934,23 +958,21 @@ void Hermes_Window_SetIsMinimized(void* window, bool minimized) {
 
 void Hermes_Window_NavigateToUrl(void* window, const char* url) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw || !url) return;
+    if (!hw || !hw->webView || !url) return;
 
-    printf("[Hermes] NavigateToUrl: %s\n", url);
-    fflush(stdout);
     webkit_web_view_load_uri(WEBKIT_WEB_VIEW(hw->webView), url);
 }
 
 void Hermes_Window_NavigateToString(void* window, const char* html) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw || !html) return;
+    if (!hw || !hw->webView || !html) return;
 
     webkit_web_view_load_html(WEBKIT_WEB_VIEW(hw->webView), html, "about:blank");
 }
 
 void Hermes_Window_SendWebMessage(void* window, const char* message) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw || !message) return;
+    if (!hw || !hw->webView || !message) return;
 
     // Escape message for JavaScript
     GString* escaped = g_string_new(NULL);
@@ -976,7 +998,7 @@ void Hermes_Window_SendWebMessage(void* window, const char* message) {
 
 void Hermes_Window_RegisterCustomScheme(void* window, const char* scheme) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw || !scheme || hw->customSchemeCount >= 16) return;
+    if (!hw || !hw->webView || !scheme || hw->customSchemeCount >= 16) return;
 
     // Check if already registered
     for (int i = 0; i < hw->customSchemeCount; i++) {
@@ -994,13 +1016,11 @@ void Hermes_Window_RegisterCustomScheme(void* window, const char* scheme) {
     webkit_security_manager_register_uri_scheme_as_secure(securityManager, scheme);
     webkit_security_manager_register_uri_scheme_as_cors_enabled(securityManager, scheme);
     webkit_web_context_register_uri_scheme(context, scheme, on_uri_scheme_request, hw, NULL);
-
-    printf("[Hermes] Registered URI scheme: %s\n", scheme);
 }
 
 void Hermes_Window_RunJavascript(void* window, const char* script) {
     HermesWindow* hw = (HermesWindow*)window;
-    if (!hw || !script) return;
+    if (!hw || !hw->webView || !script) return;
 
     webkit_web_view_run_javascript(WEBKIT_WEB_VIEW(hw->webView), script, NULL, NULL, NULL);
 }

@@ -345,9 +345,11 @@ internal sealed class SmokeSession
         var exitCode = report.Passed ? 0 : 1;
         _context.SetExitCode(exitCode);
 
-        // Closing the last window on macOS makes AppKit terminate with exit code 0, which would turn a
-        // failed run into a pass for anything reading the exit code. Exit immediately in this case, and
-        // when there is nothing to close, rather than risk a throwing or blocking cancel first.
+        // A failed run on macOS exits here instead of closing the window. AppKit's terminate ends the
+        // process with exit code 0, which would turn the failure into a pass for anything reading the exit
+        // code; the native layer no longer lets a close reach it, but a failed verdict is not worth betting
+        // on that. Exit immediately too when there is nothing to close, rather than risk a throwing or
+        // blocking cancel first.
         if ((_context.IsMacOS && !report.Passed) || _requestClose is null)
         {
             _context.HardExit(exitCode);
