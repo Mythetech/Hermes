@@ -22,17 +22,20 @@ public sealed class TeardownProbe : IHostedService
 
     /// <summary>
     /// Call after the app has been disposed. Emits the HERMES_TEARDOWN marker and fails the exit
-    /// code when hosted services were never stopped.
+    /// code when hosted services were never stopped or the page's services never finished disposing.
     /// </summary>
     public static void Report()
     {
-        if (_stopped)
+        if (_stopped && PageTeardownProbe.Disposed)
         {
             Console.WriteLine("HERMES_TEARDOWN: PASSED");
             return;
         }
 
-        Console.WriteLine("HERMES_TEARDOWN: FAILED (hosted services were not stopped after the window closed)");
+        var reason = _stopped
+            ? "the page's services did not finish disposing after the window closed"
+            : "hosted services were not stopped after the window closed";
+        Console.WriteLine($"HERMES_TEARDOWN: FAILED ({reason})");
         Environment.ExitCode = 1;
     }
 }
