@@ -1,6 +1,6 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 import { readable, type Readable } from 'svelte/store';
-import { bridge } from '@hermes/bridge';
+import { bridge } from '@mythetech/hermes-bridge';
 
 export interface InvokeState<T> {
   loading: boolean;

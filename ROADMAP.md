@@ -66,7 +66,7 @@ Enable React, Vue, Angular, Svelte and other JS/TS frameworks as an alternative 
 - [x] Static file serving with SPA fallback (`UseStaticFiles()`, `UseSpaFallback()`)
 - [x] Dev server support for Vite/Webpack HMR (`UseDevServer()`)
 - [x] C# ↔ JS interop bridge (`InteropBridge`): invoke with a result, events in both directions
-- [x] TypeScript packages in `packages/`: `@hermes/bridge`, `@hermes/react`, `@hermes/svelte`
+- [x] TypeScript packages in `packages/`: `@mythetech/hermes-bridge`, `@mythetech/hermes-react`, `@mythetech/hermes-svelte`
 - [x] Sample apps: vanilla TypeScript, React, Svelte
 
 **Remaining for 1.5:**

@@ -1,6 +1,6 @@
 <!-- Copyright (c) Mythetech. Licensed under the MIT License. -->
 <script lang="ts">
-  import { createEventStore, hermesConnected } from '@hermes/svelte';
+  import { createEventStore, hermesConnected } from '@mythetech/hermes-svelte';
 
   const tick = createEventStore<number>('tick');
 </script>
