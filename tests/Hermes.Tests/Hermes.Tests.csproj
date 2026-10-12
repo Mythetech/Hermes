@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net11.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -24,11 +24,14 @@
 
   <!-- Build-order only: BenchmarkAppEntryPointTests reads these apps' compiled
        entry points from PE metadata, so building the tests must build the apps.
-       No assembly reference is taken; their dependencies stay out of the tests. -->
+       No assembly reference is taken; their dependencies stay out of the tests.
+       The apps target one framework while the tests run on several, so the
+       framework compatibility check is skipped and the test's own TargetFramework
+       is not passed down; each app is built once, as the solution builds it. -->
   <ItemGroup>
-    <ProjectReference Include="..\..\benchmarks\Hermes.Benchmarks.Apps\HermesTestApp\HermesTestApp.csproj" ReferenceOutputAssembly="false" Private="false" />
-    <ProjectReference Include="..\..\benchmarks\Hermes.Benchmarks.Apps\PhotinoTestApp\PhotinoTestApp.csproj" ReferenceOutputAssembly="false" Private="false" />
-    <ProjectReference Include="..\..\benchmarks\Hermes.Benchmarks.Apps\PhotinoXTestApp\PhotinoXTestApp.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\benchmarks\Hermes.Benchmarks.Apps\HermesTestApp\HermesTestApp.csproj" ReferenceOutputAssembly="false" Private="false" SkipGetTargetFrameworkProperties="true" GlobalPropertiesToRemove="TargetFramework" />
+    <ProjectReference Include="..\..\benchmarks\Hermes.Benchmarks.Apps\PhotinoTestApp\PhotinoTestApp.csproj" ReferenceOutputAssembly="false" Private="false" SkipGetTargetFrameworkProperties="true" GlobalPropertiesToRemove="TargetFramework" />
+    <ProjectReference Include="..\..\benchmarks\Hermes.Benchmarks.Apps\PhotinoXTestApp\PhotinoXTestApp.csproj" ReferenceOutputAssembly="false" Private="false" SkipGetTargetFrameworkProperties="true" GlobalPropertiesToRemove="TargetFramework" />
   </ItemGroup>
 
 </Project>

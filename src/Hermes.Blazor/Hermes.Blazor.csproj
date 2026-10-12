@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
   <PropertyGroup>
-    <TargetFramework>net11.0</TargetFramework>
+    <TargetFrameworks>$(HermesTargetFrameworks)</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsAotCompatible>true</IsAotCompatible>
@@ -50,21 +50,28 @@
 
   <!-- MSBuild targets for static web asset handling (auto-imported by consuming projects) -->
   <ItemGroup>
+    <None Include="build/Hermes.Blazor.targets" Pack="true" PackagePath="buildTransitive/net10.0/Mythetech.Hermes.Blazor.targets" />
+    <None Include="build/Hermes.Blazor.targets" Pack="true" PackagePath="build/net10.0/Mythetech.Hermes.Blazor.targets" />
     <None Include="build/Hermes.Blazor.targets" Pack="true" PackagePath="buildTransitive/net11.0/Mythetech.Hermes.Blazor.targets" />
     <None Include="build/Hermes.Blazor.targets" Pack="true" PackagePath="build/net11.0/Mythetech.Hermes.Blazor.targets" />
   </ItemGroup>
 
   <!-- The FrameworkReference below puts consuming apps on the Microsoft.AspNetCore.App shared
        framework, which supplies the Components.Web runtime, so the WebView package (and the
-       blazor.webview.js it embeds) must track the same .NET 11 build. A 10.x package runs its
-       old script against the 11 runtime and every new interop entry point, Virtualize's
-       setAnchorMode for one, fails at first render. NU5104 is relaxed only until the 11.0.0
-       GA package replaces the RC build. -->
+       blazor.webview.js it embeds) must come from the same .NET major as each target framework.
+       A 10.x package runs its old script against the 11 runtime and every new interop entry
+       point, Virtualize's setAnchorMode for one, fails at first render. Never share one version
+       across target frameworks. NU5104 is relaxed only until the 11.0.0 GA package replaces the
+       RC build. -->
   <PropertyGroup>
     <NoWarn>$(NoWarn);NU5104</NoWarn>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="11.0.0-rc.1.26425.128" />
   </ItemGroup>
 
