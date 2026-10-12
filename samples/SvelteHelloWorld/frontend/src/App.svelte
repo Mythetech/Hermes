@@ -1,6 +1,6 @@
 <!-- Copyright (c) Mythetech. Licensed under the MIT License. -->
 <script lang="ts">
-  import { hermesConnected } from '@hermes/svelte';
+  import { hermesConnected } from '@mythetech/hermes-svelte';
   import GreetCard from './lib/GreetCard.svelte';
   import SystemInfo from './lib/SystemInfo.svelte';
   import LiveTicker from './lib/LiveTicker.svelte';

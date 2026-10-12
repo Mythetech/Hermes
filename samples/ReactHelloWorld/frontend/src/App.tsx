@@ -1,5 +1,5 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
-import { bridge } from '@hermes/bridge';
+import { bridge } from '@mythetech/hermes-bridge';
 import GreetCard from './components/GreetCard';
 import SystemInfo from './components/SystemInfo';
 import './App.css';

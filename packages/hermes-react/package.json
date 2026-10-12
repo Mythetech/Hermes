@@ -1,5 +1,5 @@
 {
-  "name": "@hermes/react",
+  "name": "@mythetech/hermes-react",
   "version": "1.0.0-preview.1",
   "description": "React hooks for Hermes desktop framework - useInvoke for C# interop",
   "type": "module",
@@ -21,11 +21,11 @@
     "clean": "rm -rf dist"
   },
   "peerDependencies": {
-    "@hermes/bridge": ">=1.0.0-preview.1",
+    "@mythetech/hermes-bridge": ">=1.0.0-preview.1",
     "react": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
-    "@hermes/bridge": "file:../hermes-bridge",
+    "@mythetech/hermes-bridge": "file:../hermes-bridge",
     "@types/react": "^18.0.0",
     "react": "^18.0.0",
     "typescript": "^5.7.0"

@@ -1,7 +1,7 @@
 <!-- Copyright (c) Mythetech. Licensed under the MIT License. -->
 <script lang="ts">
-  import { bridge } from '@hermes/bridge';
-  import { hermesConnected } from '@hermes/svelte';
+  import { bridge } from '@mythetech/hermes-bridge';
+  import { hermesConnected } from '@mythetech/hermes-svelte';
 
   let name = $state('World');
   let output = $state('');
