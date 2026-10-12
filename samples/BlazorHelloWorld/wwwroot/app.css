@@ -112,8 +112,8 @@ html, body {
 .layout {
     display: flex;
     flex: 1;
-    margin-top: 38px;
-    height: calc(100% - 38px);
+    margin-top: var(--hermes-titlebar-height);
+    height: calc(100% - var(--hermes-titlebar-height));
     overflow: hidden;
 }
 
