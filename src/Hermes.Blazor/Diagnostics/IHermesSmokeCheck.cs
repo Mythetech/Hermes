@@ -4,7 +4,8 @@ namespace Hermes.Blazor.Diagnostics;
 /// <summary>
 /// A named check that runs once in smoke mode, after the first render and every smoke gate.
 /// Checks are resolved from the page's service scope, so they see the same scoped services as the UI,
-/// and they are never created outside smoke mode.
+/// and they are never created outside smoke mode. They are created at the first render, before the gates
+/// are awaited, so a constructor must not depend on work a gate waits for.
 /// </summary>
 public interface IHermesSmokeCheck
 {
