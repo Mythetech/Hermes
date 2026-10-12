@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.4] - 2026-10-12
+
+### Fixed
+
+- `HermesBlazorApp.DisposeAsync()` no longer hangs after `Run()` when a page service or component finishes disposing on another thread. An app that ends `Main` with `app.Run(); app.DisposeAsync().AsTask().GetAwaiter().GetResult();` stayed alive with no window. MudBlazor apps did, because its popover service awaits thread-pool work as it disposes. On macOS this appeared with 1.4.2, when `Run()` started returning; before that the process ended before it reached the dispose
+  - Work posted to the Hermes synchronization context after the message loop has ended now runs on the thread pool. It used to be queued for a UI thread that would never run it
+  - `DisposeAsync()` stays on the calling thread until the window is destroyed. Resuming on the thread pool destroyed the native window there, which on macOS waits for the main thread
+- A page that never finishes disposing no longer blocks exit. `DisposeAsync()` logs an error after the host's `ShutdownTimeout` (5 seconds by default) and carries on with the window and the services
+
+### Changed
+
+- `IntegrationTestApp` has a page service that finishes disposing on another thread, and `HERMES_TEARDOWN: PASSED` requires it, so CI catches this on Windows, macOS and Linux
+
 ## [1.4.3] - 2026-10-12
 
 ### Added

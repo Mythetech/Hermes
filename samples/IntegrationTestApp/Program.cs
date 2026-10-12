@@ -50,6 +50,7 @@ public static class Program
 
         builder.Services.AddFluentUIComponents();
         builder.Services.AddHostedService<TeardownProbe>();
+        builder.Services.AddScoped<PageTeardownProbe>();
 
         builder.RootComponents.Add<App>("#app");
 
