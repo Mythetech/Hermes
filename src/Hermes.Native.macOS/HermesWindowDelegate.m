@@ -33,9 +33,7 @@
 }
 
 - (void)windowWillClose:(NSNotification*)notification {
-    if (_hermesWindow) {
-        _hermesWindow.isRunning = NO;
-    }
+    [_hermesWindow endRunLoop];
 }
 
 - (BOOL)windowShouldClose:(NSWindow*)sender {

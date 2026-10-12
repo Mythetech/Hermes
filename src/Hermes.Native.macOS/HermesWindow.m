@@ -14,6 +14,9 @@
 
 @end
 
+// The window whose waitForClose is running [NSApp run]. Weak, because the managed side owns the window.
+static __weak HermesWindow* g_runLoopWindow = nil;
+
 @implementation HermesWindow
 
 - (instancetype)initWithParams:(const HermesWindowParams*)params {
@@ -52,6 +55,11 @@
                                                  styleMask:styleMask
                                                    backing:NSBackingStoreBuffered
                                                      defer:YES];
+
+        // The managed side owns the window until Hermes_Window_Destroy. Left at the default, close would
+        // release it out from under this object, and everything that runs after a close (waitForClose
+        // returning, dispose) would touch a freed window.
+        _window.releasedWhenClosed = NO;
 
         if (params->Title) {
             [_window setTitle:[NSString stringWithUTF8String:params->Title]];
@@ -285,9 +293,57 @@
 }
 
 - (void)waitForClose {
+    HermesWindow* outerRunLoopWindow = g_runLoopWindow;
+    g_runLoopWindow = self;
     _isRunning = YES;
     [self show];
     [NSApp run];
+    _isRunning = NO;
+    g_runLoopWindow = outerRunLoopWindow;
+}
+
++ (HermesWindow*)runLoopWindow {
+    return g_runLoopWindow;
+}
+
+- (void)endRunLoop {
+    if (!_isRunning) return;
+    _isRunning = NO;
+    [self stopApplicationRunLoop];
+}
+
+- (void)closeForQuit {
+    [_window close];
+
+    // A second quit request, or a close that never reached the delegate, still has to end the loop.
+    _isRunning = NO;
+    [self stopApplicationRunLoop];
+}
+
+- (void)stopApplicationRunLoop {
+    if (g_runLoopWindow != self) return;
+
+    BOOL inModalSession = NSApp.modalWindow != nil;
+
+    // stop: only takes effect once the run loop has dispatched an event, and a close requested from
+    // managed code or a dispatched block is not one, so post an event for it to see.
+    [NSApp stop:nil];
+    [NSApp postEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined
+                                        location:NSZeroPoint
+                                   modifierFlags:0
+                                       timestamp:0
+                                    windowNumber:0
+                                         context:nil
+                                         subtype:0
+                                           data1:0
+                                           data2:0]
+             atStart:YES];
+
+    if (inModalSession) {
+        // During a modal session stop: ends that session, not the run loop. A delayed perform only fires
+        // in the default run loop mode, which is after the session has unwound, so ask again there.
+        [self performSelector:@selector(stopApplicationRunLoop) withObject:nil afterDelay:0];
+    }
 }
 
 #pragma mark - Properties

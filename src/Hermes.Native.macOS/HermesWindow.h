@@ -62,6 +62,15 @@
 - (void)close;
 - (void)waitForClose;
 
+/// The window whose waitForClose is running the application run loop, or nil when none is.
++ (HermesWindow*)runLoopWindow;
+
+/// Makes waitForClose return if this window is the one running the run loop. Called when the window closes.
+- (void)endRunLoop;
+
+/// Closes the window for an application quit request, which ends its run loop.
+- (void)closeForQuit;
+
 // Properties
 - (NSString*)title;
 - (void)setTitle:(NSString*)title;
