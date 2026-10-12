@@ -49,6 +49,7 @@ public static class Program
         builder.Services.AddSingleton(virtualizeProbe);
 
         builder.Services.AddFluentUIComponents();
+        builder.Services.AddHostedService<TeardownProbe>();
 
         builder.RootComponents.Add<App>("#app");
 
@@ -102,6 +103,11 @@ public static class Program
         app.Run();
 
         app.DisposeAsync().AsTask().GetAwaiter().GetResult();
+
+        if (isIntegrationTest)
+        {
+            TeardownProbe.Report();
+        }
 
         Console.WriteLine("Application closed.");
     }
