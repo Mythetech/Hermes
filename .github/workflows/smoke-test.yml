@@ -22,14 +22,30 @@ jobs:
           - os: macos-latest
             platform: macos
             app: samples/SmokeTestApp/bin/Release/net11.0/SmokeTestApp
+          # The same app on the oldest supported framework. These are extra entries, so the names of
+          # the checks above stay as they are.
+          - os: windows-latest
+            platform: windows-net10
+            app: samples/SmokeTestApp/bin/Release/net10.0/SmokeTestApp.exe
+            framework: net10.0
+          - os: ubuntu-latest
+            platform: linux-net10
+            app: samples/SmokeTestApp/bin/Release/net10.0/SmokeTestApp
+            framework: net10.0
+          - os: macos-latest
+            platform: macos-net10
+            app: samples/SmokeTestApp/bin/Release/net10.0/SmokeTestApp
+            framework: net10.0
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
 
+      # The .NET 10 SDK brings the runtimes the net10.0 builds run on; global.json picks the SDK that builds.
       - uses: actions/setup-dotnet@v4
         with:
+          dotnet-version: 10.0.x
           global-json-file: global.json
 
       - name: Build Native Library (macOS)
@@ -55,7 +71,7 @@ jobs:
           sleep 2
 
       - name: Build SmokeTestApp
-        run: dotnet build samples/SmokeTestApp -c Release
+        run: dotnet build samples/SmokeTestApp -c Release ${{ matrix.framework && format('-p:SmokeTargetFramework={0}', matrix.framework) || '' }}
 
       - name: Checkout shared smoke verdict
         uses: actions/checkout@v4
