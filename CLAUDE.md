@@ -2,6 +2,8 @@
 
 Cross-platform .NET desktop framework (Blazor hybrid over native WebViews). Original Mythetech work, not a Photino fork.
 
+The license terms for reusing this code are in @AGENTS.md.
+
 ## Desktop entry points: STA rules (Windows)
 
 Windows requires the main thread to be STA for WebView2. This has regressed twice; treat it as load-bearing.
