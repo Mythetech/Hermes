@@ -57,6 +57,55 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NotificationsDemo", "sample
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmokeTestApp", "samples\SmokeTestApp\SmokeTestApp.csproj", "{41B5FC84-F987-4BE1-AA20-E4B858FD47D3}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Hermes.Native.macOS", "Hermes.Native.macOS", "{F5CAE55A-2710-4E8C-8765-404C4C00A162}"
+	ProjectSection(SolutionItems) = preProject
+		src\Hermes.Native.macOS\Exports.h = src\Hermes.Native.macOS\Exports.h
+		src\Hermes.Native.macOS\Exports.m = src\Hermes.Native.macOS\Exports.m
+		src\Hermes.Native.macOS\HermesAppDelegate.h = src\Hermes.Native.macOS\HermesAppDelegate.h
+		src\Hermes.Native.macOS\HermesAppDelegate.m = src\Hermes.Native.macOS\HermesAppDelegate.m
+		src\Hermes.Native.macOS\HermesContextMenu.h = src\Hermes.Native.macOS\HermesContextMenu.h
+		src\Hermes.Native.macOS\HermesContextMenu.m = src\Hermes.Native.macOS\HermesContextMenu.m
+		src\Hermes.Native.macOS\HermesDialogs.h = src\Hermes.Native.macOS\HermesDialogs.h
+		src\Hermes.Native.macOS\HermesDialogs.m = src\Hermes.Native.macOS\HermesDialogs.m
+		src\Hermes.Native.macOS\HermesDockMenu.h = src\Hermes.Native.macOS\HermesDockMenu.h
+		src\Hermes.Native.macOS\HermesDockMenu.m = src\Hermes.Native.macOS\HermesDockMenu.m
+		src\Hermes.Native.macOS\HermesMenu.h = src\Hermes.Native.macOS\HermesMenu.h
+		src\Hermes.Native.macOS\HermesMenu.m = src\Hermes.Native.macOS\HermesMenu.m
+		src\Hermes.Native.macOS\HermesNotifications.h = src\Hermes.Native.macOS\HermesNotifications.h
+		src\Hermes.Native.macOS\HermesNotifications.m = src\Hermes.Native.macOS\HermesNotifications.m
+		src\Hermes.Native.macOS\HermesStatusIcon.h = src\Hermes.Native.macOS\HermesStatusIcon.h
+		src\Hermes.Native.macOS\HermesStatusIcon.m = src\Hermes.Native.macOS\HermesStatusIcon.m
+		src\Hermes.Native.macOS\HermesTypes.h = src\Hermes.Native.macOS\HermesTypes.h
+		src\Hermes.Native.macOS\HermesUiDelegate.h = src\Hermes.Native.macOS\HermesUiDelegate.h
+		src\Hermes.Native.macOS\HermesUiDelegate.m = src\Hermes.Native.macOS\HermesUiDelegate.m
+		src\Hermes.Native.macOS\HermesUrlSchemeHandler.h = src\Hermes.Native.macOS\HermesUrlSchemeHandler.h
+		src\Hermes.Native.macOS\HermesUrlSchemeHandler.m = src\Hermes.Native.macOS\HermesUrlSchemeHandler.m
+		src\Hermes.Native.macOS\HermesWindow.h = src\Hermes.Native.macOS\HermesWindow.h
+		src\Hermes.Native.macOS\HermesWindow.m = src\Hermes.Native.macOS\HermesWindow.m
+		src\Hermes.Native.macOS\HermesWindowDelegate.h = src\Hermes.Native.macOS\HermesWindowDelegate.h
+		src\Hermes.Native.macOS\HermesWindowDelegate.m = src\Hermes.Native.macOS\HermesWindowDelegate.m
+		src\Hermes.Native.macOS\Makefile = src\Hermes.Native.macOS\Makefile
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Hermes.Native.Linux", "Hermes.Native.Linux", "{DD847200-0B70-4C3E-B1AE-A9809EC49508}"
+	ProjectSection(SolutionItems) = preProject
+		src\Hermes.Native.Linux\build.sh = src\Hermes.Native.Linux\build.sh
+		src\Hermes.Native.Linux\CMakeLists.txt = src\Hermes.Native.Linux\CMakeLists.txt
+		src\Hermes.Native.Linux\Exports.c = src\Hermes.Native.Linux\Exports.c
+		src\Hermes.Native.Linux\Exports.h = src\Hermes.Native.Linux\Exports.h
+		src\Hermes.Native.Linux\HermesContextMenu.c = src\Hermes.Native.Linux\HermesContextMenu.c
+		src\Hermes.Native.Linux\HermesDialogs.c = src\Hermes.Native.Linux\HermesDialogs.c
+		src\Hermes.Native.Linux\HermesMenu.c = src\Hermes.Native.Linux\HermesMenu.c
+		src\Hermes.Native.Linux\HermesMenu.h = src\Hermes.Native.Linux\HermesMenu.h
+		src\Hermes.Native.Linux\HermesNotifications.c = src\Hermes.Native.Linux\HermesNotifications.c
+		src\Hermes.Native.Linux\HermesNotifications.h = src\Hermes.Native.Linux\HermesNotifications.h
+		src\Hermes.Native.Linux\HermesStatusIcon.c = src\Hermes.Native.Linux\HermesStatusIcon.c
+		src\Hermes.Native.Linux\HermesStatusIcon.h = src\Hermes.Native.Linux\HermesStatusIcon.h
+		src\Hermes.Native.Linux\HermesTypes.h = src\Hermes.Native.Linux\HermesTypes.h
+		src\Hermes.Native.Linux\HermesWindow.c = src\Hermes.Native.Linux\HermesWindow.c
+		src\Hermes.Native.Linux\HermesWindow.h = src\Hermes.Native.Linux\HermesWindow.h
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -359,5 +408,7 @@ Global
 		{B0F2D178-E0D7-410D-8651-C96F6DA81EA2} = {DE88883C-0E63-C898-A512-AAD2F7770360}
 		{0836216C-6D7E-4D19-A6F9-0B3CF28C2FE1} = {E8C8B8E1-1234-5678-9ABC-DEF012345678}
 		{41B5FC84-F987-4BE1-AA20-E4B858FD47D3} = {E8C8B8E1-1234-5678-9ABC-DEF012345678}
+		{F5CAE55A-2710-4E8C-8765-404C4C00A162} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{DD847200-0B70-4C3E-B1AE-A9809EC49508} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal
