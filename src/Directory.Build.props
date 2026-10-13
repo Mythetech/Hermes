@@ -2,6 +2,7 @@
   <PropertyGroup>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <PackageIcon>icon.png</PackageIcon>
+    <Copyright>Copyright (c) 2026 Mythetech</Copyright>
   </PropertyGroup>
 
   <ItemGroup>
