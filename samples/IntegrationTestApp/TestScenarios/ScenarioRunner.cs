@@ -63,6 +63,9 @@ public sealed class ScenarioRunner : IDisposable
         // Notifications: exercises the real backend, supported or not, without needing the WebView
         await RunNotificationsTestAsync();
 
+        // Clipboard: the real OS clipboard, no WebView needed
+        RunClipboardTextTest();
+
         // Web message test runs LAST - gives WebView2 maximum time to initialize
         // On Windows, WebView2 init is async and can take several seconds in CI
         await RunWebMessageRoundTripTestAsync();
@@ -594,6 +597,25 @@ public sealed class ScenarioRunner : IDisposable
 
             notifications.Dismiss(notification.Id);
             TestReporter.Pass(testName);
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail(testName, ex.Message);
+        }
+    }
+
+    private void RunClipboardTextTest()
+    {
+        const string testName = "clipboard-text";
+        TestReporter.Start(testName);
+
+        try
+        {
+            var expected = $"hermes-clipboard-{Guid.NewGuid():N}";
+            Clipboard.SetText(expected);
+            var actual = Clipboard.GetText();
+
+            TestReporter.Assert(testName, actual == expected, $"Expected '{expected}', got '{actual}'");
         }
         catch (Exception ex)
         {
