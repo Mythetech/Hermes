@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - **Rich clipboard API (preview, documented with 1.5)**: `HermesDataPackage` in `Hermes.Contracts.DataTransfer` carries text, HTML, PNG, file paths and custom MIME formats; `Clipboard.Read`, `Write`, `GetFormats`, `HasCustom`, `Clear` and the `Changed` event use it, and `IClipboard` gains matching members with text-only default implementations. This release routes text through the new API unchanged; HTML, images, files, custom formats and change monitoring arrive per platform in the following releases
+- macOS: the clipboard reads and writes HTML, images (as PNG, with TIFF added for older apps), file paths and custom MIME formats through `NSPasteboard`, and raises `Clipboard.Changed` by polling the pasteboard's change count every 500 ms while subscribed. `pbcopy` and `pbpaste` are no longer used
 
 ## [1.4.4] - 2026-10-12
 
