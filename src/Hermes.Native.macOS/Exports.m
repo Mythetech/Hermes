@@ -7,6 +7,7 @@
 #import "HermesStatusIcon.h"
 #import "HermesNotifications.h"
 #import "HermesDialogs.h"
+#import "HermesClipboard.h"
 #import "HermesAppDelegate.h"
 #import <Cocoa/Cocoa.h>
 
@@ -560,6 +561,26 @@ int Hermes_Dialog_ShowMessage(const char* title, const char* message,
                                int buttons, int icon) {
     return Hermes_ShowMessageDialog(title, message, buttons, icon);
 }
+
+#pragma mark - Clipboard Operations
+
+int Hermes_Clipboard_GetFormats(void) { return HermesClipboard_GetFormats(); }
+bool Hermes_Clipboard_HasType(const char* mimeType) { return HermesClipboard_HasType(mimeType); }
+char* Hermes_Clipboard_ReadText(void) { return HermesClipboard_ReadText(); }
+char* Hermes_Clipboard_ReadHtml(void) { return HermesClipboard_ReadHtml(); }
+uint8_t* Hermes_Clipboard_ReadPng(int* length) { return HermesClipboard_ReadPng(length); }
+char** Hermes_Clipboard_ReadFiles(int* count) { return HermesClipboard_ReadFiles(count); }
+uint8_t* Hermes_Clipboard_ReadCustom(const char* mimeType, int* length) { return HermesClipboard_ReadCustom(mimeType, length); }
+
+bool Hermes_Clipboard_Write(const char* text, const char* html, const uint8_t* png, int pngLength,
+                            const char** files, int fileCount,
+                            const char** customTypes, const uint8_t** customData, const int* customLengths, int customCount) {
+    return HermesClipboard_Write(text, html, png, pngLength, files, fileCount, customTypes, customData, customLengths, customCount);
+}
+
+void Hermes_Clipboard_Clear(void) { HermesClipboard_Clear(); }
+void Hermes_Clipboard_StartMonitoring(void (*callback)(void)) { HermesClipboard_StartMonitoring(callback); }
+void Hermes_Clipboard_StopMonitoring(void) { HermesClipboard_StopMonitoring(); }
 
 #pragma mark - Dock Menu Operations
 
