@@ -40,6 +40,18 @@ public sealed class FileUriListTests
     }
 
     [Fact]
+    public void BackslashInFileName_RoundTripsOnNonWindows()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        var path = Path.Combine(Path.GetTempPath(), "a\\b.txt");
+
+        Assert.Equal(new[] { path }, FileUriList.ParseUriList(FileUriList.BuildUriList(new[] { path })));
+        Assert.Contains("a%5Cb.txt", FileUriList.ToFileUri(path));
+    }
+
+    [Fact]
     public void ParseUriList_SkipsCommentsBlankLinesAndNonFileUris()
     {
         var text = "# comment\r\n\r\nhttps://example.com/x\r\n" + FileUriList.ToFileUri(s_paths[0]) + "\r\n";

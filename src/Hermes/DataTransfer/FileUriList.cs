@@ -30,7 +30,7 @@ internal static class FileUriList
     // Escapes each segment by hand; new Uri(path) would read '#' as the start of a fragment.
     public static string ToFileUri(string path)
     {
-        var normalized = path.Replace('\\', '/');
+        var normalized = Path.DirectorySeparatorChar == '\\' ? path.Replace('\\', '/') : path;
         if (!normalized.StartsWith('/'))
             normalized = "/" + normalized;
 
