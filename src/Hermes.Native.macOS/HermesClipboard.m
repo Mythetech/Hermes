@@ -128,7 +128,12 @@ char** HermesClipboard_ReadFiles(int* count) {
         }
         result = malloc(sizeof(char*) * urls.count);
         for (NSURL* url in urls) {
-            result[resultCount++] = strdup(url.fileSystemRepresentation);
+            // NSURL paths come back decomposed (NFD); .NET and most apps name files in NFC, and lookups ignore normalization.
+            NSString* path = url.path.precomposedStringWithCanonicalMapping;
+            const char* utf8 = path.UTF8String;
+            if (utf8 != NULL) {
+                result[resultCount++] = strdup(utf8);
+            }
         }
     });
     *count = resultCount;
