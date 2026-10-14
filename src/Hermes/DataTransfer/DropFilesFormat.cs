@@ -50,7 +50,7 @@ internal static class DropFilesFormat
         }
         else
         {
-            // Legacy ANSI lists; Latin1 matches code page 1252 for the characters that appear in paths.
+            // Legacy ANSI lists use the system code page; Latin1 is a lossless stand-in only for ASCII names.
             for (var end = rest.IndexOf((byte)0); end > 0; end = rest.IndexOf((byte)0))
             {
                 paths.Add(Encoding.Latin1.GetString(rest[..end]));

@@ -34,6 +34,9 @@ internal static class DataPackageValidator
             {
                 if (string.IsNullOrEmpty(file) || !Path.IsPathFullyQualified(file))
                     throw new ArgumentException($"File path is not absolute: '{file}'.", nameof(package));
+
+                if (file.Contains('\0'))
+                    throw new ArgumentException("File path contains a NUL character.", nameof(package));
             }
         }
 
@@ -45,6 +48,10 @@ internal static class DataPackageValidator
     {
         if (!IsMimeType(mimeType))
             throw new ArgumentException($"'{mimeType}' is not a type/subtype MIME type.", paramName);
+
+        // A parameterized key such as text/plain;charset=utf-8 would collide with the platform's standard text target.
+        if (mimeType.Contains(';'))
+            throw new ArgumentException($"'{mimeType}' must not carry MIME parameters.", paramName);
 
         if (s_standardTypes.Contains(mimeType))
             throw new ArgumentException($"'{mimeType}' is a standard format; use the matching package property.", paramName);

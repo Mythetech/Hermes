@@ -141,6 +141,11 @@ public static class Clipboard
         {
             backend.StopMonitoring();
         }
+        catch (Exception ex)
+        {
+            // Unsubscribing often runs from component disposal, where a throw would hide the real teardown.
+            HermesApplication.RaiseDispatcherUnhandledException(ex);
+        }
         finally
         {
             backend.Changed -= OnBackendChanged;
@@ -152,9 +157,20 @@ public static class Clipboard
         foreach (var (handler, context) in Volatile.Read(ref s_changedHandlers))
         {
             if (context is null)
+            {
                 InvokeHandler(handler);
-            else
+                continue;
+            }
+
+            try
+            {
                 context.Post(static state => InvokeHandler((Action)state!), handler);
+            }
+            catch (Exception ex)
+            {
+                // A torn-down context can throw from Post; the remaining subscribers must still be notified.
+                HermesApplication.RaiseDispatcherUnhandledException(ex);
+            }
         }
     }
 

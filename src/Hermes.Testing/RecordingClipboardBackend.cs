@@ -28,6 +28,9 @@ public sealed class RecordingClipboardBackend : IClipboardBackend
     /// <summary>When set, <see cref="StartMonitoring"/> records the call and throws this instead of monitoring.</summary>
     public Exception? StartMonitoringException { get; set; }
 
+    /// <summary>When set, <see cref="StopMonitoring"/> records the call and throws this after stopping.</summary>
+    public Exception? StopMonitoringException { get; set; }
+
     public HermesDataFormats GetFormats()
     {
         _operations.Add("GetFormats");
@@ -86,6 +89,8 @@ public sealed class RecordingClipboardBackend : IClipboardBackend
     {
         _operations.Add("StopMonitoring");
         IsMonitoring = false;
+        if (StopMonitoringException is not null)
+            throw StopMonitoringException;
     }
 
     public void RaiseChanged() => Changed?.Invoke();

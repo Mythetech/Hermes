@@ -47,6 +47,11 @@ public sealed class DataPackageValidatorTests
         Assert.Throws<ArgumentException>(() => DataPackageValidator.ValidateForWrite(
             new HermesDataPackage { Files = [path] }));
 
+    [Fact]
+    public void FileWithNulCharacter_Throws() =>
+        Assert.Throws<ArgumentException>(() => DataPackageValidator.ValidateForWrite(
+            new HermesDataPackage { Files = [AbsolutePath("a\0b.txt")] }));
+
     [Theory]
     [InlineData("text/plain")]
     [InlineData("TEXT/HTML")]
@@ -56,6 +61,8 @@ public sealed class DataPackageValidatorTests
     [InlineData("a/b/c")]
     [InlineData("application/x test")]
     [InlineData("/x")]
+    [InlineData("text/plain;charset=utf-8")]
+    [InlineData("application/x-a;v=1")]
     public void InvalidOrStandardCustomType_Throws(string mimeType) =>
         Assert.Throws<ArgumentException>(() => DataPackageValidator.ValidateForWrite(new HermesDataPackage
         {

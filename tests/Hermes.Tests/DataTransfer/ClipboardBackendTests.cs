@@ -1,4 +1,5 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
+using System.Runtime.ExceptionServices;
 using Hermes.Abstractions;
 using Hermes.Contracts.DataTransfer;
 using Hermes.DataTransfer;
@@ -105,6 +106,7 @@ public sealed class ClipboardBackendTests : IDisposable
     [Fact]
     public void Changed_SameHandlerTwice_KeepsMonitoringUntilTheLastRemove()
     {
+        // xUnit v2 runs sync tests under its own context, which Changed would capture and post to.
         SynchronizationContext.SetSynchronizationContext(null);
         var calls = 0;
         Action handler = () => calls++;
@@ -124,6 +126,7 @@ public sealed class ClipboardBackendTests : IDisposable
     [Fact]
     public void Changed_ThrowingHandler_DoesNotStopOthers_AndIsRouted()
     {
+        // xUnit v2 runs sync tests under its own context, which Changed would capture and post to.
         SynchronizationContext.SetSynchronizationContext(null);
         Exception? routed = null;
         Action<Exception> sink = e => routed = e;
@@ -164,6 +167,82 @@ public sealed class ClipboardBackendTests : IDisposable
 
         Assert.Equal(1, context.PostCount);
         Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public void Changed_ContextPostThrows_StillRunsOtherHandlers_AndIsRouted()
+    {
+        Exception? routed = null;
+        Action<Exception> sink = e => routed = e;
+        HermesApplication.DispatcherUnhandledException += sink;
+        var calls = 0;
+        Action posted = () => { };
+        Action direct = () => calls++;
+
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(new ThrowingPostSynchronizationContext());
+            Clipboard.Changed += posted;
+            // xUnit v2 runs sync tests under its own context, which Changed would capture and post to.
+            SynchronizationContext.SetSynchronizationContext(null);
+            Clipboard.Changed += direct;
+            _backend.RaiseChanged();
+        }
+        finally
+        {
+            Clipboard.Changed -= posted;
+            Clipboard.Changed -= direct;
+            HermesApplication.DispatcherUnhandledException -= sink;
+        }
+
+        Assert.Equal(1, calls);
+        Assert.IsType<InvalidOperationException>(routed);
+    }
+
+    [Fact]
+    public void Changed_StopMonitoringThrows_IsRoutedAndLeavesNoTrace()
+    {
+        // xUnit v2 runs sync tests under its own context, which Changed would capture and post to.
+        SynchronizationContext.SetSynchronizationContext(null);
+        Exception? routed = null;
+        Action<Exception> sink = e => routed = e;
+        HermesApplication.DispatcherUnhandledException += sink;
+        var failure = new InvalidOperationException("stop failed");
+        var oldCalls = 0;
+        var newCalls = 0;
+        Action old = () => oldCalls++;
+        Action replacement = () => newCalls++;
+
+        try
+        {
+            Clipboard.Changed += old;
+            _backend.StopMonitoringException = failure;
+            Clipboard.Changed -= old;
+            _backend.StopMonitoringException = null;
+            Clipboard.Changed += replacement;
+            _backend.RaiseChanged();
+        }
+        finally
+        {
+            Clipboard.Changed -= replacement;
+            HermesApplication.DispatcherUnhandledException -= sink;
+        }
+
+        Assert.Same(failure, routed);
+        Assert.Equal(0, oldCalls);
+        Assert.Equal(1, newCalls);
+        Assert.Equal(new[] { "StartMonitoring", "StopMonitoring", "StartMonitoring", "StopMonitoring" }, _backend.Operations);
+    }
+
+    [Fact]
+    public void HasCustom_PlatformNativeName_IsAllowed()
+    {
+        _backend.Content = new HermesDataPackage
+        {
+            Custom = new Dictionary<string, ReadOnlyMemory<byte>> { ["image/tiff"] = new byte[] { 1 } },
+        };
+
+        Assert.True(Clipboard.HasCustom("image/tiff"));
     }
 
     [Fact]
@@ -246,9 +325,26 @@ public sealed class ClipboardBackendTests : IDisposable
 
         public void StartMonitoring()
         {
-            var worker = new Thread(() => WorkDuringStart?.Invoke());
+            Exception? failure = null;
+            var worker = new Thread(() =>
+            {
+                try
+                {
+                    WorkDuringStart?.Invoke();
+                }
+                catch (Exception ex)
+                {
+                    failure = ex;
+                }
+            })
+            {
+                IsBackground = true,
+            };
             worker.Start();
             worker.Join(s_joinTimeout);
+
+            if (failure is not null)
+                ExceptionDispatchInfo.Capture(failure).Throw();
         }
 
         public void StopMonitoring()
@@ -258,6 +354,12 @@ public sealed class ClipboardBackendTests : IDisposable
         public void Dispose()
         {
         }
+    }
+
+    private sealed class ThrowingPostSynchronizationContext : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback d, object? state) =>
+            throw new InvalidOperationException("context is torn down");
     }
 
     private sealed class RecordingSynchronizationContext : SynchronizationContext

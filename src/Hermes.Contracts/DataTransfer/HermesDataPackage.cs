@@ -1,4 +1,6 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
+using System.Collections.ObjectModel;
+
 namespace Hermes.Contracts.DataTransfer;
 
 /// <summary>
@@ -7,7 +9,7 @@ namespace Hermes.Contracts.DataTransfer;
 public sealed class HermesDataPackage
 {
     private static readonly IReadOnlyDictionary<string, ReadOnlyMemory<byte>> s_noCustom =
-        new Dictionary<string, ReadOnlyMemory<byte>>(0);
+        new ReadOnlyDictionary<string, ReadOnlyMemory<byte>>(new Dictionary<string, ReadOnlyMemory<byte>>());
 
     private readonly IReadOnlyDictionary<string, ReadOnlyMemory<byte>> _custom = s_noCustom;
 
