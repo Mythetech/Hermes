@@ -1,4 +1,5 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
+using Hermes.Abstractions;
 using Hermes.Contracts.DataTransfer;
 using Hermes.DataTransfer;
 using Hermes.Testing;
@@ -163,6 +164,100 @@ public sealed class ClipboardBackendTests : IDisposable
 
         Assert.Equal(1, context.PostCount);
         Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public void Changed_StartMonitoringThrows_LeavesNoTraceAndNextSubscriberRetries()
+    {
+        SynchronizationContext.SetSynchronizationContext(null);
+        var failure = new InvalidOperationException("start failed");
+        _backend.StartMonitoringException = failure;
+        var failedCalls = 0;
+        var retryCalls = 0;
+        Action failed = () => failedCalls++;
+        Action retry = () => retryCalls++;
+
+        var thrown = Assert.Throws<InvalidOperationException>(() => Clipboard.Changed += failed);
+        _backend.StartMonitoringException = null;
+        Clipboard.Changed += retry;
+        _backend.RaiseChanged();
+
+        Assert.Same(failure, thrown);
+        Assert.True(_backend.IsMonitoring);
+        Assert.Equal(0, failedCalls);
+        Assert.Equal(1, retryCalls);
+        Assert.Equal(new[] { "StartMonitoring", "StartMonitoring" }, _backend.Operations);
+    }
+
+    [Fact]
+    public async Task Changed_RaisedFromAnotherThreadDuringStartMonitoring_DoesNotDeadlock()
+    {
+        var backend = new ThreadWaitingBackend();
+        backend.WorkDuringStart = backend.RaiseChanged;
+        Clipboard.SetBackendForTesting(backend);
+
+        var subscribe = Task.Run(() => Clipboard.Changed += () => { });
+
+        Assert.Same(subscribe, await Task.WhenAny(subscribe, Task.Delay(TimeSpan.FromSeconds(5))));
+        await subscribe;
+    }
+
+    [Fact]
+    public async Task Clipboard_ReadDuringStartMonitoringOnAnotherThread_DoesNotDeadlock()
+    {
+        var backend = new ThreadWaitingBackend { WorkDuringStart = () => Clipboard.GetFormats() };
+        Clipboard.SetBackendForTesting(backend);
+
+        var subscribe = Task.Run(() => Clipboard.Changed += () => { });
+
+        Assert.Same(subscribe, await Task.WhenAny(subscribe, Task.Delay(TimeSpan.FromSeconds(5))));
+        await subscribe;
+    }
+
+    /// <summary>Waits on another thread while starting, as a backend that dispatches to the UI thread would.</summary>
+    private sealed class ThreadWaitingBackend : IClipboardBackend
+    {
+        // Bounded so a regression fails the test instead of hanging the run.
+        private static readonly TimeSpan s_joinTimeout = TimeSpan.FromSeconds(10);
+
+        public Action? WorkDuringStart { get; set; }
+
+        public bool IsSupported => true;
+
+        public string? UnsupportedReason => null;
+
+        public event Action? Changed;
+
+        public void RaiseChanged() => Changed?.Invoke();
+
+        public HermesDataFormats GetFormats() => HermesDataFormats.None;
+
+        public bool HasCustom(string mimeType) => false;
+
+        public HermesDataPackage Read(HermesDataFormats formats, IReadOnlyList<string> customTypes) => new();
+
+        public void Write(HermesDataPackage package)
+        {
+        }
+
+        public void Clear()
+        {
+        }
+
+        public void StartMonitoring()
+        {
+            var worker = new Thread(() => WorkDuringStart?.Invoke());
+            worker.Start();
+            worker.Join(s_joinTimeout);
+        }
+
+        public void StopMonitoring()
+        {
+        }
+
+        public void Dispose()
+        {
+        }
     }
 
     private sealed class RecordingSynchronizationContext : SynchronizationContext

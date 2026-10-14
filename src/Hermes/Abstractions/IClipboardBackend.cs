@@ -22,8 +22,13 @@ internal interface IClipboardBackend : IDisposable
 
     void Clear();
 
+    /// <summary>
+    /// Starts raising <see cref="Changed"/>. This and <see cref="StopMonitoring"/> must not block waiting on another thread
+    /// (post the work instead), because Clipboard calls them under its subscription lock.
+    /// </summary>
     void StartMonitoring();
 
+    /// <summary>Stops raising <see cref="Changed"/>; see <see cref="StartMonitoring"/> for the no-blocking rule.</summary>
     void StopMonitoring();
 
     /// <summary>Raised on the backend's thread while monitoring; Clipboard posts to each subscriber's context.</summary>

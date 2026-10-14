@@ -68,4 +68,17 @@ public sealed class RecordingClipboardBackendTests
         Assert.False(backend.IsMonitoring);
         Assert.Equal(1, raised);
     }
+
+    [Fact]
+    public void StartMonitoring_WithException_RecordsTheCallThenThrowsWithoutMonitoring()
+    {
+        var failure = new InvalidOperationException("start failed");
+        var backend = new RecordingClipboardBackend { StartMonitoringException = failure };
+
+        var thrown = Assert.Throws<InvalidOperationException>(backend.StartMonitoring);
+
+        Assert.Same(failure, thrown);
+        Assert.False(backend.IsMonitoring);
+        Assert.Equal(new[] { "StartMonitoring" }, backend.Operations);
+    }
 }

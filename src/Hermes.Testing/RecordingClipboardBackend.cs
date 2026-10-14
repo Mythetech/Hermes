@@ -25,6 +25,9 @@ public sealed class RecordingClipboardBackend : IClipboardBackend
 
     public int DisposeCount { get; private set; }
 
+    /// <summary>When set, <see cref="StartMonitoring"/> records the call and throws this instead of monitoring.</summary>
+    public Exception? StartMonitoringException { get; set; }
+
     public HermesDataFormats GetFormats()
     {
         _operations.Add("GetFormats");
@@ -73,6 +76,9 @@ public sealed class RecordingClipboardBackend : IClipboardBackend
     public void StartMonitoring()
     {
         _operations.Add("StartMonitoring");
+        if (StartMonitoringException is not null)
+            throw StartMonitoringException;
+
         IsMonitoring = true;
     }
 

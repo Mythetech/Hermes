@@ -10,8 +10,9 @@ namespace Hermes;
 /// </summary>
 public static class Clipboard
 {
-    private static readonly object s_lock = new();
-    private static readonly List<(Action Handler, SynchronizationContext? Context)> s_changedHandlers = new();
+    private static readonly object s_backendLock = new();
+    private static readonly object s_subscriptionLock = new();
+    private static Subscription[] s_changedHandlers = [];
     private static IClipboardBackend? s_backend;
 
     /// <summary>
@@ -79,14 +80,13 @@ public static class Clipboard
                 return;
 
             var backend = GetSupportedBackend();
-            lock (s_lock)
+            lock (s_subscriptionLock)
             {
-                s_changedHandlers.Add((value, SynchronizationContext.Current));
-                if (s_changedHandlers.Count == 1)
-                {
-                    backend.Changed += OnBackendChanged;
-                    backend.StartMonitoring();
-                }
+                var current = s_changedHandlers;
+                if (current.Length == 0)
+                    AttachAndStart(backend);
+
+                Volatile.Write(ref s_changedHandlers, [.. current, new Subscription(value, SynchronizationContext.Current)]);
             }
         }
         remove
@@ -94,40 +94,62 @@ public static class Clipboard
             if (value is null)
                 return;
 
-            lock (s_lock)
+            lock (s_subscriptionLock)
             {
-                var index = s_changedHandlers.FindLastIndex(entry => entry.Handler == value);
+                var current = s_changedHandlers;
+                var index = Array.FindLastIndex(current, entry => entry.Handler == value);
                 if (index < 0)
                     return;
 
-                s_changedHandlers.RemoveAt(index);
-                if (s_changedHandlers.Count == 0 && s_backend is not null)
-                {
-                    s_backend.StopMonitoring();
-                    s_backend.Changed -= OnBackendChanged;
-                }
+                Subscription[] remaining = [.. current[..index], .. current[(index + 1)..]];
+                Volatile.Write(ref s_changedHandlers, remaining);
+                if (remaining.Length == 0 && Volatile.Read(ref s_backend) is { } backend)
+                    StopAndDetach(backend);
             }
         }
     }
 
     internal static void SetBackendForTesting(IClipboardBackend? backend)
     {
-        lock (s_lock)
+        lock (s_subscriptionLock)
         {
-            s_changedHandlers.Clear();
-            s_backend = backend;
+            lock (s_backendLock)
+            {
+                Volatile.Write(ref s_changedHandlers, []);
+                Volatile.Write(ref s_backend, backend);
+            }
+        }
+    }
+
+    private static void AttachAndStart(IClipboardBackend backend)
+    {
+        backend.Changed += OnBackendChanged;
+        try
+        {
+            backend.StartMonitoring();
+        }
+        catch
+        {
+            backend.Changed -= OnBackendChanged;
+            throw;
+        }
+    }
+
+    private static void StopAndDetach(IClipboardBackend backend)
+    {
+        try
+        {
+            backend.StopMonitoring();
+        }
+        finally
+        {
+            backend.Changed -= OnBackendChanged;
         }
     }
 
     private static void OnBackendChanged()
     {
-        (Action Handler, SynchronizationContext? Context)[] handlers;
-        lock (s_lock)
-        {
-            handlers = s_changedHandlers.ToArray();
-        }
-
-        foreach (var (handler, context) in handlers)
+        foreach (var (handler, context) in Volatile.Read(ref s_changedHandlers))
         {
             if (context is null)
                 InvokeHandler(handler);
@@ -151,16 +173,27 @@ public static class Clipboard
 
     private static IClipboardBackend GetSupportedBackend()
     {
-        IClipboardBackend backend;
-        lock (s_lock)
-        {
-            backend = s_backend ??= CreateBackend();
-        }
-
+        // Lock-free once created, so a read never waits on a subscribe that is itself waiting on this thread.
+        var backend = Volatile.Read(ref s_backend) ?? CreateAndPublishBackend();
         if (!backend.IsSupported)
             throw new PlatformNotSupportedException(backend.UnsupportedReason ?? "Clipboard is not supported on this platform.");
 
         return backend;
+    }
+
+    private static IClipboardBackend CreateAndPublishBackend()
+    {
+        lock (s_backendLock)
+        {
+            var backend = s_backend;
+            if (backend is null)
+            {
+                backend = CreateBackend();
+                Volatile.Write(ref s_backend, backend);
+            }
+
+            return backend;
+        }
     }
 
     private static IClipboardBackend CreateBackend()
@@ -179,4 +212,6 @@ public static class Clipboard
 #endif
         return new UnsupportedClipboardBackend("Clipboard is not supported on this platform.");
     }
+
+    private readonly record struct Subscription(Action Handler, SynchronizationContext? Context);
 }
