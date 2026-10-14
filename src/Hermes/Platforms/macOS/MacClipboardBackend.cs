@@ -14,11 +14,11 @@ internal sealed class MacClipboardBackend : IClipboardBackend
 
     public string? UnsupportedReason => null;
 
-    public event Action? Changed
-    {
-        add { }
-        remove { }
-    }
+    // Static so the delegate outlives every native timer that may still call it.
+    private static readonly MacNativeDelegates.ClipboardChangedCallback s_changedCallback = OnNativeChanged;
+    private static MacClipboardBackend? s_monitoring;
+
+    public event Action? Changed;
 
     public HermesDataFormats GetFormats() => (HermesDataFormats)MacNative.ClipboardGetFormats();
 
@@ -104,15 +104,23 @@ internal sealed class MacClipboardBackend : IClipboardBackend
 
     public void StartMonitoring()
     {
+        s_monitoring = this;
+        MacNative.ClipboardStartMonitoring(Marshal.GetFunctionPointerForDelegate(s_changedCallback));
     }
 
     public void StopMonitoring()
     {
+        MacNative.ClipboardStopMonitoring();
+        s_monitoring = null;
     }
 
     public void Dispose()
     {
+        if (ReferenceEquals(s_monitoring, this))
+            StopMonitoring();
     }
+
+    private static void OnNativeChanged() => s_monitoring?.Changed?.Invoke();
 
     private static string? TakeString(IntPtr pointer)
     {

@@ -67,7 +67,10 @@ public sealed class ScenarioRunner : IDisposable
         // Clipboard: the real OS clipboard, no WebView needed
         RunClipboardTextTest();
         if (RichClipboardSupported)
+        {
             RunClipboardRichRoundTripTest();
+            await RunClipboardChangedTestAsync();
+        }
 
         // Web message test runs LAST - gives WebView2 maximum time to initialize
         // On Windows, WebView2 init is async and can take several seconds in CI
@@ -686,6 +689,34 @@ public sealed class ScenarioRunner : IDisposable
         catch (Exception ex)
         {
             TestReporter.Fail(testName, ex.Message);
+        }
+    }
+
+    private async Task RunClipboardChangedTestAsync()
+    {
+        const string testName = "clipboard-changed";
+        TestReporter.Start(testName);
+        var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Action handler = () => changed.TrySetResult();
+
+        try
+        {
+            Clipboard.Changed += handler;
+
+            // macOS takes its baseline change count on the main thread, asynchronously
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            ExternalClipboard.WriteText($"hermes-external-{Guid.NewGuid():N}");
+
+            var raised = await Task.WhenAny(changed.Task, Task.Delay(TimeSpan.FromSeconds(10))) == changed.Task;
+            TestReporter.Assert(testName, raised, "Changed was not raised within 10s of an external write");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail(testName, ex.Message);
+        }
+        finally
+        {
+            Clipboard.Changed -= handler;
         }
     }
 
