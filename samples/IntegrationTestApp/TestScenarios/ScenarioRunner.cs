@@ -2,6 +2,7 @@
 using Hermes;
 using Hermes.Abstractions;
 using Hermes.Blazor;
+using Hermes.Contracts.DataTransfer;
 using Hermes.Contracts.Diagnostics;
 using Hermes.Contracts.Notifications;
 using Hermes.Contracts.Plugins;
@@ -65,6 +66,8 @@ public sealed class ScenarioRunner : IDisposable
 
         // Clipboard: the real OS clipboard, no WebView needed
         RunClipboardTextTest();
+        if (RichClipboardSupported)
+            RunClipboardRichRoundTripTest();
 
         // Web message test runs LAST - gives WebView2 maximum time to initialize
         // On Windows, WebView2 init is async and can take several seconds in CI
@@ -621,6 +624,77 @@ public sealed class ScenarioRunner : IDisposable
         {
             TestReporter.Fail(testName, ex.Message);
         }
+    }
+
+    // Platforms whose clipboard backend reads and writes every format; PRs 3 and 4 add Windows and Linux.
+    private static bool RichClipboardSupported => OperatingSystem.IsMacOS();
+
+    private void RunClipboardRichRoundTripTest()
+    {
+        const string testName = "clipboard-rich-roundtrip";
+        const string customType = "application/x-hermes-integration";
+        TestReporter.Start(testName);
+
+        try
+        {
+            var failures = new List<string>();
+            void Check(string what, bool ok)
+            {
+                if (!ok)
+                    failures.Add(what);
+            }
+
+            var directory = Path.Combine(Path.GetTempPath(), "hermes clipboard #1");
+            Directory.CreateDirectory(directory);
+            var files = new[] { "a.txt", "b é.txt", "c#d%.txt" }.Select(name => Path.Combine(directory, name)).ToArray();
+            foreach (var file in files)
+                File.WriteAllText(file, "x");
+
+            Clipboard.Write(new HermesDataPackage { Text = "plain", Html = "<b>rich é</b>" });
+            var html = Clipboard.Read(HermesDataFormats.Text | HermesDataFormats.Html);
+            Check("text", html.Text == "plain");
+            Check("html", html.Html == "<b>rich é</b>");
+            Check("formats after html", Clipboard.GetFormats().HasFlag(HermesDataFormats.Html));
+
+            foreach (var (label, png) in new[] { ("small png", TestPng.Create(16, 16, 1)), ("8 MB png", TestPng.Create(1448, 1448, 2)) })
+            {
+                Clipboard.Write(new HermesDataPackage { Png = new ReadOnlyMemory<byte>(png) });
+                var image = Clipboard.Read(HermesDataFormats.Png);
+                Check(label, image.Png is { } read && read.Span.SequenceEqual(png));
+            }
+            Check("legacy image format", HasLegacyImageFormat());
+
+            Clipboard.Write(new HermesDataPackage { Text = "with files", Files = files });
+            var withFiles = Clipboard.Read(HermesDataFormats.Text | HermesDataFormats.Files);
+            Check("text beside files", withFiles.Text == "with files");
+            Check("files", withFiles.Files is { } readFiles && readFiles.SequenceEqual(files));
+
+            var customBytes = new byte[] { 1, 2, 3, 250 };
+            Clipboard.Write(new HermesDataPackage
+            {
+                Custom = new Dictionary<string, ReadOnlyMemory<byte>> { [customType] = customBytes },
+            });
+            Check("has custom", Clipboard.HasCustom(customType));
+            var custom = Clipboard.Read(HermesDataFormats.None, [customType]);
+            Check("custom", custom.Custom.TryGetValue(customType, out var readCustom) && readCustom.Span.SequenceEqual(customBytes));
+
+            Clipboard.Clear();
+            Check("clear", Clipboard.GetFormats() == HermesDataFormats.None);
+
+            TestReporter.Assert(testName, failures.Count == 0, "Failed: " + string.Join(", ", failures));
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail(testName, ex.Message);
+        }
+    }
+
+    // Older apps paste the legacy format: TIFF on macOS, a DIB bitmap on Windows. Linux has none.
+    private static bool HasLegacyImageFormat()
+    {
+        if (OperatingSystem.IsMacOS())
+            return Clipboard.HasCustom("image/tiff");
+        return true;
     }
 
     public void Dispose()
