@@ -58,15 +58,17 @@ static HermesDragSource* g_activeDragSource = nil;
 }
 
 - (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
-    // Drags from this process have a source; the page handles its own drags without Hermes.
-    if (_dragDropEnabled && sender.draggingSource == nil) {
-        // The page claims each drop before the next can land, so an unclaimed capture is one the page ignored.
+    if (_dragDropEnabled) {
+        // One slot per window: a drop the page ignored must never pair with a later claim.
         [self clearDropCapture];
-        @autoreleasepool {
-            HermesPasteboard_ReadAll(sender.draggingPasteboard, _dropCustomTypes, &_capture);
+        // Drags from this process (the page's own, another window of the app, a drag out dropped back) carry a source.
+        if (sender.draggingSource == nil) {
+            @autoreleasepool {
+                HermesPasteboard_ReadAll(sender.draggingPasteboard, _dropCustomTypes, &_capture);
+            }
+            _hasCapture = YES;
+            _capturedAt = [NSProcessInfo processInfo].systemUptime;
         }
-        _hasCapture = YES;
-        _capturedAt = [NSProcessInfo processInfo].systemUptime;
     }
     return [super performDragOperation:sender];
 }

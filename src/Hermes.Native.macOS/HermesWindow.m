@@ -193,7 +193,7 @@ static NSArray<NSString*>* SplitLines(const char* joined) {
             [_window miniaturize:nil];
         }
 
-        // Set up native drag monitors for custom title bar
+        // Install the title bar drag monitors and, for drag and drop windows, the drag-source monitor
         [self setupDragMonitors];
     }
     return self;
