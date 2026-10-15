@@ -104,6 +104,14 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         run: dotnet build samples/IntegrationTestApp -c Release --no-restore
 
+      # The clipboard scenarios bound their Windows PowerShell calls at 10s, which its first start on a fresh runner can exceed.
+      - name: Warm Up Windows PowerShell
+        if: steps.check.outputs.skip != 'true' && runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -Namespace HermesWarmUp -Name User32 -MemberDefinition '[DllImport("user32.dll")] public static extern bool IsClipboardFormatAvailable(uint format);'
+
       - name: Run Integration Tests (Windows)
         if: steps.check.outputs.skip != 'true' && runner.os == 'Windows'
         shell: pwsh
