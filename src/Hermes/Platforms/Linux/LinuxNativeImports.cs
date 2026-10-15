@@ -339,6 +339,20 @@ internal static partial class LinuxNative
 
     #endregion
 
+    #region Drag and Drop
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DragDrop_Attach", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial IntPtr DragDropAttach(IntPtr window, string script, string[] dropTargets, int dropTargetCount,
+                                                  IntPtr claimed, IntPtr ended);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DragDrop_Claim")]
+    internal static partial void DragDropClaim(IntPtr dragDrop, long claimId);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DragDrop_Detach")]
+    internal static partial void DragDropDetach(IntPtr dragDrop);
+
+    #endregion
+
     #region Memory Management
 
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Free")]
