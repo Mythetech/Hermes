@@ -1,6 +1,7 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using System.Text.Json;
 using Hermes.Abstractions;
+using Hermes.Contracts.DataTransfer;
 
 namespace Hermes.Testing;
 
@@ -13,6 +14,8 @@ public sealed class RecordingWindowBackend : IHermesWindowBackend
     private readonly int _uiThreadId;
     private readonly Queue<Action> _pendingActions = new();
     private readonly object _lock = new();
+    private readonly List<HermesDataPackage> _dragsStarted = [];
+    private long _nextDropSequence;
     private readonly Dictionary<string, Func<string, (Stream? Content, string? ContentType)>> _customSchemes = new();
 
     private string _title = string.Empty;
@@ -214,6 +217,28 @@ public sealed class RecordingWindowBackend : IHermesWindowBackend
         Recording.RecordMethodCall(nameof(NavigateToString), html);
     }
 
+    /// <summary>
+    /// The result <see cref="StartDragAsync"/> returns when <see cref="DragCompletion"/> is null.
+    /// </summary>
+    public HermesDragResult DragResult { get; set; } = HermesDragResult.Dropped;
+
+    /// <summary>
+    /// When set, <see cref="StartDragAsync"/> returns this source's task, so a test can hold a drag open.
+    /// </summary>
+    public TaskCompletionSource<HermesDragResult>? DragCompletion { get; set; }
+
+    /// <summary>
+    /// Packages passed to <see cref="StartDragAsync"/>, in order.
+    /// </summary>
+    public IReadOnlyList<HermesDataPackage> DragsStarted => _dragsStarted;
+
+    public Task<HermesDragResult> StartDragAsync(HermesDataPackage package)
+    {
+        Recording.RecordMethodCall(nameof(StartDragAsync), package);
+        _dragsStarted.Add(package);
+        return DragCompletion?.Task ?? Task.FromResult(DragResult);
+    }
+
     public void SendWebMessage(string message)
     {
         Recording.RecordMethodCall(nameof(SendWebMessage), message);
@@ -284,6 +309,7 @@ public sealed class RecordingWindowBackend : IHermesWindowBackend
     public event Action<string>? WebMessageReceived;
     public event Action? Maximized;
     public event Action? Restored;
+    public event Action<HermesDropReport>? DropReported;
 
     #endregion
 
@@ -410,6 +436,34 @@ public sealed class RecordingWindowBackend : IHermesWindowBackend
     public void SimulateNonDragRegionClick()
     {
         SimulateWebMessage("""{"type":"hermes-drag","action":"no-drag"}""");
+    }
+
+    /// <summary>
+    /// Simulate the drop script reporting an outside drop, with the data the platform would have captured
+    /// (null when it captured nothing).
+    /// </summary>
+    public void SimulateDrop(HermesDataPackage? data, double x, double y)
+    {
+        var report = new HermesDropReport
+        {
+            Kind = HermesDropReportKind.Drop,
+            Sequence = ++_nextDropSequence,
+            X = x,
+            Y = y,
+            Data = data,
+        };
+        Recording.RecordEvent(nameof(DropReported), report);
+        DropReported?.Invoke(report);
+    }
+
+    /// <summary>
+    /// Simulate the page starting a new document, which releases the window's drops.
+    /// </summary>
+    public void SimulateDropReset()
+    {
+        var report = new HermesDropReport { Kind = HermesDropReportKind.Reset };
+        Recording.RecordEvent(nameof(DropReported), report);
+        DropReported?.Invoke(report);
     }
 
     #endregion

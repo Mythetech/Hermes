@@ -1,5 +1,9 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Hermes.Abstractions;
+using Hermes.Contracts.DataTransfer;
+using Hermes.DataTransfer;
 using Hermes.Diagnostics;
 using Hermes.Diagnostics.Smoke;
 using Hermes.Menu;
@@ -24,6 +28,13 @@ public sealed class HermesWindow : IDisposable
     private Func<Task<bool>>? _closeRequestedHandler;
     private bool _closeRequestBypassed;
     private Task? _pendingCloseRequest;
+    private DropCoordinator? _dropCoordinator;
+    private readonly Lock _dragLock = new();
+    private TaskCompletionSource<Task<HermesDragResult>>? _dragStart;
+    private bool _closedForDragDrop;
+
+    // The OS runs one drag at a time for the whole process.
+    private static int s_dragActive;
 
     private const int MinPersistableSize = 10;
 
@@ -292,6 +303,23 @@ public sealed class HermesWindow : IDisposable
         ThrowIfInitialized();
         // Use empty string as sentinel to indicate "use title as key"
         _options.WindowStateKey = key ?? string.Empty;
+        return this;
+    }
+
+    /// <summary>
+    /// Enable native drag and drop: drops from other apps raise <see cref="Dropped"/>, and <see cref="StartDragAsync"/> works.
+    /// </summary>
+    /// <param name="enabled">Whether drag and drop is enabled.</param>
+    /// <param name="customTypes">Custom MIME types to read from drops; the drag data is only readable during the drop.</param>
+    public HermesWindow SetDragDrop(bool enabled, IReadOnlyList<string>? customTypes = null)
+    {
+        ThrowIfInitialized();
+        customTypes ??= [];
+        foreach (var type in customTypes)
+            DataPackageValidator.ThrowIfInvalidCustomType(type, nameof(customTypes));
+
+        _options.DragDrop = enabled;
+        _options.DropCustomTypes = customTypes;
         return this;
     }
 
@@ -762,6 +790,121 @@ public sealed class HermesWindow : IDisposable
 
     #endregion
 
+    #region Drag and drop
+
+    /// <summary>
+    /// Raised on the UI thread when another app's data is dropped on the window.
+    /// Requires <see cref="SetDragDrop"/>.
+    /// </summary>
+    public event Action<HermesDrop>? Dropped;
+
+    /// <summary>
+    /// Resolves a drop ID the page received in a hermesdrop event. Only IDs dropped on this window resolve.
+    /// </summary>
+    public bool TryGetDrop(string dropId, [NotNullWhen(true)] out HermesDrop? drop) =>
+        DropRegistry.Shared.TryGet(dropId, this, out drop);
+
+    /// <summary>
+    /// Starts a native drag of the package, offering Copy. Call while the primary mouse button is held over the window,
+    /// typically from a dragstart the page cancels. Completes when the drag ends.
+    /// </summary>
+    /// <exception cref="ArgumentException">The package is empty or invalid.</exception>
+    /// <exception cref="InvalidOperationException">Drag and drop is not enabled, the window is not shown, or another drag is active.</exception>
+    public async Task<HermesDragResult> StartDragAsync(HermesDataPackage package)
+    {
+        DataPackageValidator.ValidateForWrite(package);
+
+        if (!_options.DragDrop)
+            throw new InvalidOperationException("Drag and drop is not enabled for this window. Call SetDragDrop(true) before showing it.");
+
+        if (!_initialized)
+            throw new InvalidOperationException("The window must be shown before a drag can start.");
+
+        if (Interlocked.CompareExchange(ref s_dragActive, 1, 0) != 0)
+            throw new InvalidOperationException("Another drag is already in progress.");
+
+        var started = new TaskCompletionSource<Task<HermesDragResult>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            lock (_dragLock)
+            {
+                if (_closedForDragDrop)
+                    return HermesDragResult.Canceled;
+
+                _dragStart = started;
+            }
+
+            _backend.BeginInvoke(() =>
+            {
+                try
+                {
+                    started.TrySetResult(_backend.StartDragAsync(package));
+                }
+                catch (Exception ex)
+                {
+                    started.TrySetException(ex);
+                }
+            });
+
+            var drag = await started.Task;
+            return await drag;
+        }
+        finally
+        {
+            lock (_dragLock)
+                _dragStart = null;
+
+            Volatile.Write(ref s_dragActive, 0);
+        }
+    }
+
+    /// <summary>
+    /// Queues data as if the platform captured it, then asks the drop script to report a drop at the point.
+    /// </summary>
+    internal Task<HermesDrop> SimulateDropForTesting(HermesDataPackage package, double x, double y)
+    {
+        if (_dropCoordinator is null)
+            throw new InvalidOperationException("Drag and drop is not enabled for this window, or it has not been shown.");
+
+        var drop = _dropCoordinator.QueueTestCapture(package);
+        var message = string.Create(CultureInfo.InvariantCulture, $$"""{"type":"hermes-drop-simulate","x":{{x}},"y":{{y}}}""");
+        _backend.BeginInvoke(() => _backend.SendWebMessage(message));
+        return drop;
+    }
+
+    // A closed window drops queued UI work, so a drag still waiting to start would never complete.
+    private void OnClosingForDragDrop()
+    {
+        TaskCompletionSource<Task<HermesDragResult>>? pending;
+        lock (_dragLock)
+        {
+            _closedForDragDrop = true;
+            pending = _dragStart;
+        }
+
+        pending?.TrySetResult(Task.FromResult(HermesDragResult.Canceled));
+    }
+
+    private void RaiseDropped(HermesDrop drop)
+    {
+        if (Dropped is not { } handlers)
+            return;
+
+        foreach (var handler in handlers.GetInvocationList().Cast<Action<HermesDrop>>())
+        {
+            try
+            {
+                handler(drop);
+            }
+            catch (Exception ex)
+            {
+                HermesApplication.RaiseDispatcherUnhandledException(ex);
+            }
+        }
+    }
+
+    #endregion
+
     #region IDisposable
 
     public void Dispose()
@@ -802,6 +945,13 @@ public sealed class HermesWindow : IDisposable
                 : _options.WindowStateKey;
 
             RestoreWindowState();
+        }
+
+        if (_options.DragDrop)
+        {
+            _dropCoordinator = new DropCoordinator(this, _backend, DropRegistry.Shared, RaiseDropped);
+            _dropCoordinator.Attach();
+            _backend.Closing += OnClosingForDragDrop;
         }
 
         _backend.Initialize(_options);
