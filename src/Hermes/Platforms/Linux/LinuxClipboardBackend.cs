@@ -25,11 +25,11 @@ internal sealed class LinuxClipboardBackend : IClipboardBackend
 
     public string? UnsupportedReason => null;
 
-    public event Action? Changed
-    {
-        add { }
-        remove { }
-    }
+    // Static so the delegate outlives every GTK signal connection that may still call it.
+    private static readonly LinuxNativeDelegates.ClipboardChangedCallback s_changedCallback = OnNativeChanged;
+    private static LinuxClipboardBackend? s_monitoring;
+
+    public event Action? Changed;
 
     public HermesDataFormats GetFormats() => LinuxClipboardTargets.ToFormats(GetTargets());
 
@@ -124,15 +124,24 @@ internal sealed class LinuxClipboardBackend : IClipboardBackend
 
     public void StartMonitoring()
     {
+        EnsureReady();
+        s_monitoring = this;
+        LinuxNative.ClipboardStartMonitoring(Marshal.GetFunctionPointerForDelegate(s_changedCallback));
     }
 
     public void StopMonitoring()
     {
+        LinuxNative.ClipboardStopMonitoring();
+        s_monitoring = null;
     }
 
     public void Dispose()
     {
+        if (ReferenceEquals(s_monitoring, this))
+            StopMonitoring();
     }
+
+    private static void OnNativeChanged() => s_monitoring?.Changed?.Invoke();
 
     private void EnsureReady()
     {

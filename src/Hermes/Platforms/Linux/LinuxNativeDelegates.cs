@@ -91,4 +91,10 @@ internal static class LinuxNativeDelegates
     /// </summary>
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void NotificationCompletionCallback(IntPtr context, IntPtr errorPtr);
+
+    /// <summary>
+    /// Called on the GTK thread when the system clipboard's owner changes.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void ClipboardChangedCallback();
 }
