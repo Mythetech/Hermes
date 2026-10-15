@@ -1,18 +1,25 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
-using System.ComponentModel;
-using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using System.Runtime.Versioning;
+using System.Text;
 using Hermes.Abstractions;
 using Hermes.Contracts.DataTransfer;
+using Hermes.DataTransfer;
 
 namespace Hermes.Platforms.Linux;
 
-/// <summary>Text-only clipboard through xclip until the GTK backend lands.</summary>
 [SupportedOSPlatform("linux")]
 internal sealed class LinuxClipboardBackend : IClipboardBackend
 {
-    private const string MissingXclip =
-        "xclip is required for clipboard support on Linux. Install it with: sudo apt install xclip";
+    private readonly Func<bool> _isReady;
+
+    public LinuxClipboardBackend()
+        : this(LinuxNative.ClipboardIsReady)
+    {
+    }
+
+    internal LinuxClipboardBackend(Func<bool> isReady) => _isReady = isReady;
 
     public bool IsSupported => true;
 
@@ -24,29 +31,96 @@ internal sealed class LinuxClipboardBackend : IClipboardBackend
         remove { }
     }
 
-    public HermesDataFormats GetFormats() =>
-        string.IsNullOrEmpty(ReadText()) ? HermesDataFormats.None : HermesDataFormats.Text;
+    public HermesDataFormats GetFormats() => LinuxClipboardTargets.ToFormats(GetTargets());
 
-    public bool HasCustom(string mimeType) => false;
+    public bool HasCustom(string mimeType) => GetTargets().Contains(mimeType, StringComparer.OrdinalIgnoreCase);
 
     public HermesDataPackage Read(HermesDataFormats formats, IReadOnlyList<string> customTypes)
     {
-        if (!formats.HasFlag(HermesDataFormats.Text))
-            return new HermesDataPackage();
+        EnsureReady();
 
-        var text = ReadText();
-        return new HermesDataPackage { Text = string.IsNullOrEmpty(text) ? null : text };
+        string? text = null;
+        string? html = null;
+        ReadOnlyMemory<byte>? png = null;
+        IReadOnlyList<string>? files = null;
+
+        if (formats.HasFlag(HermesDataFormats.Text))
+            text = TakeString(LinuxNative.ClipboardReadText());
+
+        if (formats.HasFlag(HermesDataFormats.Html) && ReadContents(LinuxClipboardTargets.Html) is { } htmlBytes)
+            html = LinuxClipboardTargets.DecodeHtml(htmlBytes);
+
+        if (formats.HasFlag(HermesDataFormats.Png))
+        {
+            var pngBytes = ReadContents(LinuxClipboardTargets.Png);
+            if (pngBytes is null && !GetFormats().HasFlag(HermesDataFormats.Files))
+                pngBytes = TakeBytes(LinuxNative.ClipboardReadImageAsPng(out var length), length);
+            if (pngBytes is not null)
+                png = new ReadOnlyMemory<byte>(pngBytes);
+        }
+
+        if (formats.HasFlag(HermesDataFormats.Files))
+        {
+            if (ReadContents(LinuxClipboardTargets.UriList) is { } uriBytes)
+                files = FileUriList.ParseUriList(Encoding.UTF8.GetString(uriBytes));
+            else if (ReadContents(LinuxClipboardTargets.GnomeCopiedFiles) is { } gnomeBytes)
+                files = FileUriList.ParseGnomeCopiedFiles(Encoding.UTF8.GetString(gnomeBytes));
+            if (files is { Count: 0 })
+                files = null;
+        }
+
+        var custom = new Dictionary<string, ReadOnlyMemory<byte>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var mimeType in customTypes)
+        {
+            if (ReadContents(mimeType) is { } data)
+                custom[mimeType] = data;
+        }
+
+        return new HermesDataPackage { Text = text, Html = html, Png = png, Files = files, Custom = custom };
     }
 
-    public void Write(HermesDataPackage package)
+    public unsafe void Write(HermesDataPackage package)
     {
-        if (package.Formats != HermesDataFormats.Text || package.Custom.Count > 0)
-            throw new NotSupportedException("Only text can be written to the clipboard on Linux in this version.");
+        EnsureReady();
 
-        WriteText(package.Text!);
+        var entries = LinuxClipboardTargets.ForWrite(package);
+        var count = entries.Count;
+        var targets = (byte**)NativeMemory.AllocZeroed((nuint)Math.Max(count, 1), (nuint)sizeof(byte*));
+        var data = (byte**)NativeMemory.AllocZeroed((nuint)Math.Max(count, 1), (nuint)sizeof(byte*));
+        var lengths = (int*)NativeMemory.AllocZeroed((nuint)Math.Max(count, 1), sizeof(int));
+
+        try
+        {
+            for (var i = 0; i < count; i++)
+            {
+                var (target, bytes) = entries[i];
+                targets[i] = Utf8StringMarshaller.ConvertToUnmanaged(target);
+                data[i] = (byte*)NativeMemory.Alloc((nuint)Math.Max(bytes.Length, 1));
+                bytes.CopyTo(new Span<byte>(data[i], bytes.Length));
+                lengths[i] = bytes.Length;
+            }
+
+            if (!LinuxNative.ClipboardWrite(targets, data, lengths, count))
+                throw new IOException("The system clipboard rejected the write.");
+        }
+        finally
+        {
+            for (var i = 0; i < count; i++)
+            {
+                Utf8StringMarshaller.Free(targets[i]);
+                NativeMemory.Free(data[i]);
+            }
+            NativeMemory.Free(targets);
+            NativeMemory.Free(data);
+            NativeMemory.Free(lengths);
+        }
     }
 
-    public void Clear() => WriteText(string.Empty);
+    public void Clear()
+    {
+        EnsureReady();
+        LinuxNative.ClipboardClear();
+    }
 
     public void StartMonitoring()
     {
@@ -60,43 +134,64 @@ internal sealed class LinuxClipboardBackend : IClipboardBackend
     {
     }
 
-    private static void WriteText(string text)
+    private void EnsureReady()
     {
+        if (!_isReady())
+            throw new InvalidOperationException("The Linux clipboard is available once a Hermes window or application has initialized GTK.");
+    }
+
+    private IReadOnlyList<string> GetTargets()
+    {
+        EnsureReady();
+        var array = LinuxNative.ClipboardGetTargets(out var count);
+        if (array == IntPtr.Zero)
+            return [];
+
         try
         {
-            using var process = Process.Start(new ProcessStartInfo("xclip")
-            {
-                Arguments = "-selection clipboard",
-                RedirectStandardInput = true,
-                UseShellExecute = false,
-            })!;
-            process.StandardInput.Write(text);
-            process.StandardInput.Close();
-            process.WaitForExit();
+            var targets = new string[count];
+            for (var i = 0; i < count; i++)
+                targets[i] = Marshal.PtrToStringUTF8(Marshal.ReadIntPtr(array, i * IntPtr.Size))!;
+            return targets;
         }
-        catch (Win32Exception)
+        finally
         {
-            throw new PlatformNotSupportedException(MissingXclip);
+            LinuxNative.FreeStringArray(array, count);
         }
     }
 
-    private static string ReadText()
+    private static byte[]? ReadContents(string target) =>
+        TakeBytes(LinuxNative.ClipboardReadContents(target, out var length), length);
+
+    private static string? TakeString(IntPtr pointer)
     {
+        if (pointer == IntPtr.Zero)
+            return null;
+
         try
         {
-            using var process = Process.Start(new ProcessStartInfo("xclip")
-            {
-                Arguments = "-selection clipboard -o",
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-            })!;
-            var result = process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
-            return result;
+            return Marshal.PtrToStringUTF8(pointer);
         }
-        catch (Win32Exception)
+        finally
         {
-            throw new PlatformNotSupportedException(MissingXclip);
+            LinuxNative.Free(pointer);
+        }
+    }
+
+    private static byte[]? TakeBytes(IntPtr pointer, int length)
+    {
+        if (pointer == IntPtr.Zero)
+            return null;
+
+        try
+        {
+            var bytes = new byte[length];
+            Marshal.Copy(pointer, bytes, 0, length);
+            return bytes;
+        }
+        finally
+        {
+            LinuxNative.Free(pointer);
         }
     }
 }

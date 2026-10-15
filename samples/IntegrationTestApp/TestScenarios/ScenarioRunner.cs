@@ -631,8 +631,8 @@ public sealed class ScenarioRunner : IDisposable
         }
     }
 
-    // Platforms whose clipboard backend reads and writes every format; PRs 3 and 4 add Windows and Linux.
-    private static bool RichClipboardSupported => OperatingSystem.IsMacOS();
+    // Platforms whose clipboard backend reads and writes every format; PR 3 adds Windows.
+    private static bool RichClipboardSupported => OperatingSystem.IsMacOS() || OperatingSystem.IsLinux();
 
     private void RunClipboardRichRoundTripTest()
     {
@@ -691,13 +691,17 @@ public sealed class ScenarioRunner : IDisposable
             });
             Check("pdf not png", !Clipboard.GetFormats().HasFlag(HermesDataFormats.Png));
 
-            Clipboard.Write(new HermesDataPackage
+            // macOS reads Cocoa RTF back as HTML; other platforms keep RTF as a custom format.
+            if (OperatingSystem.IsMacOS())
             {
-                Text = "bold plain",
-                Custom = new Dictionary<string, ReadOnlyMemory<byte>> { ["text/rtf"] = Encoding.UTF8.GetBytes(@"{\rtf1\ansi {\b bold} plain}") },
-            });
-            Check("formats after rtf", Clipboard.GetFormats().HasFlag(HermesDataFormats.Html));
-            Check("rtf as html", Clipboard.Read(HermesDataFormats.Html).Html is { } rtfHtml && rtfHtml.Contains("bold"));
+                Clipboard.Write(new HermesDataPackage
+                {
+                    Text = "bold plain",
+                    Custom = new Dictionary<string, ReadOnlyMemory<byte>> { ["text/rtf"] = Encoding.UTF8.GetBytes(@"{\rtf1\ansi {\b bold} plain}") },
+                });
+                Check("formats after rtf", Clipboard.GetFormats().HasFlag(HermesDataFormats.Html));
+                Check("rtf as html", Clipboard.Read(HermesDataFormats.Html).Html is { } rtfHtml && rtfHtml.Contains("bold"));
+            }
 
             var customBytes = new byte[] { 1, 2, 3, 250 };
             Clipboard.Write(new HermesDataPackage
