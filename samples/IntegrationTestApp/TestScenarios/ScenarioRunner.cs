@@ -1,4 +1,5 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
+using System.Text;
 using Hermes;
 using Hermes.Abstractions;
 using Hermes.Blazor;
@@ -638,6 +639,7 @@ public sealed class ScenarioRunner : IDisposable
         const string testName = "clipboard-rich-roundtrip";
         const string customType = "application/x-hermes-integration";
         TestReporter.Start(testName);
+        var directory = Path.Combine(Path.GetTempPath(), "hermes clipboard #1");
 
         try
         {
@@ -648,7 +650,6 @@ public sealed class ScenarioRunner : IDisposable
                     failures.Add(what);
             }
 
-            var directory = Path.Combine(Path.GetTempPath(), "hermes clipboard #1");
             Directory.CreateDirectory(directory);
             var files = new[] { "a.txt", "b é.txt", "c#d%.txt" }.Select(name => Path.Combine(directory, name)).ToArray();
             foreach (var file in files)
@@ -672,6 +673,31 @@ public sealed class ScenarioRunner : IDisposable
             var withFiles = Clipboard.Read(HermesDataFormats.Text | HermesDataFormats.Files);
             Check("text beside files", withFiles.Text == "with files");
             Check("files", withFiles.Files is { } readFiles && readFiles.SequenceEqual(files));
+            Check("formats after files", Clipboard.GetFormats().HasFlag(HermesDataFormats.Files));
+
+            // Finder puts each file's icon beside the URLs as TIFF, which must not read back as an image.
+            Clipboard.Write(new HermesDataPackage
+            {
+                Files = files,
+                Custom = new Dictionary<string, ReadOnlyMemory<byte>> { ["image/tiff"] = new byte[] { 1, 2, 3 } },
+            });
+            Check("file icon not png", !Clipboard.GetFormats().HasFlag(HermesDataFormats.Png)
+                && Clipboard.Read(HermesDataFormats.Png).Png is null);
+
+            Clipboard.Write(new HermesDataPackage
+            {
+                Text = "pdf",
+                Custom = new Dictionary<string, ReadOnlyMemory<byte>> { ["application/pdf"] = Encoding.ASCII.GetBytes("%PDF-1.4\n%%EOF") },
+            });
+            Check("pdf not png", !Clipboard.GetFormats().HasFlag(HermesDataFormats.Png));
+
+            Clipboard.Write(new HermesDataPackage
+            {
+                Text = "bold plain",
+                Custom = new Dictionary<string, ReadOnlyMemory<byte>> { ["text/rtf"] = Encoding.UTF8.GetBytes(@"{\rtf1\ansi {\b bold} plain}") },
+            });
+            Check("formats after rtf", Clipboard.GetFormats().HasFlag(HermesDataFormats.Html));
+            Check("rtf as html", Clipboard.Read(HermesDataFormats.Html).Html is { } rtfHtml && rtfHtml.Contains("bold"));
 
             var customBytes = new byte[] { 1, 2, 3, 250 };
             Clipboard.Write(new HermesDataPackage
@@ -679,6 +705,7 @@ public sealed class ScenarioRunner : IDisposable
                 Custom = new Dictionary<string, ReadOnlyMemory<byte>> { [customType] = customBytes },
             });
             Check("has custom", Clipboard.HasCustom(customType));
+            Check("has custom ignoring case", Clipboard.HasCustom(customType.ToUpperInvariant()));
             var custom = Clipboard.Read(HermesDataFormats.None, [customType]);
             Check("custom", custom.Custom.TryGetValue(customType, out var readCustom) && readCustom.Span.SequenceEqual(customBytes));
 
@@ -690,6 +717,11 @@ public sealed class ScenarioRunner : IDisposable
         catch (Exception ex)
         {
             TestReporter.Fail(testName, ex.Message);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
         }
     }
 
