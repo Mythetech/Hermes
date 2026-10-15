@@ -238,6 +238,10 @@ public static class GlobalHotkeys
         if (OperatingSystem.IsMacOS())
             return Platforms.macOS.MacGlobalHotkeyBackend.Create();
 #endif
+#if WINDOWS
+        if (OperatingSystem.IsWindows())
+            return new Platforms.Windows.WindowsGlobalHotkeyBackend();
+#endif
         return new UnsupportedGlobalHotkeyBackend("Global hotkeys are not supported on this platform.");
     }
 
