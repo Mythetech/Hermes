@@ -44,11 +44,20 @@ public sealed class DropMessageTests
     [InlineData("""{"type":"hermes-drop-reset"}""", true)]
     [InlineData("""{"type":"hermes-drop-anything","seq":"x"}""", true)]
     [InlineData("""{"type":"hermes-drag","action":"drag"}""", false)]
+    [InlineData("""{"type":"hermes-dropzone"}""", false)]
     [InlineData("""{"type":"pong"}""", false)]
     [InlineData("__bwv:[]", false)]
     [InlineData(null, false)]
     public void IsDropProtocol_MatchesEveryDropScriptMessage(string? message, bool expected) =>
         Assert.Equal(expected, DropMessage.IsDropProtocol(message));
+
+    [Fact]
+    public void TryParse_ReturnsNullForLoneSurrogates()
+    {
+        Assert.Null(DropMessage.TryParse("""{"type":"hermes-drop","seq":1,"x":0,"y":0,"text":"\ud800"}"""));
+        Assert.Null(DropMessage.TryParse("""{"type":"hermes-drop\ud800"}"""));
+        Assert.Null(DropMessage.TryParse("{\"type\":\"hermes-drop\",\"seq\":1,\"text\":\"\ud800\"}"));
+    }
 
     [Fact]
     public void ToPackage_TakesTheFirstNonFileUrl_AndLeavesEmptyStringsNull()

@@ -16,7 +16,10 @@ public sealed class DragDropScriptTests
     [InlineData("registerCustomEventType('hermesdrop'")]
     [InlineData("postMessageWithAdditionalObjects")]
     [InlineData("event.isTrusted")]
-    [InlineData("event.defaultPrevented")]
+    [InlineData("dragStart.defaultPrevented")]
+    [InlineData("composedPath")]
+    [InlineData("type === 'file'")]
+    [InlineData("'pointerdown'")]
     [InlineData("window !== window.top")]
     public void Source_SpeaksTheDropProtocol(string fragment) =>
         Assert.Contains(fragment, DragDropScript.Source);

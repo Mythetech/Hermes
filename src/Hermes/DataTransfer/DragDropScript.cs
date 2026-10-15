@@ -12,7 +12,7 @@ internal static class DragDropScript
           if (window !== window.top || window.__hermesDragDrop) return;
           window.__hermesDragDrop = true;
 
-          var inPageDrag = false;
+          var dragStart = null;
           var nextSeq = 1;
           var pending = new Map();
           var blazorRegistered = false;
@@ -21,25 +21,41 @@ internal static class DragDropScript
             return Array.prototype.indexOf.call(dataTransfer.types, 'Files') >= 0;
           }
 
-          function isEditable(target) {
-            return target instanceof HTMLElement
-              && (target.isContentEditable || target.closest('input, textarea') !== null);
+          function isFileInput(target) {
+            return target instanceof HTMLInputElement && target.type === 'file';
           }
 
-          // Text dropped on an editable field keeps the browser's own insertion.
+          function isTextEntry(target) {
+            if (!(target instanceof HTMLElement)) return false;
+            if (target.isContentEditable || target instanceof HTMLTextAreaElement) return true;
+            return target instanceof HTMLInputElement
+              && /^(text|search|url|tel|email|password|number)$/.test(target.type);
+          }
+
+          // Shadow roots retarget event.target to the host, so read the innermost element.
+          function innermost(event) {
+            var path = event.composedPath ? event.composedPath() : [];
+            return path.length > 0 ? path[0] : event.target;
+          }
+
+          // File inputs, and text dropped on text fields, keep the browser's own handling.
           function keepsBrowserDefault(event) {
-            return !hasFiles(event.dataTransfer) && isEditable(event.target);
+            var target = innermost(event);
+            return isFileInput(target) || (!hasFiles(event.dataTransfer) && isTextEntry(target));
           }
 
-          document.addEventListener('dragstart', function () { inPageDrag = true; }, true);
-          document.addEventListener('dragend', function () { inPageDrag = false; }, true);
-          // A cancelled dragstart (the drag-out pattern) never fires dragend.
-          window.addEventListener('dragstart', function (event) {
-            if (event.defaultPrevented) inPageDrag = false;
-          });
+          // The stored event shows whether the page cancelled its drag, even if a handler stopped propagation.
+          function inPageDrag() {
+            return dragStart !== null && !dragStart.defaultPrevented;
+          }
+
+          document.addEventListener('dragstart', function (event) { dragStart = event; }, true);
+          document.addEventListener('dragend', function () { dragStart = null; }, true);
+          // No pointer events fire during a drag, so a press means any earlier drag is over.
+          document.addEventListener('pointerdown', function () { dragStart = null; }, true);
 
           function accept(event) {
-            if (inPageDrag || !event.dataTransfer || keepsBrowserDefault(event)) return;
+            if (inPageDrag() || !event.dataTransfer || keepsBrowserDefault(event)) return;
             event.preventDefault();
             event.dataTransfer.dropEffect = 'copy';
           }
@@ -48,11 +64,9 @@ internal static class DragDropScript
           window.addEventListener('dragover', accept, true);
 
           window.addEventListener('drop', function (event) {
-            if (inPageDrag) {
-              inPageDrag = false;
-              return;
-            }
-            if (!event.isTrusted || !event.dataTransfer || keepsBrowserDefault(event)) return;
+            var inPage = inPageDrag();
+            dragStart = null;
+            if (inPage || !event.isTrusted || !event.dataTransfer || keepsBrowserDefault(event)) return;
             event.preventDefault();
             report(event.target, event.clientX, event.clientY, event.dataTransfer);
           }, true);
@@ -117,7 +131,7 @@ internal static class DragDropScript
             var entry = pending.get(data.seq);
             if (!entry) return;
             pending.delete(data.seq);
-            if (!data.dropId) return;
+            if (!data.dropId || Date.now() - entry.time > 10000) return;
 
             registerBlazorEvent();
             var target = entry.target && entry.target.isConnected ? entry.target : document;

@@ -17,11 +17,13 @@ internal sealed record DropMessage(
     string? Html,
     string? UriList)
 {
-    private const string Prefix = "{\"type\":\"hermes-drop";
+    private const string DropType = "{\"type\":\"hermes-drop\"";
+    private const string DropTypePrefix = "{\"type\":\"hermes-drop-";
 
     /// <summary>True for every drop-script message, so backends keep even unknown ones from app handlers.</summary>
     public static bool IsDropProtocol(string? message) =>
-        message is not null && message.StartsWith(Prefix, StringComparison.Ordinal);
+        message is not null
+        && (message.StartsWith(DropType, StringComparison.Ordinal) || message.StartsWith(DropTypePrefix, StringComparison.Ordinal));
 
     public static DropMessage? TryParse(string message)
     {
@@ -45,7 +47,7 @@ internal sealed record DropMessage(
                 _ => null,
             };
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or ArgumentException)
         {
             return null;
         }
