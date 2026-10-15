@@ -13,6 +13,7 @@ internal static class LinuxClipboardTargets
     public const string Png = "image/png";
     public const string UriList = "text/uri-list";
     public const string GnomeCopiedFiles = "x-special/gnome-copied-files";
+    public const string NetscapeUrl = "_NETSCAPE_URL";
 
     private static readonly HashSet<string> s_textTargets = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -27,7 +28,9 @@ internal static class LinuxClipboardTargets
     public static HermesDataFormats ToFormats(IReadOnlyList<string> targets)
     {
         var formats = HermesDataFormats.None;
-        var files = targets.Contains(UriList) || targets.Contains(GnomeCopiedFiles);
+        var link = targets.Contains(NetscapeUrl);
+        // A uri-list offered beside a link target holds that link, so it alone does not mean files.
+        var files = targets.Contains(GnomeCopiedFiles) || (targets.Contains(UriList) && !link);
 
         if (targets.Any(s_textTargets.Contains))
             formats |= HermesDataFormats.Text;
@@ -38,6 +41,8 @@ internal static class LinuxClipboardTargets
         // File managers add an icon image beside copied files; only a real PNG counts then.
         if (targets.Contains(Png) || (!files && targets.Any(t => t.StartsWith("image/", StringComparison.OrdinalIgnoreCase))))
             formats |= HermesDataFormats.Png;
+        if (link)
+            formats |= HermesDataFormats.Url;
 
         return formats;
     }
@@ -57,11 +62,12 @@ internal static class LinuxClipboardTargets
             entries.Add((Html, Encoding.UTF8.GetBytes(html)));
         if (package.Png is { } png)
             entries.Add((Png, png.ToArray()));
+        if (package.Files is not null || package.Url is not null)
+            entries.Add((UriList, Encoding.UTF8.GetBytes(FileUriList.BuildUriList(package.Files, package.Url))));
         if (package.Files is { } files)
-        {
-            entries.Add((UriList, Encoding.UTF8.GetBytes(FileUriList.BuildUriList(files))));
             entries.Add((GnomeCopiedFiles, Encoding.UTF8.GetBytes(FileUriList.BuildGnomeCopiedFiles(files))));
-        }
+        if (package.Url is { } url)
+            entries.Add((NetscapeUrl, Encoding.UTF8.GetBytes(url.AbsoluteUri)));
         // A standard format already offered for this target wins over a colliding custom key.
         foreach (var (mimeType, data) in package.Custom)
         {
@@ -71,6 +77,10 @@ internal static class LinuxClipboardTargets
 
         return entries;
     }
+
+    // _NETSCAPE_URL is the link, then optionally a newline and its title.
+    public static Uri? ParseNetscapeUrl(ReadOnlySpan<byte> data) =>
+        FileUriList.FirstUrl(Encoding.UTF8.GetString(data).TrimEnd('\0').Split('\n')[0]);
 
     public static string DecodeHtml(ReadOnlySpan<byte> data)
     {

@@ -59,14 +59,27 @@ internal sealed class LinuxClipboardBackend : IClipboardBackend
                 png = new ReadOnlyMemory<byte>(pngBytes);
         }
 
-        if (formats.HasFlag(HermesDataFormats.Files))
+        Uri? url = null;
+        if (formats.HasFlag(HermesDataFormats.Files) || formats.HasFlag(HermesDataFormats.Url))
         {
-            if (ReadContents(LinuxClipboardTargets.UriList) is { } uriBytes)
-                files = FileUriList.ParseUriList(Encoding.UTF8.GetString(uriBytes));
-            else if (ReadContents(LinuxClipboardTargets.GnomeCopiedFiles) is { } gnomeBytes)
-                files = FileUriList.ParseGnomeCopiedFiles(Encoding.UTF8.GetString(gnomeBytes));
-            if (files is { Count: 0 })
-                files = null;
+            var uriList = ReadContents(LinuxClipboardTargets.UriList) is { } uriBytes ? Encoding.UTF8.GetString(uriBytes) : null;
+
+            if (formats.HasFlag(HermesDataFormats.Files))
+            {
+                if (uriList is not null)
+                    files = FileUriList.ParseUriList(uriList);
+                else if (ReadContents(LinuxClipboardTargets.GnomeCopiedFiles) is { } gnomeBytes)
+                    files = FileUriList.ParseGnomeCopiedFiles(Encoding.UTF8.GetString(gnomeBytes));
+                if (files is { Count: 0 })
+                    files = null;
+            }
+
+            if (formats.HasFlag(HermesDataFormats.Url))
+            {
+                url = uriList is null ? null : FileUriList.FirstUrl(uriList);
+                if (url is null && ReadContents(LinuxClipboardTargets.NetscapeUrl) is { } netscapeBytes)
+                    url = LinuxClipboardTargets.ParseNetscapeUrl(netscapeBytes);
+            }
         }
 
         var custom = new Dictionary<string, ReadOnlyMemory<byte>>(StringComparer.OrdinalIgnoreCase);
@@ -84,7 +97,7 @@ internal sealed class LinuxClipboardBackend : IClipboardBackend
             }
         }
 
-        return new HermesDataPackage { Text = text, Html = html, Png = png, Files = files, Custom = custom };
+        return new HermesDataPackage { Text = text, Html = html, Png = png, Files = files, Url = url, Custom = custom };
     }
 
     public unsafe void Write(HermesDataPackage package)
