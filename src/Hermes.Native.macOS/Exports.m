@@ -8,6 +8,7 @@
 #import "HermesNotifications.h"
 #import "HermesDialogs.h"
 #import "HermesClipboard.h"
+#import "HermesHotkeys.h"
 #import "HermesAppDelegate.h"
 #import <Cocoa/Cocoa.h>
 
@@ -594,6 +595,16 @@ bool Hermes_Clipboard_Write(const HermesNativePackage* package) { return HermesC
 void Hermes_Clipboard_Clear(void) { HermesClipboard_Clear(); }
 void Hermes_Clipboard_StartMonitoring(void (*callback)(void)) { HermesClipboard_StartMonitoring(callback); }
 void Hermes_Clipboard_StopMonitoring(void) { HermesClipboard_StopMonitoring(); }
+
+#pragma mark - Global Hotkeys
+
+void Hermes_Hotkeys_SetCallback(void (*callback)(uint32_t hotkeyNumber)) { HermesHotkeys_SetCallback(callback); }
+
+int32_t Hermes_Hotkeys_Register(uint32_t hotkeyNumber, uint32_t keyCode, uint32_t modifiers) {
+    return HermesHotkeys_Register(hotkeyNumber, keyCode, modifiers);
+}
+
+void Hermes_Hotkeys_Unregister(uint32_t hotkeyNumber) { HermesHotkeys_Unregister(hotkeyNumber); }
 
 #pragma mark - Dock Menu Operations
 
