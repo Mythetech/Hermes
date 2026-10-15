@@ -1102,9 +1102,17 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         if (drop is null)
             return;
 
-        DropReported?.Invoke(drop.Kind == HermesDropReportKind.Drop
-            ? drop.ToReport(drop.ToPackage(ReadDroppedPaths(args)))
-            : drop.ToReport(null));
+        try
+        {
+            DropReported?.Invoke(drop.Kind == HermesDropReportKind.Drop
+                ? drop.ToReport(drop.ToPackage(ReadDroppedPaths(args)))
+                : drop.ToReport(null));
+        }
+        catch (Exception ex)
+        {
+            // A subscriber's exception goes to the dispatcher sink rather than out of the WebView2 event.
+            HermesApplication.RaiseDispatcherUnhandledException(ex);
+        }
     }
 
     // The page hands over its File objects, so paths reach .NET without ever entering JavaScript.
