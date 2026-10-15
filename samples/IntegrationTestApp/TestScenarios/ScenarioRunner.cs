@@ -755,24 +755,40 @@ public sealed class ScenarioRunner : IDisposable
     {
         const string testName = "clipboard-busy";
         TestReporter.Start(testName);
+        var id = Guid.NewGuid().ToString("N");
+        var script = Path.Combine(Path.GetTempPath(), $"hermes-hold-clipboard-{id}.ps1");
+        var marker = Path.Combine(Path.GetTempPath(), $"hermes-hold-clipboard-{id}.txt");
+        Process? holder = null;
 
         try
         {
             // Holds the clipboard open for three seconds from another process, as clipboard managers do.
-            var script = Path.Combine(Path.GetTempPath(), "hermes-hold-clipboard.ps1");
             File.WriteAllText(script, """
+                param([string]$Marker)
                 Add-Type -Namespace W -Name U -MemberDefinition '[DllImport("user32.dll")] public static extern bool OpenClipboard(System.IntPtr h); [DllImport("user32.dll")] public static extern bool CloseClipboard();'
-                [W.U]::OpenClipboard([IntPtr]::Zero) | Out-Null
-                'held'
+                $opened = [W.U]::OpenClipboard([IntPtr]::Zero)
+                [System.IO.File]::WriteAllText($Marker, [string]$opened)
                 Start-Sleep -Seconds 3
                 [W.U]::CloseClipboard() | Out-Null
                 """);
-            using var holder = Process.Start(new ProcessStartInfo("powershell", $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\"")
+            holder = Process.Start(new ProcessStartInfo("powershell",
+                $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\" \"{marker}\"")
             {
-                RedirectStandardOutput = true,
                 UseShellExecute = false,
             })!;
-            holder.StandardOutput.ReadLine();
+
+            // Redirected PowerShell stdout is not flushed until exit, so a marker file signals the hold instead.
+            var opened = WaitForMarkerContent(marker);
+            if (opened is null)
+            {
+                TestReporter.Fail(testName, "the holder never signaled");
+                return;
+            }
+            if (opened != "True")
+            {
+                TestReporter.Fail(testName, "the holder could not open the clipboard");
+                return;
+            }
 
             var watch = Stopwatch.StartNew();
             var threw = false;
@@ -785,7 +801,6 @@ public sealed class ScenarioRunner : IDisposable
                 threw = true;
             }
             watch.Stop();
-            holder.WaitForExit(10_000);
 
             TestReporter.Assert(testName, threw && watch.ElapsedMilliseconds < 1000,
                 $"Expected IOException within 1s while another process held the clipboard; threw={threw}, took {watch.ElapsedMilliseconds} ms");
@@ -793,6 +808,47 @@ public sealed class ScenarioRunner : IDisposable
         catch (Exception ex)
         {
             TestReporter.Fail(testName, ex.Message);
+        }
+        finally
+        {
+            if (holder is not null)
+            {
+                if (!holder.WaitForExit(10_000))
+                    holder.Kill();
+                holder.Dispose();
+            }
+            TryDelete(script);
+            TryDelete(marker);
+        }
+    }
+
+    private static string? WaitForMarkerContent(string path)
+    {
+        var watch = Stopwatch.StartNew();
+        while (watch.Elapsed < TimeSpan.FromSeconds(10))
+        {
+            try
+            {
+                if (File.Exists(path) && File.ReadAllText(path).Trim() is { Length: > 0 } content)
+                    return content;
+            }
+            catch (IOException)
+            {
+                // The holder may still be writing the file.
+            }
+            Thread.Sleep(50);
+        }
+        return null;
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
         }
     }
 
