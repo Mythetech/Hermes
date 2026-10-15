@@ -72,15 +72,16 @@ public sealed class GlobalHotkeysTests : IDisposable
         var over = await GlobalHotkeys.RegisterAsync("one-too-many", "Alt+Shift+K").WaitAsync(s_timeout);
 
         Assert.Equal(HermesHotkeyStatus.LimitExceeded, over.Status);
+        Assert.Equal(GlobalHotkeys.MaxRegistrations, _backend.Registered.Count);
     }
 
     [Fact]
     public async Task ARefusedRegistration_LeavesNoTrace()
     {
-        _backend.ResultsByAccelerator["Ctrl+Shift+K"] = new HermesHotkeyResult(HermesHotkeyStatus.Conflict, null, "Another app owns it.");
+        _backend.SetResult("Ctrl+Shift+K", new HermesHotkeyResult(HermesHotkeyStatus.Conflict, null, "Another app owns it."));
 
         var refused = await GlobalHotkeys.RegisterAsync("open", "Ctrl+Shift+K").WaitAsync(s_timeout);
-        _backend.ResultsByAccelerator.Clear();
+        _backend.ClearResults();
         var retried = await GlobalHotkeys.RegisterAsync("open", "Ctrl+Shift+K").WaitAsync(s_timeout);
 
         Assert.Equal(HermesHotkeyStatus.Conflict, refused.Status);
@@ -209,6 +210,57 @@ public sealed class GlobalHotkeysTests : IDisposable
         Assert.Equal(new[] { "open" }, received);
     }
 
+    [Fact]
+    public async Task Unregister_DropsAPressAlreadyQueuedOnTheSubscribersContext()
+    {
+        SynchronizationContext.SetSynchronizationContext(null);
+        var context = new QueueingContext();
+        var received = new List<string>();
+        Action<string> handler = received.Add;
+        SynchronizationContext.SetSynchronizationContext(context);
+        GlobalHotkeys.Activated += handler;
+        SynchronizationContext.SetSynchronizationContext(null);
+        try
+        {
+            await GlobalHotkeys.RegisterAsync("open", "Ctrl+Shift+K").WaitAsync(s_timeout);
+            _backend.Activate("open");
+            await GlobalHotkeys.UnregisterAsync("open").WaitAsync(s_timeout);
+            context.Drain();
+        }
+        finally
+        {
+            GlobalHotkeys.Activated -= handler;
+        }
+
+        Assert.Empty(received);
+    }
+
+    [Fact]
+    public async Task AQueuedPress_IsNotDeliveredUnderANewRegistrationOfTheSameId()
+    {
+        SynchronizationContext.SetSynchronizationContext(null);
+        var context = new QueueingContext();
+        var received = new List<string>();
+        Action<string> handler = received.Add;
+        SynchronizationContext.SetSynchronizationContext(context);
+        GlobalHotkeys.Activated += handler;
+        SynchronizationContext.SetSynchronizationContext(null);
+        try
+        {
+            await GlobalHotkeys.RegisterAsync("open", "Ctrl+Shift+K").WaitAsync(s_timeout);
+            _backend.Activate("open");
+            await GlobalHotkeys.UnregisterAsync("open").WaitAsync(s_timeout);
+            await GlobalHotkeys.RegisterAsync("open", "Ctrl+Shift+J").WaitAsync(s_timeout);
+            context.Drain();
+        }
+        finally
+        {
+            GlobalHotkeys.Activated -= handler;
+        }
+
+        Assert.Empty(received);
+    }
+
     [Theory]
     [InlineData("", "Ctrl+K")]
     [InlineData("open", "K")]
@@ -216,6 +268,19 @@ public sealed class GlobalHotkeysTests : IDisposable
     [InlineData("open", "Ctrl+/")]
     public async Task InvalidArguments_Throw(string id, string accelerator) =>
         await Assert.ThrowsAsync<ArgumentException>(() => GlobalHotkeys.RegisterAsync(id, accelerator));
+
+    private sealed class QueueingContext : SynchronizationContext
+    {
+        private readonly Queue<(SendOrPostCallback Callback, object? State)> _queue = new();
+
+        public override void Post(SendOrPostCallback d, object? state) => _queue.Enqueue((d, state));
+
+        public void Drain()
+        {
+            while (_queue.TryDequeue(out var item))
+                item.Callback(item.State);
+        }
+    }
 
     private sealed class RecordingContext : SynchronizationContext
     {

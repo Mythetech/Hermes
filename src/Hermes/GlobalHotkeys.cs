@@ -15,7 +15,7 @@ public static class GlobalHotkeys
 
     private static readonly Lock s_lock = new();
     private static readonly SemaphoreSlim s_gate = new(1, 1);
-    private static readonly Dictionary<string, string> s_registrations = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, Registration> s_registrations = new(StringComparer.Ordinal);
     private static Subscription[] s_handlers = [];
     private static IGlobalHotkeyBackend? s_backend;
 
@@ -74,13 +74,13 @@ public static class GlobalHotkeys
                 if (s_registrations.ContainsKey(id))
                     return new HermesHotkeyResult(HermesHotkeyStatus.Conflict, null, $"A hotkey with id '{id}' is already registered.");
 
-                if (s_registrations.ContainsValue(canonical))
+                if (s_registrations.Values.Any(r => r.Accelerator == canonical))
                     return new HermesHotkeyResult(HermesHotkeyStatus.Conflict, null, $"{canonical} is already registered in this app.");
 
                 if (s_registrations.Count >= MaxRegistrations)
                     return new HermesHotkeyResult(HermesHotkeyStatus.LimitExceeded, null, $"An app can register at most {MaxRegistrations} hotkeys.");
 
-                s_registrations[id] = canonical;
+                s_registrations[id] = new Registration(canonical);
             }
 
             HermesHotkeyResult result;
@@ -106,7 +106,7 @@ public static class GlobalHotkeys
     }
 
     /// <summary>
-    /// Unregisters a hotkey. Unknown ids are ignored; once this completes, the id never raises <see cref="Activated"/> again.
+    /// Unregisters a hotkey. Unknown ids are ignored. Presses not yet delivered when this completes are dropped.
     /// </summary>
     public static async Task UnregisterAsync(string id)
     {
@@ -115,12 +115,25 @@ public static class GlobalHotkeys
         await s_gate.WaitAsync();
         try
         {
-            bool removed;
+            Registration? removed;
             lock (s_lock)
-                removed = s_registrations.Remove(id);
+            {
+                s_registrations.Remove(id, out removed);
+            }
 
-            if (removed && Volatile.Read(ref s_backend) is { } backend)
-                await backend.UnregisterAsync(id);
+            if (removed is not null && Volatile.Read(ref s_backend) is { } backend)
+            {
+                try
+                {
+                    await backend.UnregisterAsync(id);
+                }
+                catch
+                {
+                    lock (s_lock)
+                        s_registrations[id] = removed;
+                    throw;
+                }
+            }
         }
         finally
         {
@@ -151,9 +164,10 @@ public static class GlobalHotkeys
 
     private static void OnBackendActivated(string id)
     {
+        Registration? registration;
         lock (s_lock)
         {
-            if (!s_registrations.ContainsKey(id))
+            if (!s_registrations.TryGetValue(id, out registration))
                 return;
         }
 
@@ -161,7 +175,7 @@ public static class GlobalHotkeys
         {
             if (context is null)
             {
-                InvokeHandler(handler, id);
+                InvokeHandler(handler, id, registration);
                 continue;
             }
 
@@ -169,9 +183,9 @@ public static class GlobalHotkeys
             {
                 context.Post(static state =>
                 {
-                    var (h, i) = ((Action<string>, string))state!;
-                    InvokeHandler(h, i);
-                }, (handler, id));
+                    var (h, i, r) = ((Action<string>, string, Registration))state!;
+                    InvokeHandler(h, i, r);
+                }, (handler, id, registration));
             }
             catch (Exception ex)
             {
@@ -182,8 +196,14 @@ public static class GlobalHotkeys
     }
 
     // Backends raise Activated from native callbacks, where an escaping exception would end the process.
-    private static void InvokeHandler(Action<string> handler, string id)
+    private static void InvokeHandler(Action<string> handler, string id, Registration registration)
     {
+        lock (s_lock)
+        {
+            if (!s_registrations.TryGetValue(id, out var current) || !ReferenceEquals(current, registration))
+                return;
+        }
+
         try
         {
             handler(id);
@@ -211,8 +231,14 @@ public static class GlobalHotkeys
         }
     }
 
+    // Runs under s_lock, so a backend constructor must not wait on the UI thread.
     private static IGlobalHotkeyBackend CreateBackend() =>
         new UnsupportedGlobalHotkeyBackend("Global hotkeys are not supported on this platform.");
+
+    private sealed class Registration(string accelerator)
+    {
+        public string Accelerator { get; } = accelerator;
+    }
 
     private readonly record struct Subscription(Action<string> Handler, SynchronizationContext? Context);
 }

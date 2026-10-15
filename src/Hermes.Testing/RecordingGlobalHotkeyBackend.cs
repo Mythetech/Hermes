@@ -13,13 +13,16 @@ public sealed class RecordingGlobalHotkeyBackend : IGlobalHotkeyBackend
 {
     private readonly List<RecordedHotkey> _registered = [];
     private readonly List<string> _unregistered = [];
+    private readonly Dictionary<string, HermesHotkeyResult> _resultsByAccelerator = new(StringComparer.Ordinal);
 
     public bool IsSupported { get; set; } = true;
 
     public string? UnsupportedReason { get; set; }
 
-    /// <summary>Results to return for particular accelerators, keyed by canonical form such as "Ctrl+Shift+K"; others register.</summary>
-    public Dictionary<string, HermesHotkeyResult> ResultsByAccelerator { get; } = new(StringComparer.Ordinal);
+    /// <summary>Return this result when the facade registers this accelerator, given in canonical form such as "Ctrl+Shift+K"; others register.</summary>
+    public void SetResult(string accelerator, HermesHotkeyResult result) => _resultsByAccelerator[accelerator] = result;
+
+    public void ClearResults() => _resultsByAccelerator.Clear();
 
     /// <summary>Every registration the facade passed down, in order.</summary>
     public IReadOnlyList<RecordedHotkey> Registered => _registered;
@@ -34,7 +37,7 @@ public sealed class RecordingGlobalHotkeyBackend : IGlobalHotkeyBackend
         var canonical = HotkeyAccelerator.ToCanonicalString(accelerator);
         _registered.Add(new RecordedHotkey(id, canonical, description));
 
-        return Task.FromResult(ResultsByAccelerator.TryGetValue(canonical, out var result)
+        return Task.FromResult(_resultsByAccelerator.TryGetValue(canonical, out var result)
             ? result
             : new HermesHotkeyResult(HermesHotkeyStatus.Registered, canonical, null));
     }
