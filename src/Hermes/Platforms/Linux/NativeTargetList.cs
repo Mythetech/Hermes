@@ -18,13 +18,21 @@ internal sealed unsafe class NativeTargetList : IDisposable
         Data = (byte**)NativeMemory.AllocZeroed((nuint)Math.Max(Count, 1), (nuint)sizeof(byte*));
         Lengths = (int*)NativeMemory.AllocZeroed((nuint)Math.Max(Count, 1), sizeof(int));
 
-        for (var i = 0; i < Count; i++)
+        try
         {
-            var (target, bytes) = entries[i];
-            Targets[i] = Utf8StringMarshaller.ConvertToUnmanaged(target);
-            Data[i] = (byte*)NativeMemory.Alloc((nuint)Math.Max(bytes.Length, 1));
-            bytes.CopyTo(new Span<byte>(Data[i], bytes.Length));
-            Lengths[i] = bytes.Length;
+            for (var i = 0; i < Count; i++)
+            {
+                var (target, bytes) = entries[i];
+                Targets[i] = Utf8StringMarshaller.ConvertToUnmanaged(target);
+                Data[i] = (byte*)NativeMemory.Alloc((nuint)Math.Max(bytes.Length, 1));
+                bytes.CopyTo(new Span<byte>(Data[i], bytes.Length));
+                Lengths[i] = bytes.Length;
+            }
+        }
+        catch
+        {
+            Dispose();
+            throw;
         }
     }
 

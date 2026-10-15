@@ -413,17 +413,23 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         if (_dragDrop == IntPtr.Zero || _dragCompletion is not null)
             return Task.FromResult(HermesDragResult.Canceled);
 
+        using var entries = new NativeTargetList(LinuxClipboardTargets.ForWrite(package));
+
         var completion = new TaskCompletionSource<HermesDragResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         _dragCompletion = completion;
 
         try
         {
-            using var entries = new NativeTargetList(LinuxClipboardTargets.ForWrite(package));
             if (LinuxNative.DragDropBeginDrag(_dragDrop, entries.Targets, entries.Data, entries.Lengths, entries.Count))
                 return completion.Task;
         }
         catch (EntryPointNotFoundException)
         {
+        }
+        catch
+        {
+            _dragCompletion = null;
+            throw;
         }
 
         _dragCompletion = null;
