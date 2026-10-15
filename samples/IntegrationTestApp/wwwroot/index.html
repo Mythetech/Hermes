@@ -66,6 +66,20 @@
                 border-top-color: #0078d4;
             }
         }
+        .hermes-drop-zone {
+            position: fixed;
+            left: 16px;
+            top: 120px;
+            width: 160px;
+            height: 60px;
+            z-index: 2147483647;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px dashed currentColor;
+            background: Canvas;
+            color: CanvasText;
+        }
     </style>
 </head>
 <body>
@@ -103,6 +117,10 @@
                         var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
                         window.external.sendMessage(JSON.stringify({ type: 'color-scheme', value: dark ? 'dark' : 'light' }));
                     }
+                });
+
+                window.addEventListener('hermesdrop', function(event) {
+                    window.external.sendMessage(JSON.stringify({ type: 'drop-detail', detail: event.detail }));
                 });
 
                 // Signal that JS message handler is ready

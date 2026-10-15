@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Hermes.Blazor\Hermes.Blazor.csproj" />
+    <ProjectReference Include="..\..\src\Hermes.Testing\Hermes.Testing.csproj" />
   </ItemGroup>
 
   <!-- Fluent UI Blazor for stress-testing JS module loading -->
