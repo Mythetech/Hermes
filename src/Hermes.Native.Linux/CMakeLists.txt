@@ -36,6 +36,7 @@ set(SOURCES
     HermesDialogs.c
     HermesContextMenu.c
     HermesNotifications.c
+    HermesClipboard.c
     Exports.c
 )
 

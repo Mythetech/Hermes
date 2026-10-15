@@ -85,4 +85,10 @@ internal static class MacNativeDelegates
     /// </summary>
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void NotificationCompletionCallback(IntPtr context, IntPtr errorPtr);
+
+    /// <summary>
+    /// Called on the main thread when the system clipboard's change count moves.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void ClipboardChangedCallback();
 }

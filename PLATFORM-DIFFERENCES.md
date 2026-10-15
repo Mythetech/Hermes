@@ -192,13 +192,17 @@ These paths are resolved by `AppDataDirectories.GetUserDataPath("KvStore")`. The
 
 | Feature | macOS | Windows | Linux |
 |---------|-------|---------|-------|
-| Text get/set | `pbcopy` / `pbpaste` | Win32 Clipboard API | `xclip` |
-| External dependency | None (ships with macOS) | None (built-in) | Requires `xclip` (`sudo apt install xclip`) |
+| API | `NSPasteboard` | Win32 Clipboard API (`CF_HTML`, PNG with `CF_DIB`, `CF_HDROP`) | GTK clipboard |
+| External dependency | None (ships with macOS) | None (built-in) | None (uses the GTK that Hermes already needs) |
 
 ### Notes
 
-- On Linux, `xclip` must be installed. If it is not available, clipboard operations throw `PlatformNotSupportedException` with an install hint.
-- macOS and Linux implementations shell out to external processes, which is slightly slower than the direct Win32 API used on Windows. For text operations this is negligible.
+- macOS and Linux run clipboard calls on the UI thread, so a call from a background thread hangs while the UI thread waits on that thread.
+- On Linux, clipboard calls need a Hermes window to exist first, since the window initializes GTK; before one, they throw `InvalidOperationException`.
+- On Wayland, `Clipboard.Changed` is raised only while the app has keyboard focus, and contents the app writes do not outlive it. On X11, GTK hands them to a running clipboard manager when the app exits.
+- Windows runs clipboard calls on the calling thread, so a background-thread call does not hang. A call that finds another app holding the clipboard retries for about 100 ms, then throws `IOException`.
+- On Windows, `Clipboard.Changed` comes from a listener on its own background thread, so monitoring works in tray-only apps without a Hermes window.
+- On Windows, a custom MIME type is a registered clipboard format name, so it only matches apps that register the same string. macOS maps it through UTType, and Linux uses it as the target name.
 
 ---
 

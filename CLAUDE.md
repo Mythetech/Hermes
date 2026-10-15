@@ -37,8 +37,8 @@ On every platform the loop ends when the window passed to `WaitForClose()` close
 ## Verification commands
 
 - Unit suite: `dotnet test tests/Hermes.Tests` (also builds the benchmark apps for the guard tests)
-- Integration scenarios: `HERMES_INTEGRATION_TEST=1 HERMES_INTEGRATION_TEST_EXIT=1 dotnet run --project samples/IntegrationTestApp` (expects 15/15 PASS, `HERMES_TEARDOWN: PASSED`, exit 0)
-  - custom-titlebar-rendered is only reported from TitlebarPage, which the automated run never visits, so it is not one of the 15.
+- Integration scenarios: `HERMES_INTEGRATION_TEST=1 HERMES_INTEGRATION_TEST_EXIT=1 dotnet run --project samples/IntegrationTestApp` (expects 19/19 PASS on macOS and Linux, and 20/20 on Windows, `HERMES_TEARDOWN: PASSED`, exit 0)
+  - custom-titlebar-rendered is only reported from TitlebarPage, which the automated run never visits, so it is not counted in either total.
 - Smoke mode: `HERMES_SMOKE_TEST=1 dotnet run --project samples/SmokeTestApp` (expects `HERMES_SMOKE_RESULT: PASSED`, exit 0). With `SMOKE_SAMPLE_FAULT=check|render|gate|log|dialog` every run must end `FAILED`. Integration runs do not enable smoke mode.
 - Benchmark smoke, same thing PR CI runs: build the three apps and the harness in Release, then `dotnet run --project benchmarks/Hermes.Benchmarks.Harness -c Release -- --iterations 1 --warmup 0` (exit code is the verdict)
 

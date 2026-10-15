@@ -31,6 +31,7 @@ SOURCES = HermesWindow.m \
           HermesStatusIcon.m \
           HermesNotifications.m \
           HermesAppDelegate.m \
+          HermesClipboard.m \
           Exports.m
 
 # Object directories

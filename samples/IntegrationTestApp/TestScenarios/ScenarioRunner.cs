@@ -1,7 +1,10 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
+using System.Diagnostics;
+using System.Text;
 using Hermes;
 using Hermes.Abstractions;
 using Hermes.Blazor;
+using Hermes.Contracts.DataTransfer;
 using Hermes.Contracts.Diagnostics;
 using Hermes.Contracts.Notifications;
 using Hermes.Contracts.Plugins;
@@ -62,6 +65,17 @@ public sealed class ScenarioRunner : IDisposable
 
         // Notifications: exercises the real backend, supported or not, without needing the WebView
         await RunNotificationsTestAsync();
+
+        // Clipboard: the real OS clipboard, no WebView needed
+        RunClipboardTextTest();
+        if (RichClipboardSupported)
+        {
+            RunClipboardRichRoundTripTest();
+            if (OperatingSystem.IsWindows())
+                RunClipboardBusyTest();
+            await RunClipboardChangedTestAsync();
+            await RunClipboardChangedMixedThreadsTestAsync();
+        }
 
         // Web message test runs LAST - gives WebView2 maximum time to initialize
         // On Windows, WebView2 init is async and can take several seconds in CI
@@ -599,6 +613,340 @@ public sealed class ScenarioRunner : IDisposable
         {
             TestReporter.Fail(testName, ex.Message);
         }
+    }
+
+    private void RunClipboardTextTest()
+    {
+        const string testName = "clipboard-text";
+        TestReporter.Start(testName);
+
+        try
+        {
+            var expected = $"hermes-clipboard-{Guid.NewGuid():N}";
+            Clipboard.SetText(expected);
+            var actual = Clipboard.GetText();
+
+            TestReporter.Assert(testName, actual == expected, $"Expected '{expected}', got '{actual}'");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail(testName, ex.Message);
+        }
+    }
+
+    // Platforms whose clipboard backend reads and writes every format.
+    private static bool RichClipboardSupported => OperatingSystem.IsMacOS() || OperatingSystem.IsLinux() || OperatingSystem.IsWindows();
+
+    private void RunClipboardRichRoundTripTest()
+    {
+        const string testName = "clipboard-rich-roundtrip";
+        const string customType = "application/x-hermes-integration";
+        TestReporter.Start(testName);
+        var directory = Path.Combine(Path.GetTempPath(), "hermes clipboard #1");
+
+        try
+        {
+            var failures = new List<string>();
+            void Check(string what, bool ok)
+            {
+                if (!ok)
+                    failures.Add(what);
+            }
+
+            Directory.CreateDirectory(directory);
+            var files = new[] { "a.txt", "b é.txt", "c#d%.txt" }.Select(name => Path.Combine(directory, name)).ToArray();
+            foreach (var file in files)
+                File.WriteAllText(file, "x");
+
+            Clipboard.Write(new HermesDataPackage { Text = "plain", Html = "<b>rich é</b>" });
+            var html = Clipboard.Read(HermesDataFormats.Text | HermesDataFormats.Html);
+            Check("text", html.Text == "plain");
+            Check("html", html.Html == "<b>rich é</b>");
+            Check("formats after html", Clipboard.GetFormats().HasFlag(HermesDataFormats.Html));
+
+            foreach (var (label, png) in new[] { ("small png", TestPng.Create(16, 16, 1)), ("8 MB png", TestPng.Create(1448, 1448, 2)) })
+            {
+                Clipboard.Write(new HermesDataPackage { Png = new ReadOnlyMemory<byte>(png) });
+                var image = Clipboard.Read(HermesDataFormats.Png);
+                Check(label, image.Png is { } read && read.Span.SequenceEqual(png));
+            }
+            Check("legacy image format", HasLegacyImageFormat());
+
+            Clipboard.Write(new HermesDataPackage { Text = "with files", Files = files });
+            var withFiles = Clipboard.Read(HermesDataFormats.Text | HermesDataFormats.Files);
+            Check("text beside files", withFiles.Text == "with files");
+            Check("files", withFiles.Files is { } readFiles && readFiles.SequenceEqual(files));
+            Check("formats after files", Clipboard.GetFormats().HasFlag(HermesDataFormats.Files));
+
+            // Finder puts each file's icon beside the URLs as TIFF, which must not read back as an image.
+            Clipboard.Write(new HermesDataPackage
+            {
+                Files = files,
+                Custom = new Dictionary<string, ReadOnlyMemory<byte>> { ["image/tiff"] = new byte[] { 1, 2, 3 } },
+            });
+            Check("file icon not png", !Clipboard.GetFormats().HasFlag(HermesDataFormats.Png)
+                && Clipboard.Read(HermesDataFormats.Png).Png is null);
+
+            Clipboard.Write(new HermesDataPackage
+            {
+                Text = "pdf",
+                Custom = new Dictionary<string, ReadOnlyMemory<byte>> { ["application/pdf"] = Encoding.ASCII.GetBytes("%PDF-1.4\n%%EOF") },
+            });
+            Check("pdf not png", !Clipboard.GetFormats().HasFlag(HermesDataFormats.Png));
+
+            // macOS reads Cocoa RTF back as HTML; other platforms keep RTF as a custom format.
+            if (OperatingSystem.IsMacOS())
+            {
+                Clipboard.Write(new HermesDataPackage
+                {
+                    Text = "bold plain",
+                    Custom = new Dictionary<string, ReadOnlyMemory<byte>> { ["text/rtf"] = Encoding.UTF8.GetBytes(@"{\rtf1\ansi {\b bold} plain}") },
+                });
+                Check("formats after rtf", Clipboard.GetFormats().HasFlag(HermesDataFormats.Html));
+                Check("rtf as html", Clipboard.Read(HermesDataFormats.Html).Html is { } rtfHtml && rtfHtml.Contains("bold"));
+            }
+
+            var customBytes = new byte[] { 1, 2, 3, 250 };
+            Clipboard.Write(new HermesDataPackage
+            {
+                Custom = new Dictionary<string, ReadOnlyMemory<byte>> { [customType] = customBytes },
+            });
+            Check("has custom", Clipboard.HasCustom(customType));
+            Check("has custom ignoring case", Clipboard.HasCustom(customType.ToUpperInvariant()));
+            var custom = Clipboard.Read(HermesDataFormats.None, [customType]);
+            Check("custom", custom.Custom.TryGetValue(customType, out var readCustom) && readCustom.Span.SequenceEqual(customBytes));
+
+            // GTK converts other image targets to PNG, and X11 target names are case-sensitive.
+            if (OperatingSystem.IsLinux())
+            {
+                Clipboard.Write(new HermesDataPackage
+                {
+                    Custom = new Dictionary<string, ReadOnlyMemory<byte>> { ["image/bmp"] = TestBmp.Create2x2() },
+                });
+                Check("bmp as png", Clipboard.Read(HermesDataFormats.Png).Png is { } bmpPng
+                    && bmpPng.Span.StartsWith((ReadOnlySpan<byte>)[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]));
+
+                Clipboard.Write(new HermesDataPackage
+                {
+                    Custom = new Dictionary<string, ReadOnlyMemory<byte>> { ["application/x-hermes-case"] = new byte[] { 1 } },
+                });
+                var upper = Clipboard.Read(HermesDataFormats.None, ["APPLICATION/X-HERMES-CASE"]);
+                Check("custom read ignoring case", upper.Custom.TryGetValue("APPLICATION/X-HERMES-CASE", out var upperBytes)
+                    && upperBytes.Span.SequenceEqual(new byte[] { 1 }));
+            }
+
+            Clipboard.Clear();
+            Check("clear", Clipboard.GetFormats() == HermesDataFormats.None);
+
+            TestReporter.Assert(testName, failures.Count == 0, "Failed: " + string.Join(", ", failures));
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail(testName, ex.Message);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private void RunClipboardBusyTest()
+    {
+        const string testName = "clipboard-busy";
+        TestReporter.Start(testName);
+        var id = Guid.NewGuid().ToString("N");
+        var script = Path.Combine(Path.GetTempPath(), $"hermes-hold-clipboard-{id}.ps1");
+        var marker = Path.Combine(Path.GetTempPath(), $"hermes-hold-clipboard-{id}.txt");
+        Process? holder = null;
+
+        try
+        {
+            // Holds the clipboard open for three seconds from another process, as clipboard managers do.
+            File.WriteAllText(script, """
+                param([string]$Marker)
+                Add-Type -AssemblyName System.Windows.Forms
+                Add-Type -Namespace W -Name U -MemberDefinition '[DllImport("user32.dll")] public static extern bool OpenClipboard(System.IntPtr h); [DllImport("user32.dll")] public static extern bool CloseClipboard();'
+                # Two opens with a NULL owner do not exclude each other, so the holder opens with a window.
+                $form = New-Object System.Windows.Forms.Form
+                $opened = [W.U]::OpenClipboard($form.Handle)
+                [System.IO.File]::WriteAllText($Marker, [string]$opened)
+                Start-Sleep -Seconds 3
+                [W.U]::CloseClipboard() | Out-Null
+                $form.Dispose()
+                """);
+            holder = Process.Start(new ProcessStartInfo("powershell",
+                $"-NoProfile -Sta -ExecutionPolicy Bypass -File \"{script}\" \"{marker}\"")
+            {
+                UseShellExecute = false,
+            })!;
+
+            // The holder signals through a file once it holds the clipboard, so the write is attempted only while it is held.
+            var opened = WaitForMarkerContent(marker);
+            if (opened is null)
+            {
+                TestReporter.Fail(testName, "the holder never signaled");
+                return;
+            }
+            if (opened != "True")
+            {
+                TestReporter.Fail(testName, "the holder could not open the clipboard");
+                return;
+            }
+
+            var watch = Stopwatch.StartNew();
+            var threw = false;
+            try
+            {
+                Clipboard.SetText("busy");
+            }
+            catch (IOException)
+            {
+                threw = true;
+            }
+            watch.Stop();
+
+            // At least 50 ms shows the open was retried before giving up.
+            TestReporter.Assert(testName, threw && watch.ElapsedMilliseconds is >= 50 and < 1000,
+                $"Expected IOException after 50 ms to 1s of retries while another process held the clipboard; threw={threw}, took {watch.ElapsedMilliseconds} ms");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail(testName, ex.Message);
+        }
+        finally
+        {
+            if (holder is not null)
+            {
+                if (!holder.WaitForExit(10_000))
+                    holder.Kill();
+                holder.Dispose();
+            }
+            TryDelete(script);
+            TryDelete(marker);
+        }
+    }
+
+    private static string? WaitForMarkerContent(string path)
+    {
+        var watch = Stopwatch.StartNew();
+        while (watch.Elapsed < TimeSpan.FromSeconds(10))
+        {
+            try
+            {
+                if (File.Exists(path) && File.ReadAllText(path).Trim() is { Length: > 0 } content)
+                    return content;
+            }
+            catch (IOException)
+            {
+                // The holder may still be writing the file.
+            }
+            Thread.Sleep(50);
+        }
+        return null;
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+        }
+    }
+
+    private async Task RunClipboardChangedTestAsync()
+    {
+        const string testName = "clipboard-changed";
+        TestReporter.Start(testName);
+        var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Action handler = () => changed.TrySetResult();
+
+        try
+        {
+            Clipboard.Changed += handler;
+
+            // macOS takes its baseline change count on the main thread, asynchronously
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            ExternalClipboard.WriteText($"hermes-external-{Guid.NewGuid():N}");
+
+            var raised = await Task.WhenAny(changed.Task, Task.Delay(TimeSpan.FromSeconds(10))) == changed.Task;
+            TestReporter.Assert(testName, raised, "Changed was not raised within 10s of an external write");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail(testName, ex.Message);
+        }
+        finally
+        {
+            Clipboard.Changed -= handler;
+        }
+    }
+
+    private async Task RunClipboardChangedMixedThreadsTestAsync()
+    {
+        const string testName = "clipboard-changed-mixed-threads";
+        TestReporter.Start(testName);
+        var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Action first = () => { };
+        Action second = () => changed.TrySetResult();
+
+        try
+        {
+            Clipboard.Changed += first;
+            await Task.Delay(TimeSpan.FromSeconds(1));
+
+            // The background unsubscribe queues its stop behind the main thread, which subscribes again before it runs.
+            _app.MainWindow.Invoke(() =>
+            {
+                Task.Run(() => Clipboard.Changed -= first).Wait();
+                Clipboard.Changed += second;
+            });
+
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            ExternalClipboard.WriteText($"hermes-external-{Guid.NewGuid():N}");
+
+            var raised = await Task.WhenAny(changed.Task, Task.Delay(TimeSpan.FromSeconds(10))) == changed.Task;
+            TestReporter.Assert(testName, raised, "Changed was not raised after a background unsubscribe and a main-thread subscribe");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail(testName, ex.Message);
+        }
+        finally
+        {
+            Clipboard.Changed -= first;
+            Clipboard.Changed -= second;
+        }
+    }
+
+    // Older apps paste the legacy format: TIFF on macOS, a DIB bitmap on Windows. Linux has none.
+    private static bool HasLegacyImageFormat()
+    {
+        if (OperatingSystem.IsMacOS())
+            return Clipboard.HasCustom("image/tiff");
+
+        if (OperatingSystem.IsWindows())
+        {
+            // Windows PowerShell 5.1 runs STA, which System.Windows.Forms.Clipboard requires.
+            using var process = Process.Start(new ProcessStartInfo("powershell",
+                "-NoProfile -Sta -Command \"Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::ContainsImage()\"")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+            })!;
+            // The output is one word, so waiting before reading cannot fill the pipe.
+            if (!process.WaitForExit(10_000))
+            {
+                process.Kill();
+                throw new TimeoutException("powershell did not report the legacy image format within 10s");
+            }
+            return process.StandardOutput.ReadToEnd().Trim().Equals("True", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return true;
     }
 
     public void Dispose()

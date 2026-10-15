@@ -43,6 +43,14 @@ void Hermes_App_Init(int* argc, char*** argv) {
     g_gtkInitialized = TRUE;
 }
 
+gboolean hermes_gtk_ready(void) {
+    return g_gtkInitialized;
+}
+
+gboolean hermes_is_ui_thread(void) {
+    return g_gtkInitialized && pthread_equal(pthread_self(), g_uiThreadId);
+}
+
 void Hermes_App_Run(void) {
     gtk_main();
 }

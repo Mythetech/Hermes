@@ -1,8 +1,10 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
+using Hermes.Tests.DataTransfer;
 using Xunit;
 
 namespace Hermes.Tests;
 
+[Collection(ClipboardCollection.Name)]
 public sealed class ClipboardTests
 {
     [Fact]

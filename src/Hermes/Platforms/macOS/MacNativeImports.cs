@@ -360,6 +360,48 @@ internal static partial class MacNative
 
     #endregion
 
+    #region Clipboard
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_GetFormats")]
+    internal static partial int ClipboardGetFormats();
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_HasType", StringMarshalling = StringMarshalling.Utf8)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static partial bool ClipboardHasType(string mimeType);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_ReadText")]
+    internal static partial IntPtr ClipboardReadText();
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_ReadHtml")]
+    internal static partial IntPtr ClipboardReadHtml();
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_ReadPng")]
+    internal static partial IntPtr ClipboardReadPng(out int length);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_ReadFiles")]
+    internal static partial IntPtr ClipboardReadFiles(out int count);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_ReadCustom", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial IntPtr ClipboardReadCustom(string mimeType, out int length);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_Write", StringMarshalling = StringMarshalling.Utf8)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static unsafe partial bool ClipboardWrite(
+        string? text, string? html, byte* png, int pngLength,
+        byte** files, int fileCount,
+        byte** customTypes, byte** customData, int* customLengths, int customCount);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_Clear")]
+    internal static partial void ClipboardClear();
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_StartMonitoring")]
+    internal static partial void ClipboardStartMonitoring(IntPtr callback);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_StopMonitoring")]
+    internal static partial void ClipboardStopMonitoring();
+
+    #endregion
+
     #region Memory Management
 
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Free")]
