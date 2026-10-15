@@ -8,6 +8,11 @@ All notable changes to this project will be documented in this file.
 
 - **Rich clipboard API (preview, documented with 1.5)**: `HermesDataPackage` in `Hermes.Contracts.DataTransfer` carries text, HTML, PNG, file paths and custom MIME formats; `Clipboard.Read`, `Write`, `GetFormats`, `HasCustom`, `Clear` and the `Changed` event use it, and `IClipboard` gains matching members with text-only default implementations. This release routes text through the new API unchanged; HTML, images, files, custom formats and change monitoring arrive per platform in the following releases
 - macOS: the clipboard reads and writes HTML (rich text that Cocoa apps copy as RTF reads back as HTML), images (as PNG, with TIFF added for older apps), file paths and custom MIME formats through `NSPasteboard`, and raises `Clipboard.Changed` by polling the pasteboard's change count every 500 ms while subscribed. `pbcopy` and `pbpaste` are no longer used, and clipboard calls now run on the main thread like native dialogs, so calling one from a background thread while the UI thread waits on that thread will hang
+- Linux: the clipboard reads and writes HTML, images (as PNG), file paths (`text/uri-list` and GNOME's copied-files format) and custom MIME formats through GTK, raises `Clipboard.Changed` from GTK's owner-change signal, and works on Wayland. `xclip` is no longer needed
+
+### Changed
+
+- Linux: clipboard contents written by an app no longer outlive it unless a clipboard manager is running. Hermes now asks the clipboard manager to keep them when the app exits; `xclip` used to keep a background process alive to serve them
 
 ## [1.4.4] - 2026-10-12
 
