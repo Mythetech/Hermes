@@ -5,7 +5,9 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text.Json;
 using Hermes.Abstractions;
+using Hermes.Contracts.DataTransfer;
 using Hermes.Contracts.Diagnostics;
+using Hermes.DataTransfer;
 using Hermes.Infrastructure;
 using Microsoft.Web.WebView2.Core;
 using Windows.Win32;
@@ -56,6 +58,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     public event Action<string>? WebMessageReceived;
     public event Action? Maximized;
     public event Action? Restored;
+    public event Action<HermesDropReport>? DropReported;
 
     public Func<bool>? CloseRequestedHandler { get; set; }
 
@@ -703,6 +706,11 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
                 await _webView.AddScriptToExecuteOnDocumentCreatedAsync(GetDragDetectionScript());
             }
 
+            if (_options.DragDrop)
+            {
+                await _webView.AddScriptToExecuteOnDocumentCreatedAsync(DragDropScript.Source);
+            }
+
             if (isSmokeTest) Console.WriteLine("WEBVIEW_INIT:script_injected");
 
             _webView.WebMessageReceived += (sender, args) =>
@@ -712,6 +720,12 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
                 if (_customTitlebar is not null && message?.StartsWith("{\"type\":\"hermes-drag\"") == true)
                 {
                     HandleDragMessage(message);
+                    return;
+                }
+
+                if (_options.DragDrop && message is not null && DropMessage.IsDropProtocol(message))
+                {
+                    HandleDropMessage(message, args);
                     return;
                 }
 
@@ -1076,6 +1090,41 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         {
             // Ignore malformed messages
         }
+    }
+
+    #endregion
+
+    #region Drag and Drop
+
+    private void HandleDropMessage(string message, CoreWebView2WebMessageReceivedEventArgs args)
+    {
+        var drop = DropMessage.TryParse(message);
+        if (drop is null)
+            return;
+
+        DropReported?.Invoke(drop.Kind == HermesDropReportKind.Drop
+            ? drop.ToReport(drop.ToPackage(ReadDroppedPaths(args)))
+            : drop.ToReport(null));
+    }
+
+    // The page hands over its File objects, so paths reach .NET without ever entering JavaScript.
+    private static List<string> ReadDroppedPaths(CoreWebView2WebMessageReceivedEventArgs args)
+    {
+        var paths = new List<string>();
+        try
+        {
+            foreach (var item in args.AdditionalObjects ?? [])
+            {
+                if (item is CoreWebView2File { Path: { Length: > 0 } path })
+                    paths.Add(path);
+            }
+        }
+        catch (Exception ex) when (ex is COMException or NotImplementedException)
+        {
+            // An older runtime or an unreadable file still leaves the drop's text, HTML and URL.
+        }
+
+        return paths;
     }
 
     #endregion
