@@ -5,7 +5,7 @@ using Hermes.Contracts.DataTransfer;
 namespace Hermes.DataTransfer;
 
 /// <summary>
-/// Maps X11 and Wayland clipboard targets to Hermes formats and back, for the Linux clipboard and drag and drop.
+/// Maps X11 and Wayland clipboard targets to Hermes formats and back.
 /// </summary>
 internal static class LinuxClipboardTargets
 {

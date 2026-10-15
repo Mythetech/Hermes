@@ -2,7 +2,7 @@
 namespace Hermes.DataTransfer;
 
 /// <summary>
-/// <c>text/uri-list</c> and GNOME's <c>x-special/gnome-copied-files</c>, used by the Linux clipboard and drag and drop.
+/// <c>text/uri-list</c> and GNOME's <c>x-special/gnome-copied-files</c>, used by the Linux clipboard.
 /// </summary>
 internal static class FileUriList
 {

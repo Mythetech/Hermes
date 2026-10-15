@@ -4,7 +4,7 @@ using System.Collections.ObjectModel;
 namespace Hermes.Contracts.DataTransfer;
 
 /// <summary>
-/// An immutable snapshot of data in one or more formats, shared by the clipboard and drag and drop.
+/// An immutable snapshot of data in one or more formats, read from or written to the clipboard.
 /// </summary>
 public sealed class HermesDataPackage
 {

@@ -202,6 +202,7 @@ These paths are resolved by `AppDataDirectories.GetUserDataPath("KvStore")`. The
 - On Wayland, `Clipboard.Changed` is raised only while the app has keyboard focus, and contents the app writes do not outlive it. On X11, GTK hands them to a running clipboard manager when the app exits.
 - Windows runs clipboard calls on the calling thread, so a background-thread call does not hang. A call that finds another app holding the clipboard retries for about 100 ms, then throws `IOException`.
 - On Windows, `Clipboard.Changed` comes from a listener on its own background thread, so monitoring works in tray-only apps without a Hermes window.
+- On Windows, a custom MIME type is a registered clipboard format name, so it only matches apps that register the same string. macOS maps it through UTType, and Linux uses it as the target name.
 
 ---
 
