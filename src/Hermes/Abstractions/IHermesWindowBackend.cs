@@ -152,7 +152,7 @@ public interface IHermesWindowBackend : IDisposable
 
     /// <summary>
     /// Starts a native drag offering Copy. Called on the UI thread; returns before any modal drag loop runs,
-    /// and completes when the drag ends, with Canceled when the primary button is no longer held.
+    /// and completes when the drag ends: Canceled when the primary button is no longer held or the window closes.
     /// </summary>
     Task<HermesDragResult> StartDragAsync(HermesDataPackage package) =>
         throw new PlatformNotSupportedException("This window backend cannot start a native drag.");

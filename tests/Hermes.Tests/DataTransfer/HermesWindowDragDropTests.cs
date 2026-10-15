@@ -241,6 +241,7 @@ public sealed class HermesWindowDragDropTests
         caller.Start();
         caller.Join();
         testable.Window.Close();
+        testable.Backend.ProcessPending();
 
         Assert.Equal(HermesDragResult.Canceled, await drag!);
         Assert.Empty(testable.Backend.DragsStarted);

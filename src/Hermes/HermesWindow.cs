@@ -836,6 +836,16 @@ public sealed class HermesWindow : IDisposable
 
             _backend.BeginInvoke(() =>
             {
+                lock (_dragLock)
+                {
+                    // Some platforms still run queued work after the window closes.
+                    if (_closedForDragDrop)
+                    {
+                        started.TrySetResult(Task.FromResult(HermesDragResult.Canceled));
+                        return;
+                    }
+                }
+
                 try
                 {
                     started.TrySetResult(_backend.StartDragAsync(package));
@@ -872,7 +882,7 @@ public sealed class HermesWindow : IDisposable
         return drop;
     }
 
-    // A closed window drops queued UI work, so a drag still waiting to start would never complete.
+    // Windows drops queued UI work once a window closes, so a drag still waiting to start is completed here.
     private void OnClosingForDragDrop()
     {
         TaskCompletionSource<Task<HermesDragResult>>? pending;
