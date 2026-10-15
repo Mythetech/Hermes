@@ -21,6 +21,7 @@ internal sealed class WindowsClipboardBackend : IClipboardBackend
     private const uint CfDibV5 = 17;
     private const int DropEffectCopy = 1;
     private const int OpenAttempts = 10;
+    private const long MaxLegacyDibBytes = 256L * 1024 * 1024;
 
     private static readonly Lazy<uint> s_htmlFormat = new(() => Register("HTML Format"));
     private static readonly Lazy<uint> s_pngFormat = new(() => Register("PNG"));
@@ -52,36 +53,59 @@ internal sealed class WindowsClipboardBackend : IClipboardBackend
 
     public HermesDataPackage Read(HermesDataFormats formats, IReadOnlyList<string> customTypes)
     {
-        using var scope = ClipboardScope.Open();
+        var customFormats = customTypes.Select(mimeType => (MimeType: mimeType, Format: Register(mimeType))).ToArray();
+        if ((GetFormats() & formats) == HermesDataFormats.None && !customFormats.Any(entry => IsAvailable(entry.Format)))
+            return new HermesDataPackage();
 
-        string? text = null;
-        string? html = null;
-        ReadOnlyMemory<byte>? png = null;
-        IReadOnlyList<string>? files = null;
-
-        if (formats.HasFlag(HermesDataFormats.Text) && GetData(CfUnicodeText) is { } textBytes)
-            text = DecodeUtf16(textBytes);
-        if (formats.HasFlag(HermesDataFormats.Html) && GetData(s_htmlFormat.Value) is { } htmlBytes)
-            html = CfHtmlFormat.Parse(htmlBytes);
-        if (formats.HasFlag(HermesDataFormats.Png) && ReadPng() is { } pngBytes)
-            png = new ReadOnlyMemory<byte>(pngBytes);
-        if (formats.HasFlag(HermesDataFormats.Files) && GetData(CfHdrop) is { } dropBytes)
-            files = DropFilesFormat.Parse(dropBytes) is { Count: > 0 } paths ? paths : null;
-
+        byte[]? textBytes = null;
+        byte[]? htmlBytes = null;
+        byte[]? pngBytes = null;
+        byte[]? dibV5Bytes = null;
+        byte[]? dibBytes = null;
+        byte[]? dropBytes = null;
         var custom = new Dictionary<string, ReadOnlyMemory<byte>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var mimeType in customTypes)
+
+        // Only copy while the clipboard is open; decoding afterwards keeps other apps from waiting on it.
+        using (ClipboardScope.Open())
         {
-            if (GetData(Register(mimeType)) is { } data)
-                custom[mimeType] = data;
+            if (formats.HasFlag(HermesDataFormats.Text))
+                textBytes = GetData(CfUnicodeText);
+            if (formats.HasFlag(HermesDataFormats.Html))
+                htmlBytes = GetData(s_htmlFormat.Value);
+            if (formats.HasFlag(HermesDataFormats.Png))
+            {
+                pngBytes = GetData(s_pngFormat.Value);
+                if (pngBytes is null)
+                {
+                    dibV5Bytes = GetData(CfDibV5);
+                    dibBytes = GetData(CfDib);
+                }
+            }
+            if (formats.HasFlag(HermesDataFormats.Files))
+                dropBytes = GetData(CfHdrop);
+            foreach (var (mimeType, format) in customFormats)
+            {
+                if (GetData(format) is { } data)
+                    custom[mimeType] = data;
+            }
         }
 
-        return new HermesDataPackage { Text = text, Html = html, Png = png, Files = files, Custom = custom };
+        var png = pngBytes ?? DibToPng(dibV5Bytes) ?? DibToPng(dibBytes);
+        return new HermesDataPackage
+        {
+            Text = textBytes is null ? null : DecodeUtf16(textBytes),
+            Html = htmlBytes is null ? null : CfHtmlFormat.Parse(htmlBytes),
+            Png = png is null ? null : new ReadOnlyMemory<byte>(png),
+            Files = dropBytes is not null && DropFilesFormat.Parse(dropBytes) is { Count: > 0 } paths ? paths : null,
+            Custom = custom,
+        };
     }
 
     public void Write(HermesDataPackage package)
     {
-        // Decode before opening the clipboard so other apps are not locked out while WIC works.
+        // Decode and register first, so WIC does not hold the clipboard and a bad custom name fails before it is emptied.
         var legacyDib = package.Png is { } pngToDecode ? CreateLegacyDib(pngToDecode.Span) : null;
+        var customFormats = RegisterCustomFormats(package);
 
         using var scope = ClipboardScope.Open();
         if (!PInvoke.EmptyClipboard())
@@ -104,8 +128,8 @@ internal sealed class WindowsClipboardBackend : IClipboardBackend
             BinaryPrimitives.WriteInt32LittleEndian(effect, DropEffectCopy);
             SetData(s_dropEffectFormat.Value, effect);
         }
-        foreach (var (mimeType, data) in package.Custom)
-            SetData(Register(mimeType), data.Span);
+        foreach (var (format, data) in customFormats)
+            SetData(format, data.Span);
     }
 
     public void Clear()
@@ -126,22 +150,35 @@ internal sealed class WindowsClipboardBackend : IClipboardBackend
 
     private static byte[]? CreateLegacyDib(ReadOnlySpan<byte> png)
     {
-        // The legacy bitmap is best effort: an undecodable or inconsistent image just skips it.
-        if (!WicPngDecoder.TryDecodeToBgra(png, out var width, out var height, out var bgra)
-            || width <= 0 || height <= 0 || (long)width * height * 4 != bgra.Length)
+        // The legacy bitmap is best effort: an undecodable, inconsistent or oversized image just skips it.
+        try
+        {
+            if (!WicPngDecoder.TryDecodeToBgra(png, MaxLegacyDibBytes, out var width, out var height, out var bgra)
+                || width <= 0 || height <= 0 || (long)width * height * 4 != bgra.Length)
+                return null;
+
+            return DibFormat.FromBgra(width, height, bgra);
+        }
+        catch (OutOfMemoryException)
+        {
             return null;
-
-        return DibFormat.FromBgra(width, height, bgra);
+        }
     }
 
-    private static byte[]? ReadPng()
+    private static (uint Format, ReadOnlyMemory<byte> Data)[] RegisterCustomFormats(HermesDataPackage package)
     {
-        if (GetData(s_pngFormat.Value) is { } png)
-            return png;
-
-        var dib = GetData(CfDibV5) ?? GetData(CfDib);
-        return dib is null ? null : DibFormat.ToPng(dib);
+        var formats = new List<(uint Format, ReadOnlyMemory<byte> Data)>(package.Custom.Count);
+        foreach (var (mimeType, data) in package.Custom)
+        {
+            var format = Register(mimeType);
+            if (format == 0)
+                throw new ArgumentException($"'{mimeType}' cannot be registered as a Windows clipboard format.", nameof(package));
+            formats.Add((format, data));
+        }
+        return formats.ToArray();
     }
+
+    private static byte[]? DibToPng(byte[]? dib) => dib is null ? null : DibFormat.ToPng(dib);
 
     private static bool IsAvailable(uint format) => format != 0 && PInvoke.IsClipboardFormatAvailable(format);
 
@@ -219,19 +256,35 @@ internal sealed class WindowsClipboardBackend : IClipboardBackend
 
     private readonly struct ClipboardScope : IDisposable
     {
+        // Windows treats every NULL-owner open as one owner, so two Hermes threads could interleave inside one open.
+        private static readonly Lock s_openLock = new();
+
         // Clipboard managers hold the clipboard briefly after every change, so a failed open is retried.
         public static ClipboardScope Open()
         {
-            for (var attempt = 1; ; attempt++)
+            s_openLock.Enter();
+            try
             {
-                if (PInvoke.OpenClipboard(HWND.Null))
-                    return default;
-                if (attempt == OpenAttempts)
-                    throw new IOException("The clipboard is in use by another application.");
-                Thread.Sleep(10);
+                for (var attempt = 1; ; attempt++)
+                {
+                    if (PInvoke.OpenClipboard(HWND.Null))
+                        return default;
+                    if (attempt == OpenAttempts)
+                        throw new IOException("The clipboard is in use by another application.");
+                    Thread.Sleep(10);
+                }
+            }
+            catch
+            {
+                s_openLock.Exit();
+                throw;
             }
         }
 
-        public void Dispose() => PInvoke.CloseClipboard();
+        public void Dispose()
+        {
+            PInvoke.CloseClipboard();
+            s_openLock.Exit();
+        }
     }
 }

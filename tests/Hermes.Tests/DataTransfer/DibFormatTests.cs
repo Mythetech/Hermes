@@ -23,9 +23,11 @@ public sealed class DibFormatTests
         return pixels;
     }
 
+    // Masks go at offset 40: after a 40-byte header, or inside a V4/V5 header.
     private static byte[] Dib(int width, int height, short bitCount, int compression, byte[] pixelRows, int headerSize = 40, byte[]? masks = null, int colorsUsed = 0)
     {
-        var dib = new byte[headerSize + (masks?.Length ?? 0) + pixelRows.Length];
+        var trailingMasks = headerSize == 40 ? masks?.Length ?? 0 : 0;
+        var dib = new byte[headerSize + trailingMasks + pixelRows.Length];
         BinaryPrimitives.WriteInt32LittleEndian(dib, headerSize);
         BinaryPrimitives.WriteInt32LittleEndian(dib.AsSpan(4), width);
         BinaryPrimitives.WriteInt32LittleEndian(dib.AsSpan(8), height);
@@ -33,9 +35,17 @@ public sealed class DibFormatTests
         BinaryPrimitives.WriteInt16LittleEndian(dib.AsSpan(14), bitCount);
         BinaryPrimitives.WriteInt32LittleEndian(dib.AsSpan(16), compression);
         BinaryPrimitives.WriteInt32LittleEndian(dib.AsSpan(32), colorsUsed);
-        masks?.CopyTo(dib, headerSize);
-        pixelRows.CopyTo(dib, headerSize + (masks?.Length ?? 0));
+        masks?.CopyTo(dib, 40);
+        pixelRows.CopyTo(dib, headerSize + trailingMasks);
         return dib;
+    }
+
+    private static byte[] Masks(params uint[] values)
+    {
+        var masks = new byte[values.Length * 4];
+        for (var i = 0; i < values.Length; i++)
+            BinaryPrimitives.WriteUInt32LittleEndian(masks.AsSpan(i * 4), values[i]);
+        return masks;
     }
 
     [Fact]
@@ -79,13 +89,27 @@ public sealed class DibFormatTests
     [Fact]
     public void ToPng_Bitfields_WithStandardMasks_IsRead()
     {
-        var masks = new byte[12];
-        BinaryPrimitives.WriteUInt32LittleEndian(masks, 0x00FF0000);
-        BinaryPrimitives.WriteUInt32LittleEndian(masks.AsSpan(4), 0x0000FF00);
-        BinaryPrimitives.WriteUInt32LittleEndian(masks.AsSpan(8), 0x000000FF);
+        var masks = Masks(0x00FF0000, 0x0000FF00, 0x000000FF);
         var png = DibFormat.ToPng(Dib(1, 1, 32, 3, [10, 20, 30, 255], masks: masks))!;
 
         Assert.Equal(new byte[] { 30, 20, 10, 255 }, PngPixels(png, 1, 1));
+    }
+
+    [Fact]
+    public void ToPng_V5HeaderWithBitfields_ReadsTheMasksInsideTheHeader()
+    {
+        var masks = Masks(0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+        var png = DibFormat.ToPng(Dib(1, 1, 32, 3, [10, 20, 30, 128], headerSize: 124, masks: masks))!;
+
+        Assert.Equal(new byte[] { 30, 20, 10, 128 }, PngPixels(png, 1, 1));
+    }
+
+    [Fact]
+    public void ToPng_V5HeaderWithRgb_IsRead()
+    {
+        var png = DibFormat.ToPng(Dib(1, 1, 32, 0, [10, 20, 30, 128], headerSize: 124))!;
+
+        Assert.Equal(new byte[] { 30, 20, 10, 128 }, PngPixels(png, 1, 1));
     }
 
     [Theory]

@@ -13,7 +13,8 @@ internal static class WicPngDecoder
 {
     private static readonly Guid s_wicImagingFactoryClsid = new("cacaf262-9370-4615-a13b-9f5539da4c0a");
 
-    public static unsafe bool TryDecodeToBgra(ReadOnlySpan<byte> png, out int width, out int height, out byte[] bgra)
+    /// <summary>Returns false for anything WIC cannot decode, or whose pixels would exceed <paramref name="maxByteCount"/>.</summary>
+    public static unsafe bool TryDecodeToBgra(ReadOnlySpan<byte> png, long maxByteCount, out int width, out int height, out byte[] bgra)
     {
         width = 0;
         height = 0;
@@ -52,7 +53,7 @@ internal static class WicPngDecoder
 
             converter.GetSize(out var decodedWidth, out var decodedHeight);
             var byteCount = (long)decodedWidth * decodedHeight * 4;
-            if (byteCount == 0 || byteCount > Array.MaxLength)
+            if (byteCount == 0 || byteCount > Math.Min(maxByteCount, Array.MaxLength))
                 return false;
 
             var pixels = new byte[byteCount];
