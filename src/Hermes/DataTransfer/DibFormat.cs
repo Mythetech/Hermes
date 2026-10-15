@@ -36,19 +36,29 @@ internal static class DibFormat
         if (compression == BiBitfields && !HasStandardMasks(dib))
             return null;
 
-        var height = Math.Abs(rawHeight);
-        var stride = (width * bitCount + 31) / 32 * 4;
-        var pixelOffset = headerSize + masksSize + colorsUsed * 4;
-        if (pixelOffset + (long)stride * height > dib.Length)
+        // Header fields are untrusted, so each factor is bounded before the products are formed.
+        var height = Math.Abs((long)rawHeight);
+        var stride = ((long)width * bitCount + 31) / 32 * 4;
+        if (colorsUsed < 0 || stride > dib.Length || height > dib.Length)
+            return null;
+        var pixelOffset = headerSize + masksSize + (long)colorsUsed * 4;
+        if (pixelOffset + stride * height > dib.Length)
             return null;
 
+        var rgbaSize = (long)width * height * 4;
+        if (rgbaSize > int.MaxValue)
+            return null;
+
+        var rows = (int)height;
+        var rowBytes = (int)stride;
+        var firstRow = (int)pixelOffset;
         var bytesPerPixel = bitCount / 8;
-        var rgba = new byte[width * height * 4];
+        var rgba = new byte[rgbaSize];
         var anyAlpha = false;
-        for (var y = 0; y < height; y++)
+        for (var y = 0; y < rows; y++)
         {
-            var sourceRow = rawHeight > 0 ? height - 1 - y : y;
-            var row = dib.Slice(pixelOffset + sourceRow * stride, stride);
+            var sourceRow = rawHeight > 0 ? rows - 1 - y : y;
+            var row = dib.Slice(firstRow + sourceRow * rowBytes, rowBytes);
             for (var x = 0; x < width; x++)
             {
                 var source = row.Slice(x * bytesPerPixel, bytesPerPixel);
@@ -68,7 +78,7 @@ internal static class DibFormat
                 rgba[i] = 255;
         }
 
-        return PngEncoder.EncodeRgba(width, height, rgba);
+        return PngEncoder.EncodeRgba(width, rows, rgba);
     }
 
     public static byte[] FromBgra(int width, int height, ReadOnlySpan<byte> bgraTopDown)

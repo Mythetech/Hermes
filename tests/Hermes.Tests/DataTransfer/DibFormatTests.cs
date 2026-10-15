@@ -23,7 +23,7 @@ public sealed class DibFormatTests
         return pixels;
     }
 
-    private static byte[] Dib(int width, int height, short bitCount, int compression, byte[] pixelRows, int headerSize = 40, byte[]? masks = null)
+    private static byte[] Dib(int width, int height, short bitCount, int compression, byte[] pixelRows, int headerSize = 40, byte[]? masks = null, int colorsUsed = 0)
     {
         var dib = new byte[headerSize + (masks?.Length ?? 0) + pixelRows.Length];
         BinaryPrimitives.WriteInt32LittleEndian(dib, headerSize);
@@ -32,6 +32,7 @@ public sealed class DibFormatTests
         BinaryPrimitives.WriteInt16LittleEndian(dib.AsSpan(12), 1);
         BinaryPrimitives.WriteInt16LittleEndian(dib.AsSpan(14), bitCount);
         BinaryPrimitives.WriteInt32LittleEndian(dib.AsSpan(16), compression);
+        BinaryPrimitives.WriteInt32LittleEndian(dib.AsSpan(32), colorsUsed);
         masks?.CopyTo(dib, headerSize);
         pixelRows.CopyTo(dib, headerSize + (masks?.Length ?? 0));
         return dib;
@@ -96,6 +97,18 @@ public sealed class DibFormatTests
     [Fact]
     public void ToPng_Truncated_ReturnsNull() =>
         Assert.Null(DibFormat.ToPng(Dib(4, 4, 32, 0, new byte[4])));
+
+    [Fact]
+    public void ToPng_WidthWhoseStrideWrapsInt_ReturnsNull() =>
+        Assert.Null(DibFormat.ToPng(Dib(1 << 27, 1, 32, 0, new byte[4])));
+
+    [Fact]
+    public void ToPng_ColorsUsedWhosePaletteOffsetWrapsInt_ReturnsNull() =>
+        Assert.Null(DibFormat.ToPng(Dib(1, 1, 32, 0, new byte[4], colorsUsed: 1 << 29)));
+
+    [Fact]
+    public void ToPng_HeightOfIntMinValue_ReturnsNull() =>
+        Assert.Null(DibFormat.ToPng(Dib(1, int.MinValue, 32, 0, new byte[4])));
 
     [Fact]
     public void FromBgra_WritesABottomUp32BitDib()
