@@ -665,8 +665,12 @@ public sealed class ScenarioRunner : IDisposable
             var both = Clipboard.Read(HermesDataFormats.Files | HermesDataFormats.Url);
             var bothRoundTrip = both.Url?.AbsoluteUri == url.AbsoluteUri && both.Files is [var only] && only == file;
 
-            TestReporter.Assert(testName, urlRoundTrips && reportsUrl && bothRoundTrip,
-                $"url round trip: {urlRoundTrips}, formats report url: {reportsUrl}, files and url: {bothRoundTrip}");
+            Clipboard.Write(new HermesDataPackage { Files = [file] });
+            var filesOnlyHasNoUrl = !Clipboard.GetFormats().HasFlag(HermesDataFormats.Url)
+                && Clipboard.Read(HermesDataFormats.Url).Url is null;
+
+            TestReporter.Assert(testName, urlRoundTrips && reportsUrl && bothRoundTrip && filesOnlyHasNoUrl,
+                $"url round trip: {urlRoundTrips}, formats report url: {reportsUrl}, files and url: {bothRoundTrip}, files only has no url: {filesOnlyHasNoUrl}");
         }
         catch (Exception ex)
         {
