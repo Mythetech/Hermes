@@ -1,4 +1,6 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
+using Hermes.Contracts.DataTransfer;
+
 namespace Hermes.Abstractions;
 
 /// <summary>
@@ -133,6 +135,27 @@ public interface IHermesWindowBackend : IDisposable
     /// The handler receives the URL and returns (content stream, content type), or (null, null) for 404.
     /// </summary>
     void RegisterCustomScheme(string scheme, Func<string, (Stream? Content, string? ContentType)> handler);
+
+    #endregion
+
+    #region Drag and drop
+
+    /// <summary>
+    /// Raised on the UI thread when the drop script reports a drop or a new document,
+    /// in windows created with <see cref="HermesWindowOptions.DragDrop"/>.
+    /// </summary>
+    event Action<HermesDropReport>? DropReported
+    {
+        add { }
+        remove { }
+    }
+
+    /// <summary>
+    /// Starts a native drag offering Copy. Called on the UI thread; returns before any modal drag loop runs,
+    /// and completes when the drag ends, with Canceled when the primary button is no longer held.
+    /// </summary>
+    Task<HermesDragResult> StartDragAsync(HermesDataPackage package) =>
+        throw new PlatformNotSupportedException("This window backend cannot start a native drag.");
 
     #endregion
 
