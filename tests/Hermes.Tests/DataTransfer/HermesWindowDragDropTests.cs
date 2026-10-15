@@ -250,6 +250,46 @@ public sealed class HermesWindowDragDropTests
         Assert.Equal(HermesDragResult.Dropped, await other.Window.StartDragAsync(package).WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
+    [Fact]
+    public void Dispose_WithoutClose_ReleasesTheWindowsDrops()
+    {
+        using var testable = CreateShown();
+        HermesDrop? dropped = null;
+        testable.Window.Dropped += drop => dropped = drop;
+        testable.Backend.SimulateDrop(new HermesDataPackage { Files = s_paths }, 1, 2);
+        Assert.NotNull(dropped);
+        Assert.True(testable.Window.TryGetDrop(dropped.Id, out _));
+
+        testable.Window.Dispose();
+
+        Assert.False(testable.Window.TryGetDrop(dropped.Id, out _));
+    }
+
+    [Fact]
+    public async Task Dispose_WithoutClose_CancelsAQueuedDragStart()
+    {
+        using var testable = CreateShown();
+        var package = new HermesDataPackage { Text = "x" };
+
+        Task<HermesDragResult>? drag = null;
+        var caller = new Thread(() => drag = testable.Window.StartDragAsync(package));
+        caller.Start();
+        caller.Join();
+        testable.Window.Dispose();
+        testable.Backend.ProcessPending();
+
+        Assert.Equal(HermesDragResult.Canceled, await drag!.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Empty(testable.Backend.DragsStarted);
+    }
+
+    [Fact]
+    public async Task SimulateDropAsync_RejectsAnEmptyPackage()
+    {
+        using var testable = CreateShown();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => HermesDragDropTesting.SimulateDropAsync(testable.Window, new HermesDataPackage(), 0, 0));
+    }
+
     [Theory]
     [InlineData("not-a-mime")]
     [InlineData("text/plain")]

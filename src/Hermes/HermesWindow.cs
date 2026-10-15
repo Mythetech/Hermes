@@ -314,12 +314,12 @@ public sealed class HermesWindow : IDisposable
     public HermesWindow SetDragDrop(bool enabled, IReadOnlyList<string>? customTypes = null)
     {
         ThrowIfInitialized();
-        customTypes ??= [];
-        foreach (var type in customTypes)
+        string[] copy = [.. customTypes ?? []];
+        foreach (var type in copy)
             DataPackageValidator.ThrowIfInvalidCustomType(type, nameof(customTypes));
 
         _options.DragDrop = enabled;
-        _options.DropCustomTypes = customTypes;
+        _options.DropCustomTypes = copy;
         return this;
     }
 
@@ -921,6 +921,9 @@ public sealed class HermesWindow : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        // Some close paths never raise Closing, so drag and drop state is released here too.
+        OnClosingForDragDrop();
+        DropRegistry.Shared.Release(this);
         _backend.Dispose();
     }
 

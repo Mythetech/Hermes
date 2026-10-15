@@ -16,6 +16,8 @@ public static class HermesDragDropTesting
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(data);
+        if (data.IsEmpty)
+            throw new ArgumentException("An empty package never produces a drop.", nameof(data));
         return window.SimulateDropForTesting(data, x, y);
     }
 }
