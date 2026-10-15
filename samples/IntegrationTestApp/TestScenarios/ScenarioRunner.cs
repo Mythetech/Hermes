@@ -767,7 +767,7 @@ public sealed class ScenarioRunner : IDisposable
                 param([string]$Marker)
                 Add-Type -AssemblyName System.Windows.Forms
                 Add-Type -Namespace W -Name U -MemberDefinition '[DllImport("user32.dll")] public static extern bool OpenClipboard(System.IntPtr h); [DllImport("user32.dll")] public static extern bool CloseClipboard();'
-                # A clipboard opened with a NULL owner does not lock out other processes; tie the open to a window.
+                # Two opens with a NULL owner do not exclude each other, so the holder opens with a window.
                 $form = New-Object System.Windows.Forms.Form
                 $opened = [W.U]::OpenClipboard($form.Handle)
                 [System.IO.File]::WriteAllText($Marker, [string]$opened)
@@ -781,7 +781,7 @@ public sealed class ScenarioRunner : IDisposable
                 UseShellExecute = false,
             })!;
 
-            // Redirected PowerShell stdout is not flushed until exit, so a marker file signals the hold instead.
+            // The holder signals through a file once it holds the clipboard, so the write is attempted only while it is held.
             var opened = WaitForMarkerContent(marker);
             if (opened is null)
             {
@@ -806,8 +806,9 @@ public sealed class ScenarioRunner : IDisposable
             }
             watch.Stop();
 
-            TestReporter.Assert(testName, threw && watch.ElapsedMilliseconds < 1000,
-                $"Expected IOException within 1s while another process held the clipboard; threw={threw}, took {watch.ElapsedMilliseconds} ms");
+            // At least 50 ms shows the open was retried before giving up.
+            TestReporter.Assert(testName, threw && watch.ElapsedMilliseconds is >= 50 and < 1000,
+                $"Expected IOException after 50 ms to 1s of retries while another process held the clipboard; threw={threw}, took {watch.ElapsedMilliseconds} ms");
         }
         catch (Exception ex)
         {
@@ -936,9 +937,13 @@ public sealed class ScenarioRunner : IDisposable
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
             })!;
-            var output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit(10_000);
-            return output.Trim().Equals("True", StringComparison.OrdinalIgnoreCase);
+            // The output is one word, so waiting before reading cannot fill the pipe.
+            if (!process.WaitForExit(10_000))
+            {
+                process.Kill();
+                throw new TimeoutException("powershell did not report the legacy image format within 10s");
+            }
+            return process.StandardOutput.ReadToEnd().Trim().Equals("True", StringComparison.OrdinalIgnoreCase);
         }
 
         return true;
