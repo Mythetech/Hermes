@@ -68,4 +68,15 @@ public sealed class DataPackageValidatorTests
         {
             Custom = new Dictionary<string, ReadOnlyMemory<byte>> { [mimeType] = new byte[] { 1 } },
         }));
+
+    [Theory]
+    [InlineData("relative/path")]
+    [InlineData("file:///tmp/a.txt")]
+    public void ValidateForWrite_RejectsRelativeAndFileUrls(string url) =>
+        Assert.Throws<ArgumentException>(() => DataPackageValidator.ValidateForWrite(
+            new HermesDataPackage { Url = new Uri(url, UriKind.RelativeOrAbsolute) }));
+
+    [Fact]
+    public void ValidateForWrite_AcceptsAnHttpsUrlAlone() =>
+        DataPackageValidator.ValidateForWrite(new HermesDataPackage { Url = new Uri("https://example.com/a?b=c#d") });
 }

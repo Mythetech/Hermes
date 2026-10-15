@@ -54,4 +54,13 @@ public sealed class HermesDataPackageTests
         Assert.NotNull(package.Custom);
         Assert.True(package.IsEmpty);
     }
+
+    [Fact]
+    public void Formats_ReportsUrl_AndAUrlAloneIsNotEmpty()
+    {
+        var package = new HermesDataPackage { Url = new Uri("https://example.com/") };
+
+        Assert.Equal(HermesDataFormats.Url, package.Formats);
+        Assert.False(package.IsEmpty);
+    }
 }
