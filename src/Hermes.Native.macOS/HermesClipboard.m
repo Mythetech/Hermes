@@ -201,10 +201,10 @@ void HermesClipboard_Clear(void) {
     });
 }
 
-void HermesClipboard_StartMonitoring(HermesClipboardChangedCallback callback) {
-    atomic_store(&g_changedCallback, callback);
-    RunOnMainAsync(^{
-        [g_monitorTimer invalidate];
+// Reconciles the timer with the latest request, so a stale queued call can never undo a newer one.
+static void ApplyMonitoringState(void) {
+    BOOL wanted = atomic_load(&g_changedCallback) != NULL;
+    if (wanted && g_monitorTimer == nil) {
         g_lastChangeCount = [NSPasteboard generalPasteboard].changeCount;
         // macOS has no pasteboard change notification; polling the counter reads no content.
         g_monitorTimer = [NSTimer timerWithTimeInterval:0.5 repeats:YES block:^(NSTimer* timer) {
@@ -219,13 +219,22 @@ void HermesClipboard_StartMonitoring(HermesClipboardChangedCallback callback) {
             }
         }];
         [[NSRunLoop mainRunLoop] addTimer:g_monitorTimer forMode:NSRunLoopCommonModes];
+    } else if (!wanted && g_monitorTimer != nil) {
+        [g_monitorTimer invalidate];
+        g_monitorTimer = nil;
+    }
+}
+
+void HermesClipboard_StartMonitoring(HermesClipboardChangedCallback callback) {
+    atomic_store(&g_changedCallback, callback);
+    RunOnMainAsync(^{
+        ApplyMonitoringState();
     });
 }
 
 void HermesClipboard_StopMonitoring(void) {
     atomic_store(&g_changedCallback, NULL);
     RunOnMainAsync(^{
-        [g_monitorTimer invalidate];
-        g_monitorTimer = nil;
+        ApplyMonitoringState();
     });
 }

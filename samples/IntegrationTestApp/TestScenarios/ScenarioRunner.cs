@@ -70,6 +70,7 @@ public sealed class ScenarioRunner : IDisposable
         {
             RunClipboardRichRoundTripTest();
             await RunClipboardChangedTestAsync();
+            await RunClipboardChangedMixedThreadsTestAsync();
         }
 
         // Web message test runs LAST - gives WebView2 maximum time to initialize
@@ -717,6 +718,43 @@ public sealed class ScenarioRunner : IDisposable
         finally
         {
             Clipboard.Changed -= handler;
+        }
+    }
+
+    private async Task RunClipboardChangedMixedThreadsTestAsync()
+    {
+        const string testName = "clipboard-changed-mixed-threads";
+        TestReporter.Start(testName);
+        var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Action first = () => { };
+        Action second = () => changed.TrySetResult();
+
+        try
+        {
+            Clipboard.Changed += first;
+            await Task.Delay(TimeSpan.FromSeconds(1));
+
+            // The background unsubscribe queues its stop behind the main thread, which subscribes again before it runs.
+            _app.MainWindow.Invoke(() =>
+            {
+                Task.Run(() => Clipboard.Changed -= first).Wait();
+                Clipboard.Changed += second;
+            });
+
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            ExternalClipboard.WriteText($"hermes-external-{Guid.NewGuid():N}");
+
+            var raised = await Task.WhenAny(changed.Task, Task.Delay(TimeSpan.FromSeconds(10))) == changed.Task;
+            TestReporter.Assert(testName, raised, "Changed was not raised after a background unsubscribe and a main-thread subscribe");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail(testName, ex.Message);
+        }
+        finally
+        {
+            Clipboard.Changed -= first;
+            Clipboard.Changed -= second;
         }
     }
 
