@@ -25,7 +25,7 @@ public sealed class DesktopDragDropTests
         var package = new HermesDataPackage { Text = "x" };
 
         testable.Backend.SimulateDrop(package, 1, 2);
-        var result = await dragDrop.StartDragAsync(package);
+        var result = await dragDrop.StartDragAsync(package).WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Same(package, dropped?.Data);
         Assert.Equal(HermesDragResult.Dropped, result);

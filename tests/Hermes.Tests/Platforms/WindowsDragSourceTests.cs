@@ -30,7 +30,8 @@ public sealed class WindowsDragSourceTests
         });
 
         Assert.False(completedBeforeDispose);
-        Assert.Equal(HermesDragResult.Canceled, await drag!);
+        Assert.True(drag!.IsCompleted, "Dispose must cancel a queued drag");
+        Assert.Equal(HermesDragResult.Canceled, await drag!.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
     [Fact]
@@ -64,7 +65,7 @@ public sealed class WindowsDragSourceTests
         });
 
         Assert.True(completedByTheLoop);
-        Assert.Equal(HermesDragResult.Canceled, await drag!);
+        Assert.Equal(HermesDragResult.Canceled, await drag!.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
     // WindowsWindowBackend.Initialize requires an STA thread, as an app's UI thread is.

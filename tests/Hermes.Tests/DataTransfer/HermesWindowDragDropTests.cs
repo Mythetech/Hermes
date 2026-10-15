@@ -155,7 +155,7 @@ public sealed class HermesWindowDragDropTests
 
         testable.Backend.SimulateDrop(null, 96, 150.5);
 
-        var drop = await pending;
+        var drop = await pending.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Same(package, drop.Data);
         Assert.True(testable.Window.TryGetDrop(drop.Id, out _));
     }
@@ -167,7 +167,7 @@ public sealed class HermesWindowDragDropTests
         testable.Backend.DragResult = HermesDragResult.Canceled;
         var package = new HermesDataPackage { Text = "drag me" };
 
-        var result = await testable.Window.StartDragAsync(package);
+        var result = await testable.Window.StartDragAsync(package).WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Equal(HermesDragResult.Canceled, result);
         Assert.Same(package, Assert.Single(testable.Backend.DragsStarted));
@@ -212,11 +212,11 @@ public sealed class HermesWindowDragDropTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => testable.Window.StartDragAsync(package));
         completion.SetResult(HermesDragResult.Dropped);
 
-        Assert.Equal(HermesDragResult.Dropped, await first);
+        Assert.Equal(HermesDragResult.Dropped, await first.WaitAsync(TimeSpan.FromSeconds(5)));
 
         // After an await the test may resume on another thread, where the first window's backend would only queue.
         using var next = CreateShown();
-        Assert.Equal(HermesDragResult.Dropped, await next.Window.StartDragAsync(package));
+        Assert.Equal(HermesDragResult.Dropped, await next.Window.StartDragAsync(package).WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
     [Fact]
@@ -225,7 +225,7 @@ public sealed class HermesWindowDragDropTests
         using var testable = CreateShown();
         testable.Window.Close();
 
-        Assert.Equal(HermesDragResult.Canceled, await testable.Window.StartDragAsync(new HermesDataPackage { Text = "x" }));
+        Assert.Equal(HermesDragResult.Canceled, await testable.Window.StartDragAsync(new HermesDataPackage { Text = "x" }).WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.Empty(testable.Backend.DragsStarted);
     }
 
@@ -243,11 +243,11 @@ public sealed class HermesWindowDragDropTests
         testable.Window.Close();
         testable.Backend.ProcessPending();
 
-        Assert.Equal(HermesDragResult.Canceled, await drag!);
+        Assert.Equal(HermesDragResult.Canceled, await drag!.WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.Empty(testable.Backend.DragsStarted);
 
         using var other = CreateShown();
-        Assert.Equal(HermesDragResult.Dropped, await other.Window.StartDragAsync(package));
+        Assert.Equal(HermesDragResult.Dropped, await other.Window.StartDragAsync(package).WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
     [Theory]
