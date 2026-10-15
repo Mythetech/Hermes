@@ -348,6 +348,10 @@ internal static partial class LinuxNative
     [LibraryImport(LibraryName, EntryPoint = "Hermes_DragDrop_Claim")]
     internal static partial void DragDropClaim(IntPtr dragDrop, long claimId);
 
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DragDrop_BeginDrag")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static unsafe partial bool DragDropBeginDrag(IntPtr dragDrop, byte** targets, byte** data, int* lengths, int count);
+
     [LibraryImport(LibraryName, EntryPoint = "Hermes_DragDrop_Detach")]
     internal static partial void DragDropDetach(IntPtr dragDrop);
 

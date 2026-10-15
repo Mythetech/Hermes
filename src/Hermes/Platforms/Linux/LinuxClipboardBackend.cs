@@ -1,6 +1,5 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.Marshalling;
 using System.Runtime.Versioning;
 using System.Text;
 using Hermes.Abstractions;
@@ -104,37 +103,9 @@ internal sealed class LinuxClipboardBackend : IClipboardBackend
     {
         EnsureReady();
 
-        var entries = LinuxClipboardTargets.ForWrite(package);
-        var count = entries.Count;
-        var targets = (byte**)NativeMemory.AllocZeroed((nuint)Math.Max(count, 1), (nuint)sizeof(byte*));
-        var data = (byte**)NativeMemory.AllocZeroed((nuint)Math.Max(count, 1), (nuint)sizeof(byte*));
-        var lengths = (int*)NativeMemory.AllocZeroed((nuint)Math.Max(count, 1), sizeof(int));
-
-        try
-        {
-            for (var i = 0; i < count; i++)
-            {
-                var (target, bytes) = entries[i];
-                targets[i] = Utf8StringMarshaller.ConvertToUnmanaged(target);
-                data[i] = (byte*)NativeMemory.Alloc((nuint)Math.Max(bytes.Length, 1));
-                bytes.CopyTo(new Span<byte>(data[i], bytes.Length));
-                lengths[i] = bytes.Length;
-            }
-
-            if (!LinuxNative.ClipboardWrite(targets, data, lengths, count))
-                throw new IOException("The system clipboard rejected the write.");
-        }
-        finally
-        {
-            for (var i = 0; i < count; i++)
-            {
-                Utf8StringMarshaller.Free(targets[i]);
-                NativeMemory.Free(data[i]);
-            }
-            NativeMemory.Free(targets);
-            NativeMemory.Free(data);
-            NativeMemory.Free(lengths);
-        }
+        using var entries = new NativeTargetList(LinuxClipboardTargets.ForWrite(package));
+        if (!LinuxNative.ClipboardWrite(entries.Targets, entries.Data, entries.Lengths, entries.Count))
+            throw new IOException("The system clipboard rejected the write.");
     }
 
     public void Clear()

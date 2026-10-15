@@ -408,6 +408,28 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
     #region Drag and Drop
 
+    public unsafe Task<HermesDragResult> StartDragAsync(HermesDataPackage package)
+    {
+        if (_dragDrop == IntPtr.Zero || _dragCompletion is not null)
+            return Task.FromResult(HermesDragResult.Canceled);
+
+        var completion = new TaskCompletionSource<HermesDragResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _dragCompletion = completion;
+
+        try
+        {
+            using var entries = new NativeTargetList(LinuxClipboardTargets.ForWrite(package));
+            if (LinuxNative.DragDropBeginDrag(_dragDrop, entries.Targets, entries.Data, entries.Lengths, entries.Count))
+                return completion.Task;
+        }
+        catch (EntryPointNotFoundException)
+        {
+        }
+
+        _dragCompletion = null;
+        return Task.FromResult(HermesDragResult.Canceled);
+    }
+
     private void AttachDragDrop(IReadOnlyList<string> customTypes)
     {
         _dropCustomTypes = customTypes;

@@ -53,6 +53,14 @@ public sealed class LinuxWindowBackendDragDropTests
     }
 
     [Fact]
+    public async Task StartDragAsync_WithoutTheShim_ReturnsCanceled()
+    {
+        using IHermesWindowBackend backend = new LinuxWindowBackend();
+
+        Assert.Equal(HermesDragResult.Canceled, await backend.StartDragAsync(new HermesDataPackage { Text = "x" }));
+    }
+
+    [Fact]
     public void ASubscriberThatThrows_DoesNotEscapeTheMessagePath()
     {
         using var backend = new LinuxWindowBackend { DragDropEnabled = true };
