@@ -5,6 +5,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "HermesTypes.h"
+#import "HermesWebView.h"
 
 @class HermesWindowDelegate;
 @class HermesUiDelegate;
@@ -21,7 +22,7 @@
 @interface HermesWindow : NSObject
 
 @property (nonatomic, strong) NSWindow* window;
-@property (nonatomic, strong) WKWebView* webView;
+@property (nonatomic, strong) HermesWebView* webView;
 @property (nonatomic, strong) WKWebViewConfiguration* webViewConfiguration;
 @property (nonatomic, strong) HermesWindowDelegate* windowDelegate;
 @property (nonatomic, strong) HermesUiDelegate* uiDelegate;
@@ -45,6 +46,9 @@
 @property (nonatomic, assign) BOOL devToolsEnabled;
 @property (nonatomic, assign) BOOL customTitleBar;
 @property (nonatomic, assign) BOOL transparent;
+@property (nonatomic, assign) BOOL dragDrop;
+@property (nonatomic, copy) NSString* dragDropScript;
+@property (nonatomic, copy) NSArray<NSString*>* dropCustomTypes;
 
 // Drag tracking (hybrid approach - JS informs about no-drag regions)
 @property (nonatomic, strong) id mouseDownMonitor;

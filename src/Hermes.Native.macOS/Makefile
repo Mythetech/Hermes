@@ -21,6 +21,7 @@ ARCH_X86_64 = -arch x86_64
 
 # Source files
 SOURCES = HermesWindow.m \
+          HermesWebView.m \
           HermesWindowDelegate.m \
           HermesUrlSchemeHandler.m \
           HermesUiDelegate.m \

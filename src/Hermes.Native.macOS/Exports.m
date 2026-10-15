@@ -271,6 +271,15 @@ void Hermes_Window_RegisterCustomScheme(void* window, const char* scheme) {
     }
 }
 
+#pragma mark - Drag and Drop
+
+bool Hermes_Window_TakeDropCapture(void* window, HermesNativePackage* package) {
+    @autoreleasepool {
+        HermesWindow* hermesWindow = (__bridge HermesWindow*)window;
+        return [hermesWindow.webView takeDropCapture:package];
+    }
+}
+
 #pragma mark - Threading
 
 void Hermes_Window_Invoke(void* window, InvokeCallback callback) {
@@ -899,6 +908,12 @@ void Hermes_Notifications_Destroy(void* center) {
 void Hermes_Free(void* ptr) {
     if (ptr) {
         free(ptr);
+    }
+}
+
+void Hermes_FreeNativePackage(HermesNativePackage* package) {
+    if (package) {
+        HermesNativePackage_Free(package);
     }
 }
 

@@ -104,6 +104,13 @@ void Hermes_Window_SendWebMessage(void* window, const char* message);
 void Hermes_Window_RegisterCustomScheme(void* window, const char* scheme);
 
 // ============================================================================
+// Drag and Drop (main thread only)
+// ============================================================================
+
+/// Move the latest drop another app made on the window into package; free it with Hermes_FreeNativePackage
+bool Hermes_Window_TakeDropCapture(void* window, HermesNativePackage* package);
+
+// ============================================================================
 // Threading
 // ============================================================================
 
@@ -303,6 +310,9 @@ void Hermes_Free(void* ptr);
 
 /// Free an array of strings allocated by Hermes
 void Hermes_FreeStringArray(char** array, int count);
+
+/// Free the contents of a package filled in by Hermes
+void Hermes_FreeNativePackage(HermesNativePackage* package);
 
 // ============================================================================
 // Notifications

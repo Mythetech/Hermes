@@ -50,6 +50,7 @@ typedef struct {
     bool ContextMenuEnabled;
     bool CustomTitleBar;
     bool Transparent;
+    bool DragDrop;
 
     // Event callbacks
     ClosingCallback OnClosing;
@@ -64,9 +65,20 @@ typedef struct {
     // Custom URL schemes to register (must be set before WebView creation)
     const char* CustomSchemeNames[16];
 
+    // With DragDrop: the page's drop script, and the custom MIME types to read from drops, one per line
+    const char* DragDropScript;
+    const char* DropCustomTypes;
+
 } HermesWindowParams;
 
+// MacNativeParams.cs mirrors this layout.
+_Static_assert(offsetof(HermesWindowParams, DragDrop) == 75, "HermesWindowParams no longer matches its managed mirror");
+_Static_assert(offsetof(HermesWindowParams, OnClosing) == 80, "HermesWindowParams no longer matches its managed mirror");
+_Static_assert(offsetof(HermesWindowParams, DragDropScript) == 272, "HermesWindowParams no longer matches its managed mirror");
+_Static_assert(sizeof(HermesWindowParams) == 288, "HermesWindowParams no longer matches its managed mirror");
+
 // Data in several formats crossing the library boundary. Absent formats are NULL with a zero count or length.
+// A package the library fills in is released with Hermes_FreeNativePackage.
 typedef struct {
     char* Text;
     char* Html;

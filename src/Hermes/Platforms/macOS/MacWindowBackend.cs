@@ -3,6 +3,8 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
 using Hermes.Abstractions;
+using Hermes.Contracts.DataTransfer;
+using Hermes.DataTransfer;
 
 namespace Hermes.Platforms.macOS;
 
@@ -16,6 +18,7 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
     private int _uiThreadId;
     private bool _initialized;
     private bool _disposed;
+    private bool _dragDrop;
 
     // Keep strong references to delegates to prevent GC during window lifetime
     private readonly List<Delegate> _pinnedDelegates = new();
@@ -61,6 +64,7 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
 
         _uiThreadId = Environment.CurrentManagedThreadId;
         IsCustomTitleBarActive = options.CustomTitleBar;
+        _dragDrop = options.DragDrop;
 
         // Create native parameter struct
         var parameters = new HermesWindowParams
@@ -83,7 +87,8 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
             DevToolsEnabled = options.DevToolsEnabled,
             ContextMenuEnabled = options.ContextMenuEnabled,
             CustomTitleBar = options.CustomTitleBar,
-            Transparent = options.Transparent
+            Transparent = options.Transparent,
+            DragDrop = options.DragDrop
         };
 
         // Marshal strings
@@ -91,6 +96,12 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
         parameters.StartUrl = MarshalString(options.StartUrl);
         parameters.StartHtml = MarshalString(options.StartHtml);
         parameters.IconPath = MarshalString(options.IconPath);
+
+        if (options.DragDrop)
+        {
+            parameters.DragDropScript = MarshalString(DragDropScript.Source);
+            parameters.DropCustomTypes = MarshalString(string.Join('\n', options.DropCustomTypes));
+        }
 
         // Initialize custom scheme names array (must be done before WindowCreate on macOS)
         parameters.CustomSchemeNames = new IntPtr[16];
@@ -122,6 +133,8 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
             FreeString(parameters.StartUrl);
             FreeString(parameters.StartHtml);
             FreeString(parameters.IconPath);
+            FreeString(parameters.DragDropScript);
+            FreeString(parameters.DropCustomTypes);
 
             // Free scheme name strings
             foreach (var ptr in parameters.CustomSchemeNames)
@@ -403,6 +416,7 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
     public event Action<string>? WebMessageReceived;
     public event Action? Maximized;
     public event Action? Restored;
+    public event Action<HermesDropReport>? DropReported;
 
     public Func<bool>? CloseRequestedHandler { get; set; }
 
@@ -525,10 +539,55 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
         Diagnostics.HermesCrashInterceptor.NotifyCrash(context);
     }
 
-    private void OnNativeWebMessage(IntPtr messagePtr)
+    private void OnNativeWebMessage(IntPtr messagePtr) =>
+        HandleWebMessage(Marshal.PtrToStringUTF8(messagePtr) ?? "");
+
+    /// <summary>Raises the drop script's messages as drop reports in a window with drag and drop; the rest are web messages.</summary>
+    internal void HandleWebMessage(string message)
     {
-        var message = Marshal.PtrToStringUTF8(messagePtr) ?? "";
-        WebMessageReceived?.Invoke(message);
+        if (!_dragDrop || !DropMessage.IsDropProtocol(message))
+        {
+            WebMessageReceived?.Invoke(message);
+            return;
+        }
+
+        // Runs inside a native callback, where an exception would end the process.
+        try
+        {
+            if (ToDropReport(message, TakeDropCapture) is { } report)
+                DropReported?.Invoke(report);
+        }
+        catch (Exception ex)
+        {
+            HermesApplication.RaiseDispatcherUnhandledException(ex);
+        }
+    }
+
+    /// <summary>
+    /// The report for a drop-script message, with the native capture for a drop, or null when the message does not parse.
+    /// </summary>
+    internal static HermesDropReport? ToDropReport(string message, Func<HermesDataPackage?> takeCapture) =>
+        DropMessage.TryParse(message) switch
+        {
+            null => null,
+            { Kind: HermesDropReportKind.Drop } drop => drop.ToReport(takeCapture()),
+            var other => other.ToReport(null),
+        };
+
+    private unsafe HermesDataPackage? TakeDropCapture()
+    {
+        var native = default(HermesNativePackage);
+        if (!MacNative.WindowTakeDropCapture(_windowHandle, &native))
+            return null;
+
+        try
+        {
+            return MacNativePackage.Read(native);
+        }
+        finally
+        {
+            MacNative.FreeNativePackage(&native);
+        }
     }
 
     private IntPtr OnNativeCustomScheme(IntPtr urlPtr, out int numBytes, out IntPtr contentTypePtr)

@@ -62,14 +62,16 @@ internal struct HermesWindowParams
     [MarshalAs(UnmanagedType.U1)]
     public bool Transparent;
 
+    [MarshalAs(UnmanagedType.U1)]
+    public bool DragDrop;
+
     // Explicit padding to align to 8-byte boundary for next pointer field
     // C compiler adds this automatically; C# Sequential layout does not
-    // 11 bools = 11 bytes, need 5 more to reach 16 bytes (multiple of 8)
+    // 12 bools = 12 bytes, need 4 more to reach 16 bytes (multiple of 8)
     private byte _pad0;
     private byte _pad1;
     private byte _pad2;
     private byte _pad3;
-    private byte _pad4;
 
     // Callback function pointers
     public IntPtr OnClosing;
@@ -85,4 +87,8 @@ internal struct HermesWindowParams
     // Fixed-size array of 16 pointers to UTF-8 strings
     [MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)]
     public IntPtr[] CustomSchemeNames;
+
+    // With DragDrop: the page's drop script, and the custom MIME types to read from drops, one per line
+    public IntPtr DragDropScript;
+    public IntPtr DropCustomTypes;
 }

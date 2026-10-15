@@ -26,5 +26,9 @@ void HermesClipboard_StopMonitoring(void);
 NSPasteboardType HermesPasteboard_TypeForMime(NSString* mimeType);
 NSPasteboardItem* HermesPasteboard_CreateItem(const HermesNativePackage* package);
 NSArray<NSURL*>* HermesPasteboard_FileUrls(const HermesNativePackage* package);
+void HermesPasteboard_ReadAll(NSPasteboard* pasteboard, NSArray<NSString*>* customTypes, HermesNativePackage* package);
+
+// Frees what HermesPasteboard_ReadAll allocated and clears the package.
+void HermesNativePackage_Free(HermesNativePackage* package);
 
 #endif

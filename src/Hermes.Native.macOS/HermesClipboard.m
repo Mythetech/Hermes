@@ -196,6 +196,53 @@ NSArray<NSURL*>* HermesPasteboard_FileUrls(const HermesNativePackage* package) {
     return urls;
 }
 
+// Reads every standard format plus the listed custom MIME types, each allocated with malloc.
+void HermesPasteboard_ReadAll(NSPasteboard* pasteboard, NSArray<NSString*>* customTypes, HermesNativePackage* package) {
+    memset(package, 0, sizeof(*package));
+    package->Text = CopyUtf8(ReadText(pasteboard));
+    package->Html = CopyUtf8(ReadHtml(pasteboard));
+    package->Url = CopyUtf8(ReadUrl(pasteboard));
+    package->Png = CopyBytes(ReadPng(pasteboard), &package->PngLength);
+    package->Files = CopyUtf8Array(ReadFiles(pasteboard), &package->FileCount);
+
+    if (customTypes.count == 0) {
+        return;
+    }
+    package->CustomTypes = calloc(customTypes.count, sizeof(char*));
+    package->CustomData = calloc(customTypes.count, sizeof(uint8_t*));
+    package->CustomLengths = calloc(customTypes.count, sizeof(int));
+    for (NSString* mimeType in customTypes) {
+        int length = 0;
+        uint8_t* data = CopyBytes([pasteboard dataForType:HermesPasteboard_TypeForMime(mimeType)], &length);
+        if (data == NULL) {
+            continue;
+        }
+        int i = package->CustomCount++;
+        package->CustomTypes[i] = CopyUtf8(mimeType);
+        package->CustomData[i] = data;
+        package->CustomLengths[i] = length;
+    }
+}
+
+void HermesNativePackage_Free(HermesNativePackage* package) {
+    free(package->Text);
+    free(package->Html);
+    free(package->Url);
+    free(package->Png);
+    for (int i = 0; package->Files != NULL && i < package->FileCount; i++) {
+        free(package->Files[i]);
+    }
+    free(package->Files);
+    for (int i = 0; package->CustomTypes != NULL && i < package->CustomCount; i++) {
+        free(package->CustomTypes[i]);
+        free(package->CustomData[i]);
+    }
+    free(package->CustomTypes);
+    free(package->CustomData);
+    free(package->CustomLengths);
+    memset(package, 0, sizeof(*package));
+}
+
 int HermesClipboard_GetFormats(void) {
     __block int formats = 0;
     RunOnMainSync(^{

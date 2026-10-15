@@ -111,6 +111,14 @@ internal static partial class MacNative
 
     #endregion
 
+    #region Drag and Drop
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Window_TakeDropCapture")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static unsafe partial bool WindowTakeDropCapture(IntPtr window, HermesNativePackage* package);
+
+    #endregion
+
     #region Threading
 
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Window_Invoke")]
@@ -409,6 +417,9 @@ internal static partial class MacNative
 
     [LibraryImport(LibraryName, EntryPoint = "Hermes_FreeStringArray")]
     internal static partial void FreeStringArray(IntPtr array, int count);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_FreeNativePackage")]
+    internal static unsafe partial void FreeNativePackage(HermesNativePackage* package);
 
     #endregion
 

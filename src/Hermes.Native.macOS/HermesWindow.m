@@ -30,6 +30,15 @@
 // The window whose waitForClose is running [NSApp run]. Weak, because the managed side owns the window.
 static __weak HermesWindow* g_runLoopWindow = nil;
 
+// Managed code joins the types with newlines, which a MIME type cannot contain.
+static NSArray<NSString*>* SplitLines(const char* joined) {
+    if (joined == NULL) {
+        return @[];
+    }
+    NSArray<NSString*>* lines = [[NSString stringWithUTF8String:joined] componentsSeparatedByString:@"\n"];
+    return [lines filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"length > 0"]];
+}
+
 @implementation HermesWindow
 
 - (instancetype)initWithParams:(const HermesWindowParams*)params {
@@ -126,6 +135,9 @@ static __weak HermesWindow* g_runLoopWindow = nil;
         _webViewConfiguration = [[WKWebViewConfiguration alloc] init];
         _devToolsEnabled = params->DevToolsEnabled;
         _customTitleBar = params->CustomTitleBar;
+        _dragDrop = params->DragDrop;
+        _dragDropScript = params->DragDropScript ? [NSString stringWithUTF8String:params->DragDropScript] : nil;
+        _dropCustomTypes = SplitLines(params->DropCustomTypes);
 
         WKPreferences* prefs = _webViewConfiguration.preferences;
 
@@ -249,6 +261,13 @@ static __weak HermesWindow* g_runLoopWindow = nil;
     WKUserContentController* contentController = [[WKUserContentController alloc] init];
     [contentController addUserScript:userScript];
 
+    // After the bridge script, because the drop script talks through window.external.
+    if (_dragDrop && _dragDropScript != nil) {
+        [contentController addUserScript:[[WKUserScript alloc] initWithSource:_dragDropScript
+                                                                injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                                                             forMainFrameOnly:YES]];
+    }
+
     _uiDelegate = [[HermesUiDelegate alloc] init];
     _uiDelegate.hermesWindow = self;
     [contentController addScriptMessageHandler:_uiDelegate name:@"hermesinterop"];
@@ -264,8 +283,11 @@ static __weak HermesWindow* g_runLoopWindow = nil;
     }
     [_pendingSchemes removeAllObjects];
 
-    _webView = [[WKWebView alloc] initWithFrame:_window.contentView.bounds
-                                  configuration:_webViewConfiguration];
+    _webView = [[HermesWebView alloc] initWithFrame:_window.contentView.bounds
+                                      configuration:_webViewConfiguration];
+    if (_dragDrop) {
+        [_webView enableDragDropWithCustomTypes:_dropCustomTypes];
+    }
 
     if (_devToolsEnabled) {
         if (@available(macOS 13.3, *)) {
