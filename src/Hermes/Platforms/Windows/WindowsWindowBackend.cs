@@ -1162,9 +1162,9 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
                     paths.Add(path);
             }
         }
-        catch (Exception ex) when (ex is COMException or NotImplementedException)
+        catch (Exception)
         {
-            // An older runtime or an unreadable file still leaves the drop's text, HTML and URL.
+            // An older runtime or an unreadable file, or any other failure, still leaves the drop's text, HTML and URL.
         }
 
         return paths;
