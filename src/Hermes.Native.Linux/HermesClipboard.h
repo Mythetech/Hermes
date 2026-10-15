@@ -15,6 +15,5 @@ bool HermesClipboard_Write(const char** targets, const uint8_t** data, const int
 void HermesClipboard_Clear(void);
 void HermesClipboard_StartMonitoring(HermesClipboardChangedCallback callback);
 void HermesClipboard_StopMonitoring(void);
-void HermesClipboard_StoreOnExit(void);
 
 #endif

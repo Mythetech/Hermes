@@ -1,7 +1,6 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 #include "HermesWindow.h"
 #include "Exports.h"
-#include "HermesClipboard.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -54,7 +53,6 @@ gboolean hermes_is_ui_thread(void) {
 
 void Hermes_App_Run(void) {
     gtk_main();
-    HermesClipboard_StoreOnExit();
 }
 
 void Hermes_App_Quit(void) {
@@ -850,9 +848,6 @@ void Hermes_Window_WaitForClose(void* window) {
     g_loopWindow = hw;
     gtk_main();
     g_loopWindow = outerLoopWindow;
-    if (outerLoopWindow == NULL) {
-        HermesClipboard_StoreOnExit();
-    }
 }
 
 void Hermes_Window_Destroy(void* window) {

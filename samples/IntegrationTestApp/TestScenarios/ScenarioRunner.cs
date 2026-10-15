@@ -713,6 +713,25 @@ public sealed class ScenarioRunner : IDisposable
             var custom = Clipboard.Read(HermesDataFormats.None, [customType]);
             Check("custom", custom.Custom.TryGetValue(customType, out var readCustom) && readCustom.Span.SequenceEqual(customBytes));
 
+            // GTK converts other image targets to PNG, and X11 target names are case-sensitive.
+            if (OperatingSystem.IsLinux())
+            {
+                Clipboard.Write(new HermesDataPackage
+                {
+                    Custom = new Dictionary<string, ReadOnlyMemory<byte>> { ["image/bmp"] = TestBmp.Create2x2() },
+                });
+                Check("bmp as png", Clipboard.Read(HermesDataFormats.Png).Png is { } bmpPng
+                    && bmpPng.Span.StartsWith((ReadOnlySpan<byte>)[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]));
+
+                Clipboard.Write(new HermesDataPackage
+                {
+                    Custom = new Dictionary<string, ReadOnlyMemory<byte>> { ["application/x-hermes-case"] = new byte[] { 1 } },
+                });
+                var upper = Clipboard.Read(HermesDataFormats.None, ["APPLICATION/X-HERMES-CASE"]);
+                Check("custom read ignoring case", upper.Custom.TryGetValue("APPLICATION/X-HERMES-CASE", out var upperBytes)
+                    && upperBytes.Span.SequenceEqual(new byte[] { 1 }));
+            }
+
             Clipboard.Clear();
             Check("clear", Clipboard.GetFormats() == HermesDataFormats.None);
 

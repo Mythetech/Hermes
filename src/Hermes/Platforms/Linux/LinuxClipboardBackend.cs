@@ -70,10 +70,18 @@ internal sealed class LinuxClipboardBackend : IClipboardBackend
         }
 
         var custom = new Dictionary<string, ReadOnlyMemory<byte>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var mimeType in customTypes)
+        if (customTypes.Count > 0)
         {
-            if (ReadContents(mimeType) is { } data)
-                custom[mimeType] = data;
+            // X11 target names are case-sensitive, so read each type under the name the owner offered.
+            var targets = GetTargets();
+            foreach (var mimeType in customTypes)
+            {
+                var target = targets.Contains(mimeType)
+                    ? mimeType
+                    : targets.FirstOrDefault(t => t.Equals(mimeType, StringComparison.OrdinalIgnoreCase));
+                if (target is not null && ReadContents(target) is { } data)
+                    custom[mimeType] = data;
+            }
         }
 
         return new HermesDataPackage { Text = text, Html = html, Png = png, Files = files, Custom = custom };
@@ -146,7 +154,7 @@ internal sealed class LinuxClipboardBackend : IClipboardBackend
     private void EnsureReady()
     {
         if (!_isReady())
-            throw new InvalidOperationException("The Linux clipboard is available once a Hermes window or application has initialized GTK.");
+            throw new InvalidOperationException("The Linux clipboard is available once a Hermes window has initialized GTK.");
     }
 
     private IReadOnlyList<string> GetTargets()

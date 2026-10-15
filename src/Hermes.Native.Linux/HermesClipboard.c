@@ -1,7 +1,5 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 #include <gtk/gtk.h>
-#include <stdlib.h>
-#include <string.h>
 #include "HermesClipboard.h"
 #include "HermesWindow.h"
 
@@ -22,7 +20,6 @@ typedef struct {
 
 static gulong g_ownerChangeHandler = 0;
 static gpointer g_changedCallback = NULL;
-static gboolean g_ownsClipboard = FALSE;
 
 static GtkClipboard* hermes_clipboard(void) {
     return gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
@@ -75,11 +72,12 @@ static gboolean get_targets_work(gpointer data) {
     GdkAtom* atoms = NULL;
     gint count = 0;
     if (gtk_clipboard_wait_for_targets(hermes_clipboard(), &atoms, &count) && count > 0) {
-        call->targets = malloc(sizeof(char*) * (size_t)count);
+        call->targets = g_new0(char*, count);
         for (gint i = 0; i < count; i++) {
             gchar* name = gdk_atom_name(atoms[i]);
-            call->targets[call->count++] = strdup(name);
-            g_free(name);
+            if (name != NULL) {
+                call->targets[call->count++] = name;
+            }
         }
     }
     g_free(atoms);
@@ -97,11 +95,7 @@ typedef struct { char* text; } TextCall;
 
 static gboolean read_text_work(gpointer data) {
     TextCall* call = data;
-    gchar* text = gtk_clipboard_wait_for_text(hermes_clipboard());
-    if (text != NULL) {
-        call->text = strdup(text);
-        g_free(text);
-    }
+    call->text = gtk_clipboard_wait_for_text(hermes_clipboard());
     return G_SOURCE_REMOVE;
 }
 
@@ -120,8 +114,7 @@ static gboolean read_contents_work(gpointer data) {
         gint length = gtk_selection_data_get_length(selection);
         const guchar* raw = gtk_selection_data_get_data(selection);
         if (length > 0 && raw != NULL) {
-            call->bytes = malloc((size_t)length);
-            memcpy(call->bytes, raw, (size_t)length);
+            call->bytes = g_memdup2(raw, (gsize)length);
             call->length = length;
         }
         gtk_selection_data_free(selection);
@@ -143,11 +136,11 @@ static gboolean read_image_work(gpointer data) {
         gchar* buffer = NULL;
         gsize size = 0;
         if (gdk_pixbuf_save_to_buffer(pixbuf, &buffer, &size, "png", NULL, NULL) && size > 0) {
-            call->bytes = malloc(size);
-            memcpy(call->bytes, buffer, size);
+            call->bytes = (uint8_t*)buffer;
             call->length = (int)size;
+        } else {
+            g_free(buffer);
         }
-        g_free(buffer);
         g_object_unref(pixbuf);
     }
     return G_SOURCE_REMOVE;
@@ -179,7 +172,6 @@ static void owned_clear(GtkClipboard* clipboard, gpointer user_data) {
     g_free(owned->data);
     g_free(owned->lengths);
     g_free(owned);
-    g_ownsClipboard = FALSE;
 }
 
 typedef struct {
@@ -207,7 +199,6 @@ static gboolean write_work(gpointer data) {
     GtkClipboard* clipboard = hermes_clipboard();
     call->written = gtk_clipboard_set_with_data(clipboard, owned->entries, (guint)call->count, owned_get, owned_clear, owned);
     if (call->written) {
-        g_ownsClipboard = TRUE;
         // Lets a running clipboard manager keep the contents after the app exits.
         gtk_clipboard_set_can_store(clipboard, NULL, 0);
     } else {
@@ -261,10 +252,4 @@ void HermesClipboard_StartMonitoring(HermesClipboardChangedCallback callback) {
 void HermesClipboard_StopMonitoring(void) {
     g_atomic_pointer_set(&g_changedCallback, NULL);
     run_on_ui_async(apply_monitoring_state);
-}
-
-void HermesClipboard_StoreOnExit(void) {
-    if (g_ownsClipboard) {
-        gtk_clipboard_store(hermes_clipboard());
-    }
 }

@@ -20,5 +20,13 @@ public sealed class LinuxClipboardBackendTests
         Assert.Throws<InvalidOperationException>(() => backend.Write(new HermesDataPackage { Text = "a" }));
         Assert.Throws<InvalidOperationException>(() => backend.GetFormats());
     }
+
+    [Fact]
+    public void StartMonitoring_BeforeGtkIsInitialized_ThrowsInvalidOperation()
+    {
+        using var backend = new LinuxClipboardBackend(isReady: () => false);
+
+        Assert.Throws<InvalidOperationException>(backend.StartMonitoring);
+    }
 }
 #endif
