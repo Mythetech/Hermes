@@ -15,6 +15,10 @@
     <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
   </PropertyGroup>
 
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <DefineConstants>$(DefineConstants);MACOS</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="bunit" Version="2.11.3" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />

@@ -271,6 +271,22 @@ void Hermes_Window_RegisterCustomScheme(void* window, const char* scheme) {
     }
 }
 
+#pragma mark - Drag and Drop
+
+bool Hermes_Window_TakeDropCapture(void* window, HermesNativePackage* package) {
+    @autoreleasepool {
+        HermesWindow* hermesWindow = (__bridge HermesWindow*)window;
+        return [hermesWindow.webView takeDropCapture:package];
+    }
+}
+
+bool Hermes_Window_StartDrag(void* window, const HermesNativePackage* package) {
+    @autoreleasepool {
+        HermesWindow* hermesWindow = (__bridge HermesWindow*)window;
+        return [hermesWindow startDragWithPackage:package];
+    }
+}
+
 #pragma mark - Threading
 
 void Hermes_Window_Invoke(void* window, InvokeCallback callback) {
@@ -568,15 +584,12 @@ int Hermes_Clipboard_GetFormats(void) { return HermesClipboard_GetFormats(); }
 bool Hermes_Clipboard_HasType(const char* mimeType) { return HermesClipboard_HasType(mimeType); }
 char* Hermes_Clipboard_ReadText(void) { return HermesClipboard_ReadText(); }
 char* Hermes_Clipboard_ReadHtml(void) { return HermesClipboard_ReadHtml(); }
+char* Hermes_Clipboard_ReadUrl(void) { return HermesClipboard_ReadUrl(); }
 uint8_t* Hermes_Clipboard_ReadPng(int* length) { return HermesClipboard_ReadPng(length); }
 char** Hermes_Clipboard_ReadFiles(int* count) { return HermesClipboard_ReadFiles(count); }
 uint8_t* Hermes_Clipboard_ReadCustom(const char* mimeType, int* length) { return HermesClipboard_ReadCustom(mimeType, length); }
 
-bool Hermes_Clipboard_Write(const char* text, const char* html, const uint8_t* png, int pngLength,
-                            const char** files, int fileCount,
-                            const char** customTypes, const uint8_t** customData, const int* customLengths, int customCount) {
-    return HermesClipboard_Write(text, html, png, pngLength, files, fileCount, customTypes, customData, customLengths, customCount);
-}
+bool Hermes_Clipboard_Write(const HermesNativePackage* package) { return HermesClipboard_Write(package); }
 
 void Hermes_Clipboard_Clear(void) { HermesClipboard_Clear(); }
 void Hermes_Clipboard_StartMonitoring(void (*callback)(void)) { HermesClipboard_StartMonitoring(callback); }
@@ -902,6 +915,12 @@ void Hermes_Notifications_Destroy(void* center) {
 void Hermes_Free(void* ptr) {
     if (ptr) {
         free(ptr);
+    }
+}
+
+void Hermes_FreeNativePackage(HermesNativePackage* package) {
+    if (package) {
+        HermesNativePackage_Free(package);
     }
 }
 

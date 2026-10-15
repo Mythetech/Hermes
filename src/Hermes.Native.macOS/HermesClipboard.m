@@ -7,7 +7,7 @@
 #import "HermesClipboard.h"
 
 // Must match Hermes.Contracts.DataTransfer.HermesDataFormats.
-enum { FormatText = 1, FormatHtml = 2, FormatPng = 4, FormatFiles = 8 };
+enum { FormatText = 1, FormatHtml = 2, FormatPng = 4, FormatFiles = 8, FormatUrl = 16 };
 
 static NSTimer* g_monitorTimer = nil;
 static NSInteger g_lastChangeCount = 0;
@@ -30,10 +30,13 @@ static void RunOnMainAsync(dispatch_block_t work) {
     }
 }
 
+NSPasteboardType HermesPasteboard_TypeForMime(NSString* mimeType) {
+    UTType* type = [UTType typeWithMIMEType:mimeType];
+    return type != nil ? (NSPasteboardType)type.identifier : (NSPasteboardType)mimeType;
+}
+
 static NSPasteboardType TypeForMime(const char* mimeType) {
-    NSString* mime = [NSString stringWithUTF8String:mimeType];
-    UTType* type = [UTType typeWithMIMEType:mime];
-    return type != nil ? (NSPasteboardType)type.identifier : (NSPasteboardType)mime;
+    return HermesPasteboard_TypeForMime([NSString stringWithUTF8String:mimeType]);
 }
 
 static NSDictionary* FileUrlOptions(void) {
@@ -63,6 +66,18 @@ static uint8_t* CopyBytes(NSData* data, int* length) {
     memcpy(buffer, data.bytes, data.length);
     *length = (int)data.length;
     return buffer;
+}
+
+static char** CopyUtf8Array(NSArray<NSString*>* values, int* count) {
+    *count = 0;
+    if (values.count == 0) {
+        return NULL;
+    }
+    char** result = malloc(sizeof(char*) * values.count);
+    for (NSString* value in values) {
+        result[(*count)++] = CopyUtf8(value);
+    }
+    return result;
 }
 
 // stringForType: gives up on HTML written as UTF-16, which some apps prefix with a byte order mark.
@@ -95,6 +110,139 @@ static NSString* HtmlFromRichText(NSPasteboard* pasteboard) {
     return html != nil ? [[NSString alloc] initWithData:html encoding:NSUTF8StringEncoding] : nil;
 }
 
+static NSString* ReadText(NSPasteboard* pasteboard) {
+    return [pasteboard stringForType:NSPasteboardTypeString];
+}
+
+static NSString* ReadHtml(NSPasteboard* pasteboard) {
+    NSString* html = [pasteboard stringForType:NSPasteboardTypeHTML];
+    if (html == nil) {
+        NSData* data = [pasteboard dataForType:NSPasteboardTypeHTML];
+        html = data != nil ? DecodeUtf16Html(data) : nil;
+    }
+    return html != nil ? html : HtmlFromRichText(pasteboard);
+}
+
+// File URLs are read as Files, so the first link that is not a file is the URL.
+static NSString* ReadUrl(NSPasteboard* pasteboard) {
+    for (NSURL* url in [pasteboard readObjectsForClasses:@[[NSURL class]] options:@{}]) {
+        if (!url.isFileURL) {
+            return url.absoluteString;
+        }
+    }
+    return nil;
+}
+
+static NSData* ReadPng(NSPasteboard* pasteboard) {
+    NSData* png = [pasteboard dataForType:NSPasteboardTypePNG];
+    if (png == nil && !HasFileUrls(pasteboard.types)) {
+        NSPasteboardType type = AvailableBitmapType(pasteboard);
+        NSData* data = type != nil ? [pasteboard dataForType:type] : nil;
+        NSBitmapImageRep* rep = data != nil ? [NSBitmapImageRep imageRepWithData:data] : nil;
+        png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+    }
+    return png;
+}
+
+static NSArray<NSString*>* ReadFiles(NSPasteboard* pasteboard) {
+    NSMutableArray<NSString*>* paths = [NSMutableArray array];
+    for (NSURL* url in [pasteboard readObjectsForClasses:@[[NSURL class]] options:FileUrlOptions()]) {
+        // NSURL paths come back decomposed (NFD); .NET and most apps name files in NFC, and on APFS and HFS+ lookups ignore normalization.
+        NSString* path = url.path.precomposedStringWithCanonicalMapping;
+        if (path.UTF8String != NULL) {
+            [paths addObject:path];
+        }
+    }
+    return paths;
+}
+
+// Text, HTML, the URL, the image and custom formats share one item; each file is an item of its own.
+NSPasteboardItem* HermesPasteboard_CreateItem(const HermesNativePackage* package) {
+    NSPasteboardItem* item = [[NSPasteboardItem alloc] init];
+    if (package->Text != NULL) {
+        [item setString:[NSString stringWithUTF8String:package->Text] forType:NSPasteboardTypeString];
+    }
+    if (package->Html != NULL) {
+        [item setString:[NSString stringWithUTF8String:package->Html] forType:NSPasteboardTypeHTML];
+    }
+    if (package->Url != NULL) {
+        [item setString:[NSString stringWithUTF8String:package->Url] forType:NSPasteboardTypeURL];
+    }
+    if (package->Png != NULL && package->PngLength > 0) {
+        NSData* pngData = [NSData dataWithBytes:package->Png length:(NSUInteger)package->PngLength];
+        [item setData:pngData forType:NSPasteboardTypePNG];
+        NSData* tiff = [[NSBitmapImageRep imageRepWithData:pngData] TIFFRepresentation];
+        if (tiff != nil) {
+            [item setData:tiff forType:NSPasteboardTypeTIFF];
+        }
+    }
+    for (int i = 0; i < package->CustomCount; i++) {
+        NSPasteboardType type = TypeForMime(package->CustomTypes[i]);
+        // A standard format already written for this type wins over a colliding custom key.
+        if ([item.types containsObject:type]) {
+            continue;
+        }
+        NSData* data = [NSData dataWithBytes:package->CustomData[i] length:(NSUInteger)package->CustomLengths[i]];
+        [item setData:data forType:type];
+    }
+    return item.types.count > 0 ? item : nil;
+}
+
+NSArray<NSURL*>* HermesPasteboard_FileUrls(const HermesNativePackage* package) {
+    NSMutableArray<NSURL*>* urls = [NSMutableArray array];
+    for (int i = 0; i < package->FileCount; i++) {
+        [urls addObject:[NSURL fileURLWithPath:[NSString stringWithUTF8String:package->Files[i]]]];
+    }
+    return urls;
+}
+
+// Reads every standard format plus the listed custom MIME types, each allocated with malloc.
+void HermesPasteboard_ReadAll(NSPasteboard* pasteboard, NSArray<NSString*>* customTypes, HermesNativePackage* package) {
+    memset(package, 0, sizeof(*package));
+    package->Text = CopyUtf8(ReadText(pasteboard));
+    package->Html = CopyUtf8(ReadHtml(pasteboard));
+    package->Url = CopyUtf8(ReadUrl(pasteboard));
+    package->Png = CopyBytes(ReadPng(pasteboard), &package->PngLength);
+    package->Files = CopyUtf8Array(ReadFiles(pasteboard), &package->FileCount);
+
+    if (customTypes.count == 0) {
+        return;
+    }
+    package->CustomTypes = calloc(customTypes.count, sizeof(char*));
+    package->CustomData = calloc(customTypes.count, sizeof(uint8_t*));
+    package->CustomLengths = calloc(customTypes.count, sizeof(int));
+    for (NSString* mimeType in customTypes) {
+        int length = 0;
+        uint8_t* data = CopyBytes([pasteboard dataForType:HermesPasteboard_TypeForMime(mimeType)], &length);
+        if (data == NULL) {
+            continue;
+        }
+        int i = package->CustomCount++;
+        package->CustomTypes[i] = CopyUtf8(mimeType);
+        package->CustomData[i] = data;
+        package->CustomLengths[i] = length;
+    }
+}
+
+void HermesNativePackage_Free(HermesNativePackage* package) {
+    free(package->Text);
+    free(package->Html);
+    free(package->Url);
+    free(package->Png);
+    for (int i = 0; package->Files != NULL && i < package->FileCount; i++) {
+        free(package->Files[i]);
+    }
+    free(package->Files);
+    for (int i = 0; package->CustomTypes != NULL && i < package->CustomCount; i++) {
+        free(package->CustomTypes[i]);
+        free(package->CustomData[i]);
+    }
+    free(package->CustomTypes);
+    free(package->CustomData);
+    free(package->CustomLengths);
+    memset(package, 0, sizeof(*package));
+}
+
 int HermesClipboard_GetFormats(void) {
     __block int formats = 0;
     RunOnMainSync(^{
@@ -108,6 +256,8 @@ int HermesClipboard_GetFormats(void) {
             if (files) formats |= FormatFiles;
             // Finder adds each file's icon as an image, so with files present only real PNG data counts.
             if ([types containsObject:NSPasteboardTypePNG] || (!files && AvailableBitmapType(pasteboard) != nil)) formats |= FormatPng;
+            // A link is public.url; file URLs are public.file-url and count as Files.
+            if ([types containsObject:NSPasteboardTypeURL]) formats |= FormatUrl;
         }
     });
     return formats;
@@ -128,7 +278,7 @@ char* HermesClipboard_ReadText(void) {
     __block char* result = NULL;
     RunOnMainSync(^{
         @autoreleasepool {
-            result = CopyUtf8([[NSPasteboard generalPasteboard] stringForType:NSPasteboardTypeString]);
+            result = CopyUtf8(ReadText([NSPasteboard generalPasteboard]));
         }
     });
     return result;
@@ -138,16 +288,17 @@ char* HermesClipboard_ReadHtml(void) {
     __block char* result = NULL;
     RunOnMainSync(^{
         @autoreleasepool {
-            NSPasteboard* pasteboard = [NSPasteboard generalPasteboard];
-            NSString* html = [pasteboard stringForType:NSPasteboardTypeHTML];
-            if (html == nil) {
-                NSData* data = [pasteboard dataForType:NSPasteboardTypeHTML];
-                html = data != nil ? DecodeUtf16Html(data) : nil;
-            }
-            if (html == nil) {
-                html = HtmlFromRichText(pasteboard);
-            }
-            result = CopyUtf8(html);
+            result = CopyUtf8(ReadHtml([NSPasteboard generalPasteboard]));
+        }
+    });
+    return result;
+}
+
+char* HermesClipboard_ReadUrl(void) {
+    __block char* result = NULL;
+    RunOnMainSync(^{
+        @autoreleasepool {
+            result = CopyUtf8(ReadUrl([NSPasteboard generalPasteboard]));
         }
     });
     return result;
@@ -158,15 +309,7 @@ uint8_t* HermesClipboard_ReadPng(int* length) {
     __block int resultLength = 0;
     RunOnMainSync(^{
         @autoreleasepool {
-            NSPasteboard* pasteboard = [NSPasteboard generalPasteboard];
-            NSData* png = [pasteboard dataForType:NSPasteboardTypePNG];
-            if (png == nil && !HasFileUrls(pasteboard.types)) {
-                NSPasteboardType type = AvailableBitmapType(pasteboard);
-                NSData* data = type != nil ? [pasteboard dataForType:type] : nil;
-                NSBitmapImageRep* rep = data != nil ? [NSBitmapImageRep imageRepWithData:data] : nil;
-                png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
-            }
-            result = CopyBytes(png, &resultLength);
+            result = CopyBytes(ReadPng([NSPasteboard generalPasteboard]), &resultLength);
         }
     });
     *length = resultLength;
@@ -178,24 +321,7 @@ char** HermesClipboard_ReadFiles(int* count) {
     __block int resultCount = 0;
     RunOnMainSync(^{
         @autoreleasepool {
-            NSArray<NSURL*>* urls = [[NSPasteboard generalPasteboard] readObjectsForClasses:@[[NSURL class]]
-                                                                                   options:FileUrlOptions()];
-            if (urls.count == 0) {
-                return;
-            }
-            result = malloc(sizeof(char*) * urls.count);
-            for (NSURL* url in urls) {
-                // NSURL paths come back decomposed (NFD); .NET and most apps name files in NFC, and on APFS and HFS+ lookups ignore normalization.
-                NSString* path = url.path.precomposedStringWithCanonicalMapping;
-                const char* utf8 = path.UTF8String;
-                if (utf8 != NULL) {
-                    result[resultCount++] = strdup(utf8);
-                }
-            }
-            if (resultCount == 0) {
-                free(result);
-                result = NULL;
-            }
+            result = CopyUtf8Array(ReadFiles([NSPasteboard generalPasteboard]), &resultCount);
         }
     });
     *count = resultCount;
@@ -214,44 +340,16 @@ uint8_t* HermesClipboard_ReadCustom(const char* mimeType, int* length) {
     return result;
 }
 
-bool HermesClipboard_Write(const char* text, const char* html, const uint8_t* png, int pngLength,
-                           const char** files, int fileCount,
-                           const char** customTypes, const uint8_t** customData, const int* customLengths, int customCount) {
+bool HermesClipboard_Write(const HermesNativePackage* package) {
     __block BOOL written = NO;
     RunOnMainSync(^{
         @autoreleasepool {
-            NSPasteboardItem* item = [[NSPasteboardItem alloc] init];
-            if (text != NULL) {
-                [item setString:[NSString stringWithUTF8String:text] forType:NSPasteboardTypeString];
-            }
-            if (html != NULL) {
-                [item setString:[NSString stringWithUTF8String:html] forType:NSPasteboardTypeHTML];
-            }
-            if (png != NULL && pngLength > 0) {
-                NSData* pngData = [NSData dataWithBytes:png length:(NSUInteger)pngLength];
-                [item setData:pngData forType:NSPasteboardTypePNG];
-                NSData* tiff = [[NSBitmapImageRep imageRepWithData:pngData] TIFFRepresentation];
-                if (tiff != nil) {
-                    [item setData:tiff forType:NSPasteboardTypeTIFF];
-                }
-            }
-            for (int i = 0; i < customCount; i++) {
-                NSPasteboardType type = TypeForMime(customTypes[i]);
-                // A standard format already written for this type wins over a colliding custom key.
-                if ([item.types containsObject:type]) {
-                    continue;
-                }
-                NSData* data = [NSData dataWithBytes:customData[i] length:(NSUInteger)customLengths[i]];
-                [item setData:data forType:type];
-            }
-
             NSMutableArray<id<NSPasteboardWriting>>* objects = [NSMutableArray array];
-            if (item.types.count > 0) {
+            NSPasteboardItem* item = HermesPasteboard_CreateItem(package);
+            if (item != nil) {
                 [objects addObject:item];
             }
-            for (int i = 0; i < fileCount; i++) {
-                [objects addObject:[NSURL fileURLWithPath:[NSString stringWithUTF8String:files[i]]]];
-            }
+            [objects addObjectsFromArray:HermesPasteboard_FileUrls(package)];
 
             NSPasteboard* pasteboard = [NSPasteboard generalPasteboard];
             [pasteboard clearContents];

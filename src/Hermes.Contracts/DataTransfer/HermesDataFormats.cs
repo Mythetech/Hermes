@@ -12,4 +12,5 @@ public enum HermesDataFormats
     Html = 2,
     Png = 4,
     Files = 8,
+    Url = 16,
 }

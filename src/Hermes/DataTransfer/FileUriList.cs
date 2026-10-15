@@ -2,12 +2,34 @@
 namespace Hermes.DataTransfer;
 
 /// <summary>
-/// <c>text/uri-list</c> and GNOME's <c>x-special/gnome-copied-files</c>, used by the Linux clipboard.
+/// <c>text/uri-list</c> and GNOME's <c>x-special/gnome-copied-files</c>, used by the Linux clipboard and by drops.
 /// </summary>
 internal static class FileUriList
 {
     public static string BuildUriList(IReadOnlyList<string> paths) =>
         string.Concat(paths.Select(p => ToFileUri(p) + "\r\n"));
+
+    public static string BuildUriList(IReadOnlyList<string>? paths, Uri? url) =>
+        (paths is null ? "" : BuildUriList(paths)) + (url is null ? "" : url.AbsoluteUri + "\r\n");
+
+    public static (IReadOnlyList<string> Files, Uri? Url) SplitUriList(string text) =>
+        (ParseUriList(text), FirstUrl(text));
+
+    // A drag or clipboard carries one link on Windows, so every platform keeps only the first.
+    public static Uri? FirstUrl(string text)
+    {
+        foreach (var raw in text.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.Length == 0 || line.StartsWith('#'))
+                continue;
+
+            if (Uri.TryCreate(line, UriKind.Absolute, out var uri) && !uri.IsFile)
+                return uri;
+        }
+
+        return null;
+    }
 
     public static IReadOnlyList<string> ParseUriList(string text) =>
         text.Split('\n')

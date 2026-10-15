@@ -33,6 +33,7 @@
 }
 
 - (void)windowWillClose:(NSNotification*)notification {
+    [_hermesWindow endDragAndDrop];
     [_hermesWindow endRunLoop];
 }
 

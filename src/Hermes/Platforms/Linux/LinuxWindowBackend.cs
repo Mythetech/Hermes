@@ -3,6 +3,8 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
 using Hermes.Abstractions;
+using Hermes.Contracts.DataTransfer;
+using Hermes.DataTransfer;
 
 namespace Hermes.Platforms.Linux;
 
@@ -34,6 +36,13 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
     // Menu backend (lazily created)
     private LinuxMenuBackend? _menuBackend;
+
+    // Native drag and drop, zero when the window did not opt in or the native library lacks it.
+    private IntPtr _dragDrop;
+    private IReadOnlyList<string> _dropCustomTypes = [];
+    private readonly Dictionary<long, DropMessage> _pendingDropClaims = new();
+    private long _nextDropClaimId;
+    private TaskCompletionSource<HermesDragResult>? _dragCompletion;
 
     #region Lifecycle
 
@@ -96,6 +105,10 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
             _windowHandle = LinuxNative.WindowCreate(ref parameters);
             if (_windowHandle == IntPtr.Zero)
                 throw new InvalidOperationException("Failed to create native window.");
+
+            DragDropEnabled = options.DragDrop;
+            if (DragDropEnabled)
+                AttachDragDrop(options.DropCustomTypes);
 
             _initialized = true;
         }
@@ -246,6 +259,11 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
     public HermesPlatform Platform => HermesPlatform.Linux;
 
+    /// <summary>
+    /// Whether the window opted in to drag and drop; only then is the drop protocol kept from <see cref="WebMessageReceived"/>.
+    /// </summary>
+    internal bool DragDropEnabled { get; set; }
+
     public bool IsCustomTitleBarActive { get; private set; }
 
     #endregion
@@ -379,11 +397,137 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     public event Action? FocusIn;
     public event Action? FocusOut;
     public event Action<string>? WebMessageReceived;
+    public event Action<HermesDropReport>? DropReported;
     public event Action? Maximized;
     public event Action? Restored;
     internal event Action? PageLoaded;
 
     public Func<bool>? CloseRequestedHandler { get; set; }
+
+    #endregion
+
+    #region Drag and Drop
+
+    public unsafe Task<HermesDragResult> StartDragAsync(HermesDataPackage package)
+    {
+        if (_dragDrop == IntPtr.Zero || _dragCompletion is not null)
+            return Task.FromResult(HermesDragResult.Canceled);
+
+        using var entries = new NativeTargetList(LinuxClipboardTargets.ForWrite(package));
+
+        var completion = new TaskCompletionSource<HermesDragResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _dragCompletion = completion;
+
+        try
+        {
+            if (LinuxNative.DragDropBeginDrag(_dragDrop, entries.Targets, entries.Data, entries.Lengths, entries.Count))
+                return completion.Task;
+        }
+        catch (EntryPointNotFoundException)
+        {
+        }
+        catch
+        {
+            _dragCompletion = null;
+            throw;
+        }
+
+        _dragCompletion = null;
+        return Task.FromResult(HermesDragResult.Canceled);
+    }
+
+    private void AttachDragDrop(IReadOnlyList<string> customTypes)
+    {
+        _dropCustomTypes = customTypes;
+        var claimedDelegate = new LinuxNativeDelegates.DropClaimedCallback(OnNativeDropClaimed);
+        var endedDelegate = new LinuxNativeDelegates.DragEndedCallback(OnNativeDragEnded);
+        _pinnedDelegates.Add(claimedDelegate);
+        _pinnedDelegates.Add(endedDelegate);
+
+        try
+        {
+            var dropTargets = LinuxClipboardTargets.DropTargets(customTypes);
+            _dragDrop = LinuxNative.DragDropAttach(_windowHandle, DragDropScript.Source, [.. dropTargets], dropTargets.Count,
+                Marshal.GetFunctionPointerForDelegate(claimedDelegate), Marshal.GetFunctionPointerForDelegate(endedDelegate));
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            // An older native library: no drop is captured and drags end as Canceled.
+            Diagnostics.HermesLogger.Warning($"Native drag and drop is unavailable: {ex.Message}");
+        }
+    }
+
+    private void ReceiveDropMessage(string message)
+    {
+        if (DropMessage.TryParse(message) is not { } drop)
+            return;
+
+        // Only the shim's capture can carry data, so without it the drop is reported empty and gets no ID.
+        if (drop.Kind == HermesDropReportKind.Reset || _dragDrop == IntPtr.Zero)
+        {
+            RaiseDropReported(drop.ToReport(null));
+            return;
+        }
+
+        var claimId = ++_nextDropClaimId;
+        _pendingDropClaims[claimId] = drop;
+        LinuxNative.DragDropClaim(_dragDrop, claimId);
+    }
+
+    private void OnNativeDropClaimed(long claimId, IntPtr targets, IntPtr data, IntPtr lengths, int count)
+    {
+        if (!_pendingDropClaims.Remove(claimId, out var drop))
+            return;
+
+        HermesDataPackage? package = null;
+        try
+        {
+            if (count >= 0)
+                package = LinuxClipboardTargets.ReadDrop(ReadTargets(targets, data, lengths, count), _dropCustomTypes);
+        }
+        catch (Exception ex)
+        {
+            // Nothing may unwind into the GTK main loop that called back.
+            HermesApplication.RaiseDispatcherUnhandledException(ex);
+            return;
+        }
+
+        RaiseDropReported(drop.ToReport(package));
+    }
+
+    private void RaiseDropReported(HermesDropReport report)
+    {
+        try
+        {
+            DropReported?.Invoke(report);
+        }
+        catch (Exception ex)
+        {
+            // A subscriber's exception goes to the dispatcher sink rather than out of the native callback.
+            HermesApplication.RaiseDispatcherUnhandledException(ex);
+        }
+    }
+
+    private void OnNativeDragEnded(bool dropped)
+    {
+        var completion = _dragCompletion;
+        _dragCompletion = null;
+        completion?.TrySetResult(dropped ? HermesDragResult.Dropped : HermesDragResult.Canceled);
+    }
+
+    private static List<(string Target, byte[] Data)> ReadTargets(IntPtr targets, IntPtr data, IntPtr lengths, int count)
+    {
+        var received = new List<(string Target, byte[] Data)>(count);
+        for (var i = 0; i < count; i++)
+        {
+            var target = Marshal.PtrToStringUTF8(Marshal.ReadIntPtr(targets, i * IntPtr.Size));
+            var bytes = new byte[Marshal.ReadInt32(lengths, i * sizeof(int))];
+            Marshal.Copy(Marshal.ReadIntPtr(data, i * IntPtr.Size), bytes, 0, bytes.Length);
+            if (target is not null)
+                received.Add((target, bytes));
+        }
+        return received;
+    }
 
     #endregion
 
@@ -512,14 +656,22 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         FocusOut?.Invoke();
     }
 
-    private void OnNativeWebMessage(IntPtr messagePtr)
+    private void OnNativeWebMessage(IntPtr messagePtr) => ReceiveWebMessage(Marshal.PtrToStringUTF8(messagePtr) ?? "");
+
+    internal void ReceiveWebMessage(string message)
     {
-        var message = Marshal.PtrToStringUTF8(messagePtr) ?? "";
         if (message.StartsWith("__hermes_accel:", StringComparison.Ordinal))
         {
             _menuBackend?.HandleAcceleratorMessage(message.Substring(15));
             return;
         }
+
+        if (DragDropEnabled && DropMessage.IsDropProtocol(message))
+        {
+            ReceiveDropMessage(message);
+            return;
+        }
+
         WebMessageReceived?.Invoke(message);
     }
 
@@ -638,6 +790,14 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
     {
         if (_disposed) return;
         _disposed = true;
+
+        if (_dragDrop != IntPtr.Zero)
+        {
+            LinuxNative.DragDropDetach(_dragDrop);
+            _dragDrop = IntPtr.Zero;
+        }
+        OnNativeDragEnded(dropped: false);
+        _pendingDropClaims.Clear();
 
         if (_windowHandle != IntPtr.Zero)
         {

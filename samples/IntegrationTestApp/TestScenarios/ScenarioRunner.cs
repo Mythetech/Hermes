@@ -9,6 +9,7 @@ using Hermes.Contracts.Diagnostics;
 using Hermes.Contracts.Notifications;
 using Hermes.Contracts.Plugins;
 using Hermes.Diagnostics;
+using Hermes.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IntegrationTestApp.TestScenarios;
@@ -21,14 +22,16 @@ public sealed class ScenarioRunner : IDisposable
 {
     private readonly HermesBlazorApp _app;
     private readonly VirtualizeProbe _virtualizeProbe;
+    private readonly DropProbe _dropProbe;
     private readonly bool _autoExit;
     private bool _disposed;
     private volatile string? _latestColorScheme;
 
-    public ScenarioRunner(HermesBlazorApp app, VirtualizeProbe virtualizeProbe, bool autoExit = false)
+    public ScenarioRunner(HermesBlazorApp app, VirtualizeProbe virtualizeProbe, DropProbe dropProbe, bool autoExit = false)
     {
         _app = app;
         _virtualizeProbe = virtualizeProbe;
+        _dropProbe = dropProbe;
         _autoExit = autoExit;
     }
 
@@ -71,6 +74,7 @@ public sealed class ScenarioRunner : IDisposable
         if (RichClipboardSupported)
         {
             RunClipboardRichRoundTripTest();
+            RunClipboardUrlTest();
             if (OperatingSystem.IsWindows())
                 RunClipboardBusyTest();
             await RunClipboardChangedTestAsync();
@@ -80,6 +84,10 @@ public sealed class ScenarioRunner : IDisposable
         // Web message test runs LAST - gives WebView2 maximum time to initialize
         // On Windows, WebView2 init is async and can take several seconds in CI
         await RunWebMessageRoundTripTestAsync();
+
+        // Drag and drop drives the page's drop script, so it needs the WebView up
+        await RunDragDropInboundTestAsync();
+        await RunDragDropOutboundGuardTestAsync();
 
         // Virtualize interop runs after the web message round trip because both need the WebView
         // to be up; by this point the home page has long since rendered, so the probe is normally
@@ -636,6 +644,135 @@ public sealed class ScenarioRunner : IDisposable
 
     // Platforms whose clipboard backend reads and writes every format.
     private static bool RichClipboardSupported => OperatingSystem.IsMacOS() || OperatingSystem.IsLinux() || OperatingSystem.IsWindows();
+
+    private void RunClipboardUrlTest()
+    {
+        const string testName = "clipboard-url";
+        TestReporter.Start(testName);
+        var file = Path.Combine(Path.GetTempPath(), "hermes clipboard url.txt");
+
+        try
+        {
+            File.WriteAllText(file, "x");
+            var url = new Uri("https://example.com/a b?c=d#e");
+
+            Clipboard.Write(new HermesDataPackage { Text = "link", Url = url });
+            var read = Clipboard.Read(HermesDataFormats.Text | HermesDataFormats.Url);
+            var urlRoundTrips = read.Url?.AbsoluteUri == url.AbsoluteUri && read.Text == "link";
+            var reportsUrl = Clipboard.GetFormats().HasFlag(HermesDataFormats.Url);
+
+            Clipboard.Write(new HermesDataPackage { Files = [file], Url = url });
+            var both = Clipboard.Read(HermesDataFormats.Files | HermesDataFormats.Url);
+            var bothRoundTrip = both.Url?.AbsoluteUri == url.AbsoluteUri && both.Files is [var only] && only == file;
+
+            Clipboard.Write(new HermesDataPackage { Files = [file] });
+            var filesOnlyHasNoUrl = !Clipboard.GetFormats().HasFlag(HermesDataFormats.Url)
+                && Clipboard.Read(HermesDataFormats.Url).Url is null;
+
+            TestReporter.Assert(testName, urlRoundTrips && reportsUrl && bothRoundTrip && filesOnlyHasNoUrl,
+                $"url round trip: {urlRoundTrips}, formats report url: {reportsUrl}, files and url: {bothRoundTrip}, files only has no url: {filesOnlyHasNoUrl}");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail(testName, ex.Message);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    private async Task RunDragDropInboundTestAsync()
+    {
+        const string testName = "dragdrop-inbound";
+        TestReporter.Start(testName);
+        var directory = Path.Combine(Path.GetTempPath(), "hermes drop #1");
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            var files = new[] { "a.txt", "b é.txt" }.Select(name => Path.Combine(directory, name)).ToArray();
+            foreach (var file in files)
+                File.WriteAllText(file, "x");
+
+            var window = _app.MainWindow;
+            var detailJson = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            window.OnWebMessage(message =>
+            {
+                if (message.Contains("\"drop-detail\"", StringComparison.Ordinal))
+                    detailJson.TrySetResult(message);
+            });
+
+            var droppedEvent = new TaskCompletionSource<HermesDrop>(TaskCreationOptions.RunContinuationsAsynchronously);
+            void OnDropped(HermesDrop drop) => droppedEvent.TrySetResult(drop);
+            window.Dropped += OnDropped;
+
+            try
+            {
+                // The drop zone is fixed at left 16, top 120, 160 by 60 CSS pixels.
+                var drop = await HermesDragDropTesting.SimulateDropAsync(window, new HermesDataPackage { Files = files }, 96, 150)
+                    .WaitAsync(TimeSpan.FromSeconds(10));
+                var args = await _dropProbe.WaitAsync(TimeSpan.FromSeconds(10));
+                var detail = await detailJson.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                var raised = await droppedEvent.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+                var failures = new List<string>();
+                if (args is null)
+                    failures.Add("@onhermesdrop never fired");
+                else if (args.Data.Files is not { } argFiles || !argFiles.SequenceEqual(files))
+                    failures.Add("Blazor args did not carry the dropped paths");
+                if (args is not null && args.DropId != drop.Id)
+                    failures.Add("Blazor args carried a different drop ID");
+                if (raised.Id != drop.Id)
+                    failures.Add("Dropped carried a different drop ID");
+                if (!window.TryGetDrop(drop.Id, out _))
+                    failures.Add("TryGetDrop did not resolve the drop");
+                foreach (var file in files)
+                {
+                    if (detail.Contains(file, StringComparison.Ordinal) || detail.Contains(file.Replace("\\", "\\\\"), StringComparison.Ordinal))
+                        failures.Add("the page's hermesdrop detail contained a path");
+                }
+
+                TestReporter.Assert(testName, failures.Count == 0, string.Join("; ", failures));
+            }
+            finally
+            {
+                window.Dropped -= OnDropped;
+            }
+        }
+        catch (TimeoutException)
+        {
+            TestReporter.Fail(testName, "Timed out waiting for the simulated drop to reach .NET, Blazor and the page");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail(testName, ex.Message);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private async Task RunDragDropOutboundGuardTestAsync()
+    {
+        const string testName = "dragdrop-outbound-guard";
+        TestReporter.Start(testName);
+
+        try
+        {
+            // No mouse button is held in an automated run, so the native drag must refuse cleanly.
+            var result = await _app.MainWindow.StartDragAsync(new HermesDataPackage { Text = "drag" })
+                .WaitAsync(TimeSpan.FromSeconds(10));
+
+            TestReporter.Assert(testName, result == HermesDragResult.Canceled, $"Expected Canceled, got {result}");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail(testName, ex.Message);
+        }
+    }
 
     private void RunClipboardRichRoundTripTest()
     {

@@ -30,6 +30,15 @@
 // The window whose waitForClose is running [NSApp run]. Weak, because the managed side owns the window.
 static __weak HermesWindow* g_runLoopWindow = nil;
 
+// Managed code joins the types with newlines, which a MIME type cannot contain.
+static NSArray<NSString*>* SplitLines(const char* joined) {
+    if (joined == NULL) {
+        return @[];
+    }
+    NSArray<NSString*>* lines = [[NSString stringWithUTF8String:joined] componentsSeparatedByString:@"\n"];
+    return [lines filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"length > 0"]];
+}
+
 @implementation HermesWindow
 
 - (instancetype)initWithParams:(const HermesWindowParams*)params {
@@ -44,6 +53,7 @@ static __weak HermesWindow* g_runLoopWindow = nil;
         _onWebMessage = params->OnWebMessage;
         _onCustomScheme = params->OnCustomScheme;
         _onWebViewCrash = params->OnWebViewCrash;
+        _onDragEnded = params->OnDragEnded;
         _schemeHandlers = [NSMutableArray new];
         _pendingSchemes = [NSMutableArray new];
 
@@ -126,6 +136,9 @@ static __weak HermesWindow* g_runLoopWindow = nil;
         _webViewConfiguration = [[WKWebViewConfiguration alloc] init];
         _devToolsEnabled = params->DevToolsEnabled;
         _customTitleBar = params->CustomTitleBar;
+        _dragDrop = params->DragDrop;
+        _dragDropScript = params->DragDropScript ? [NSString stringWithUTF8String:params->DragDropScript] : nil;
+        _dropCustomTypes = SplitLines(params->DropCustomTypes);
 
         WKPreferences* prefs = _webViewConfiguration.preferences;
 
@@ -180,7 +193,7 @@ static __weak HermesWindow* g_runLoopWindow = nil;
             [_window miniaturize:nil];
         }
 
-        // Set up native drag monitors for custom title bar
+        // Install the title bar drag monitors and, for drag and drop windows, the drag-source monitor
         [self setupDragMonitors];
     }
     return self;
@@ -249,6 +262,13 @@ static __weak HermesWindow* g_runLoopWindow = nil;
     WKUserContentController* contentController = [[WKUserContentController alloc] init];
     [contentController addUserScript:userScript];
 
+    // After the bridge script, because the drop script talks through window.external.
+    if (_dragDrop && _dragDropScript != nil) {
+        [contentController addUserScript:[[WKUserScript alloc] initWithSource:_dragDropScript
+                                                                injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                                                             forMainFrameOnly:YES]];
+    }
+
     _uiDelegate = [[HermesUiDelegate alloc] init];
     _uiDelegate.hermesWindow = self;
     [contentController addScriptMessageHandler:_uiDelegate name:@"hermesinterop"];
@@ -264,8 +284,11 @@ static __weak HermesWindow* g_runLoopWindow = nil;
     }
     [_pendingSchemes removeAllObjects];
 
-    _webView = [[WKWebView alloc] initWithFrame:_window.contentView.bounds
-                                  configuration:_webViewConfiguration];
+    _webView = [[HermesWebView alloc] initWithFrame:_window.contentView.bounds
+                                      configuration:_webViewConfiguration];
+    if (_dragDrop) {
+        [_webView enableDragDropWithCustomTypes:_dropCustomTypes];
+    }
 
     if (_devToolsEnabled) {
         if (@available(macOS 13.3, *)) {
@@ -581,6 +604,10 @@ static __weak HermesWindow* g_runLoopWindow = nil;
 #pragma mark - Drag Support
 
 - (void)setupDragMonitors {
+    if (_dragDrop) {
+        [self setupDragSourceMonitor];
+    }
+
     if (!_customTitleBar) return;
 
     __weak typeof(self) weakSelf = self;
@@ -655,6 +682,38 @@ static __weak HermesWindow* g_runLoopWindow = nil;
     }];
 }
 
+// A native drag has to start from an event of the press still in progress, so keep the latest one.
+- (void)setupDragSourceMonitor {
+    __weak typeof(self) weakSelf = self;
+    NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp;
+    _dragEventMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:mask handler:^NSEvent*(NSEvent* event) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (strongSelf) {
+            BOOL pressHere = event.type != NSEventTypeLeftMouseUp && event.window == strongSelf.window;
+            strongSelf.lastMouseEvent = pressHere ? event : nil;
+        }
+        return event;
+    }];
+}
+
+- (BOOL)startDragWithPackage:(const HermesNativePackage*)package {
+    NSEvent* event = _lastMouseEvent;
+    _lastMouseEvent = nil;
+    if (event == nil || ([NSEvent pressedMouseButtons] & 1) == 0) {
+        return NO;
+    }
+    return [_webView startDragWithPackage:package event:event ended:_onDragEnded];
+}
+
+- (void)endDragAndDrop {
+    [_webView cancelDrag];
+    if (_dragEventMonitor) {
+        [NSEvent removeMonitor:_dragEventMonitor];
+        _dragEventMonitor = nil;
+    }
+    _lastMouseEvent = nil;
+}
+
 - (void)teardownDragMonitors {
     if (_mouseDownMonitor) {
         [NSEvent removeMonitor:_mouseDownMonitor];
@@ -672,6 +731,7 @@ static __weak HermesWindow* g_runLoopWindow = nil;
 #pragma mark - Cleanup
 
 - (void)dealloc {
+    [self endDragAndDrop];
     [self teardownDragMonitors];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_webViewConfiguration.userContentController removeScriptMessageHandlerForName:@"hermesinterop"];

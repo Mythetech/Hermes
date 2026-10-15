@@ -97,4 +97,16 @@ internal static class LinuxNativeDelegates
     /// </summary>
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void ClipboardChangedCallback();
+
+    /// <summary>
+    /// Called on the GTK thread with a claimed drop's targets and data; count is -1 when no capture was waiting.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void DropClaimedCallback(long claimId, IntPtr targets, IntPtr data, IntPtr lengths, int count);
+
+    /// <summary>
+    /// Called on the GTK thread when a drag started by the window ends.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void DragEndedCallback([MarshalAs(UnmanagedType.U1)] bool dropped);
 }

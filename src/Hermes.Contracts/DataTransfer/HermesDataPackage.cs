@@ -4,7 +4,7 @@ using System.Collections.ObjectModel;
 namespace Hermes.Contracts.DataTransfer;
 
 /// <summary>
-/// An immutable snapshot of data in one or more formats, read from or written to the clipboard.
+/// An immutable snapshot of data in one or more formats, read from or written to the clipboard or a drag.
 /// </summary>
 public sealed class HermesDataPackage
 {
@@ -25,6 +25,9 @@ public sealed class HermesDataPackage
     /// <summary>Absolute file paths.</summary>
     public IReadOnlyList<string>? Files { get; init; }
 
+    /// <summary>An absolute URL that is not a file URL; files belong in <see cref="Files"/>.</summary>
+    public Uri? Url { get; init; }
+
     /// <summary>App-defined formats keyed by MIME type. Never null.</summary>
     public IReadOnlyDictionary<string, ReadOnlyMemory<byte>> Custom
     {
@@ -37,7 +40,8 @@ public sealed class HermesDataPackage
         (Text is null ? HermesDataFormats.None : HermesDataFormats.Text)
         | (Html is null ? HermesDataFormats.None : HermesDataFormats.Html)
         | (Png is null ? HermesDataFormats.None : HermesDataFormats.Png)
-        | (Files is null ? HermesDataFormats.None : HermesDataFormats.Files);
+        | (Files is null ? HermesDataFormats.None : HermesDataFormats.Files)
+        | (Url is null ? HermesDataFormats.None : HermesDataFormats.Url);
 
     /// <summary>True when the package carries no standard format and no custom format.</summary>
     public bool IsEmpty => Formats == HermesDataFormats.None && Custom.Count == 0;

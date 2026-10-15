@@ -78,4 +78,102 @@ public sealed class LinuxClipboardTargetsTests
         Assert.Equal(html, LinuxClipboardTargets.DecodeHtml([0xFF, 0xFE, .. Encoding.Unicode.GetBytes(html)]));
         Assert.Equal(html, LinuxClipboardTargets.DecodeHtml([0xFE, 0xFF, .. Encoding.BigEndianUnicode.GetBytes(html)]));
     }
+
+    [Fact]
+    public void ToFormats_ReportsAUrlFromTheLinkTarget_AndItsUriListIsNotFiles() =>
+        Assert.Equal(HermesDataFormats.Url, LinuxClipboardTargets.ToFormats(["text/uri-list", "_NETSCAPE_URL"]));
+
+    [Fact]
+    public void ToFormats_FileManagerCopy_ReportsFilesWithoutAUrl() =>
+        Assert.Equal(HermesDataFormats.Files, LinuxClipboardTargets.ToFormats(["text/uri-list", "x-special/gnome-copied-files"]));
+
+    [Fact]
+    public void ForWrite_PutsFilesThenTheUrlInOneUriList_AndGnomeCopiedFilesKeepsOnlyFiles()
+    {
+        var file = Path.Combine(Path.GetTempPath(), "a b.txt");
+        var url = new Uri("https://example.com/a b?c=d#e");
+
+        var entries = LinuxClipboardTargets.ForWrite(new HermesDataPackage { Files = [file], Url = url });
+
+        Assert.Equal(new[] { "text/uri-list", "x-special/gnome-copied-files", "_NETSCAPE_URL" }, entries.Select(e => e.Target));
+        var (files, listed) = FileUriList.SplitUriList(Encoding.UTF8.GetString(entries[0].Data));
+        Assert.Equal(new[] { file }, files);
+        Assert.Equal(url.AbsoluteUri, listed?.AbsoluteUri);
+        Assert.Equal(new[] { file }, FileUriList.ParseGnomeCopiedFiles(Encoding.UTF8.GetString(entries[1].Data)));
+        Assert.Equal(url.AbsoluteUri, Encoding.UTF8.GetString(entries[2].Data));
+        Assert.Equal(HermesDataFormats.Files | HermesDataFormats.Url, LinuxClipboardTargets.ToFormats([.. entries.Select(e => e.Target)]));
+    }
+
+    [Fact]
+    public void ForWrite_UrlAlone_ReportsOnlyUrl()
+    {
+        var entries = LinuxClipboardTargets.ForWrite(new HermesDataPackage { Text = "link", Url = new Uri("https://example.com/") });
+
+        Assert.Equal("https://example.com/\r\n", Encoding.UTF8.GetString(Assert.Single(entries, e => e.Target == "text/uri-list").Data));
+        Assert.Equal(HermesDataFormats.Text | HermesDataFormats.Url, LinuxClipboardTargets.ToFormats([.. entries.Select(e => e.Target)]));
+    }
+
+    [Theory]
+    [InlineData("https://example.com/link\nExample", "https://example.com/link")]
+    [InlineData("https://example.com/link\0", "https://example.com/link")]
+    [InlineData("file:///tmp/a.txt\nhttps://example.com/", null)]
+    [InlineData("not a url", null)]
+    public void ParseNetscapeUrl_ReadsTheFirstLine(string data, string? expected) =>
+        Assert.Equal(expected, LinuxClipboardTargets.ParseNetscapeUrl(Encoding.UTF8.GetBytes(data))?.AbsoluteUri);
+
+    [Fact]
+    public void DropTargets_AddsCustomTypesOnce()
+    {
+        var targets = LinuxClipboardTargets.DropTargets(["application/x-hermes-test", "X-SPECIAL/GNOME-COPIED-FILES"]);
+
+        Assert.Equal(
+            new[] { "text/plain;charset=utf-8", "UTF8_STRING", "text/html", "image/png", "text/uri-list", "x-special/gnome-copied-files", "_NETSCAPE_URL", "application/x-hermes-test" },
+            targets);
+    }
+
+    [Fact]
+    public void ReadDrop_ParsesEveryFormat()
+    {
+        var file = Path.Combine(Path.GetTempPath(), "s4 dir", "a b.txt");
+        byte[] png = [0x89, 0x50, 0x4E, 0x47];
+        var received = new List<(string Target, byte[] Data)>
+        {
+            ("text/uri-list", Encoding.UTF8.GetBytes(FileUriList.BuildUriList([file], new Uri("https://example.com/link")))),
+            ("UTF8_STRING", Encoding.UTF8.GetBytes("hello é 世界")),
+            ("text/html", [0xFF, 0xFE, .. Encoding.Unicode.GetBytes("<b>é</b>")]),
+            ("image/png", png),
+            ("_NETSCAPE_URL", Encoding.UTF8.GetBytes("https://other.example/\nOther")),
+            ("Application/X-Hermes-Test", [7, 8]),
+        };
+
+        var package = LinuxClipboardTargets.ReadDrop(received, ["application/x-hermes-test", "application/x-missing"]);
+
+        Assert.Equal("hello é 世界", package.Text);
+        Assert.Equal("<b>é</b>", package.Html);
+        Assert.Equal(png, package.Png?.ToArray());
+        Assert.Equal(new[] { file }, package.Files);
+        Assert.Equal("https://example.com/link", package.Url?.AbsoluteUri);
+        Assert.Equal(new byte[] { 7, 8 }, Assert.Single(package.Custom, c => c.Key == "application/x-hermes-test").Value.ToArray());
+    }
+
+    [Fact]
+    public void ReadDrop_FallsBackToGnomeFilesAndTheLinkTarget()
+    {
+        var file = Path.Combine(Path.GetTempPath(), "c.txt");
+        var received = new List<(string Target, byte[] Data)>
+        {
+            ("x-special/gnome-copied-files", Encoding.UTF8.GetBytes(FileUriList.BuildGnomeCopiedFiles([file]))),
+            ("_NETSCAPE_URL", Encoding.UTF8.GetBytes("https://example.com/only\nTitle")),
+        };
+
+        var package = LinuxClipboardTargets.ReadDrop(received, []);
+
+        Assert.Equal(new[] { file }, package.Files);
+        Assert.Equal("https://example.com/only", package.Url?.AbsoluteUri);
+        Assert.Null(package.Text);
+    }
+
+    [Fact]
+    public void ReadDrop_WithNothingReceived_IsEmpty() =>
+        Assert.True(LinuxClipboardTargets.ReadDrop([], ["application/x-hermes-test"]).IsEmpty);
 }

@@ -148,6 +148,17 @@ public sealed class HermesWindowOptions
     /// </summary>
     public string? WindowStateKey { get; set; }
 
+    /// <summary>
+    /// Enable native drag and drop: drops from other apps raise <see cref="HermesWindow.Dropped"/>,
+    /// and <see cref="HermesWindow.StartDragAsync"/> works.
+    /// </summary>
+    public bool DragDrop { get; set; }
+
+    /// <summary>
+    /// Custom MIME types to read from drops. The drag data is only readable during the drop, so they are named in advance.
+    /// </summary>
+    public IReadOnlyList<string> DropCustomTypes { get; set; } = [];
+
     internal static void ApplyTo(HermesWindow window, HermesWindowOptions options)
     {
         window.SetTitle(options.Title);
@@ -167,6 +178,7 @@ public sealed class HermesWindowOptions
         window.SetCustomTitleBar(options.CustomTitleBar);
         window.SetTransparent(options.Transparent);
         window.SetTheme(options.Theme);
+        window.SetDragDrop(options.DragDrop, options.DropCustomTypes);
 
         if (options.Maximized)
             window.Maximize();

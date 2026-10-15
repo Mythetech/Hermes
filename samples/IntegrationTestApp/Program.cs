@@ -37,6 +37,7 @@ public static class Program
             options.CenterOnScreen = true;
             options.DevToolsEnabled = !isIntegrationTest;
             options.CustomTitleBar = true;
+            options.DragDrop = true;
         });
 
         builder.Services.AddSingleton(new TestContext
@@ -47,6 +48,9 @@ public static class Program
 
         var virtualizeProbe = new VirtualizeProbe();
         builder.Services.AddSingleton(virtualizeProbe);
+
+        var dropProbe = new DropProbe();
+        builder.Services.AddSingleton(dropProbe);
 
         builder.Services.AddFluentUIComponents();
         builder.Services.AddHostedService<TeardownProbe>();
@@ -91,7 +95,7 @@ public static class Program
         {
             TestReporter.Ready();
 
-            var runner = new ScenarioRunner(app, virtualizeProbe, autoExit);
+            var runner = new ScenarioRunner(app, virtualizeProbe, dropProbe, autoExit);
             _ = Task.Run(async () =>
             {
                 // Wait for message loop to start pumping and WebView to begin initializing

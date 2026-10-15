@@ -253,6 +253,23 @@ void Hermes_Clipboard_StartMonitoring(void (*callback)(void));
 void Hermes_Clipboard_StopMonitoring(void);
 
 // ============================================================================
+// Drag and Drop
+// ============================================================================
+
+/// Install the drop script and capture other apps' drops on the window's web view. Callbacks run on the GTK thread.
+void* Hermes_DragDrop_Attach(void* window, const char* script, const char** dropTargets, int dropTargetCount,
+                             DropClaimedCallback claimed, DragEndedCallback ended);
+
+/// Hand the newest unclaimed capture to the claimed callback, waiting up to 2 s for it to finish.
+void Hermes_DragDrop_Claim(void* dragDrop, int64_t claimId);
+
+/// Start a drag of the targets while the primary button is held; false when no drag started.
+bool Hermes_DragDrop_BeginDrag(void* dragDrop, const char** targets, const uint8_t** data, const int* lengths, int count);
+
+/// Cancel an active drag, drop pending captures and disconnect from the web view.
+void Hermes_DragDrop_Detach(void* dragDrop);
+
+// ============================================================================
 // Status Icon Operations (requires libappindicator3)
 // ============================================================================
 

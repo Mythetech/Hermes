@@ -40,6 +40,9 @@ internal static class DataPackageValidator
             }
         }
 
+        if (package.Url is { } url && (!url.IsAbsoluteUri || url.IsFile))
+            throw new ArgumentException($"Url must be an absolute, non-file URL: '{url.OriginalString}'.", nameof(package));
+
         foreach (var mimeType in package.Custom.Keys)
             ThrowIfInvalidCustomType(mimeType, nameof(package));
     }

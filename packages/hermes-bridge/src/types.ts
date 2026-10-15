@@ -33,3 +33,32 @@ export interface HermesExternal {
   sendMessage(message: string): void;
   receiveMessage(callback: (message: string) => void): void;
 }
+
+export interface HermesDropFile {
+  name: string;
+  size: number;
+  type: string;
+}
+
+/** Detail of the hermesdrop event. File paths stay in .NET; resolve dropId there. */
+export interface HermesDropEventDetail {
+  dropId: string;
+  x: number;
+  y: number;
+  files: HermesDropFile[];
+  types: string[];
+}
+
+declare global {
+  interface WindowEventMap {
+    hermesdrop: CustomEvent<HermesDropEventDetail>;
+  }
+
+  interface DocumentEventMap {
+    hermesdrop: CustomEvent<HermesDropEventDetail>;
+  }
+
+  interface HTMLElementEventMap {
+    hermesdrop: CustomEvent<HermesDropEventDetail>;
+  }
+}

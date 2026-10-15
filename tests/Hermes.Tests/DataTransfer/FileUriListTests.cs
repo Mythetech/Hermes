@@ -70,4 +70,28 @@ public sealed class FileUriListTests
         Assert.Null(FileUriList.FromFileUri("file://otherhost/tmp/x"));
         Assert.Null(FileUriList.FromFileUri("https://example.com/x"));
     }
+
+    [Fact]
+    public void SplitUriList_SeparatesFilesFromTheUrl()
+    {
+        var list = FileUriList.BuildUriList(s_paths, new Uri("https://example.com/a b"));
+
+        var (files, url) = FileUriList.SplitUriList(list);
+
+        Assert.Equal(s_paths, files);
+        Assert.Equal("https://example.com/a%20b", url?.AbsoluteUri);
+    }
+
+    [Fact]
+    public void FirstUrl_SkipsCommentsBlankLinesAndFileUris() =>
+        Assert.Equal("https://example.com/", FileUriList.FirstUrl(
+            "# comment\r\n\r\nfile:///tmp/a.txt\r\nhttps://example.com/\r\nhttps://second.example/\r\n")?.AbsoluteUri);
+
+    [Fact]
+    public void FirstUrl_ReturnsNullForAFileOnlyList() =>
+        Assert.Null(FileUriList.FirstUrl(FileUriList.BuildUriList(s_paths)));
+
+    [Fact]
+    public void BuildUriList_WithOnlyAUrl_WritesOneLine() =>
+        Assert.Equal("https://example.com/\r\n", FileUriList.BuildUriList(null, new Uri("https://example.com/")));
 }
