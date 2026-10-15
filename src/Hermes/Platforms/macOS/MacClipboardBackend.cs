@@ -1,6 +1,5 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.Marshalling;
 using System.Runtime.Versioning;
 using Hermes.Abstractions;
 using Hermes.Contracts.DataTransfer;
@@ -30,6 +29,7 @@ internal sealed class MacClipboardBackend : IClipboardBackend
         string? html = null;
         ReadOnlyMemory<byte>? png = null;
         IReadOnlyList<string>? files = null;
+        Uri? url = null;
 
         if (formats.HasFlag(HermesDataFormats.Text))
             text = TakeString(MacNative.ClipboardReadText());
@@ -39,6 +39,8 @@ internal sealed class MacClipboardBackend : IClipboardBackend
             png = TakeBytes(MacNative.ClipboardReadPng(out var pngLength), pngLength);
         if (formats.HasFlag(HermesDataFormats.Files))
             files = TakeStrings(MacNative.ClipboardReadFiles(out var fileCount), fileCount);
+        if (formats.HasFlag(HermesDataFormats.Url))
+            url = MacNativePackage.ParseUrl(TakeString(MacNative.ClipboardReadUrl()));
 
         var custom = new Dictionary<string, ReadOnlyMemory<byte>>(StringComparer.OrdinalIgnoreCase);
         foreach (var mimeType in customTypes)
@@ -47,56 +49,20 @@ internal sealed class MacClipboardBackend : IClipboardBackend
                 custom[mimeType] = data;
         }
 
-        return new HermesDataPackage { Text = text, Html = html, Png = png, Files = files, Custom = custom };
+        return new HermesDataPackage { Text = text, Html = html, Png = png, Files = files, Url = url, Custom = custom };
     }
 
     public unsafe void Write(HermesDataPackage package)
     {
-        var files = package.Files ?? [];
-        var custom = package.Custom.ToArray();
-        var filePointers = (byte**)NativeMemory.AllocZeroed((nuint)Math.Max(files.Count, 1), (nuint)sizeof(byte*));
-        var typePointers = (byte**)NativeMemory.AllocZeroed((nuint)Math.Max(custom.Length, 1), (nuint)sizeof(byte*));
-        var dataPointers = (byte**)NativeMemory.AllocZeroed((nuint)Math.Max(custom.Length, 1), (nuint)sizeof(byte*));
-        var lengths = (int*)NativeMemory.AllocZeroed((nuint)Math.Max(custom.Length, 1), sizeof(int));
-
+        var native = MacNativePackage.Allocate(package);
         try
         {
-            for (var i = 0; i < files.Count; i++)
-                filePointers[i] = Utf8StringMarshaller.ConvertToUnmanaged(files[i]);
-
-            for (var i = 0; i < custom.Length; i++)
-            {
-                var data = custom[i].Value.Span;
-                typePointers[i] = Utf8StringMarshaller.ConvertToUnmanaged(custom[i].Key);
-                dataPointers[i] = (byte*)NativeMemory.Alloc((nuint)Math.Max(data.Length, 1));
-                data.CopyTo(new Span<byte>(dataPointers[i], data.Length));
-                lengths[i] = data.Length;
-            }
-
-            ReadOnlySpan<byte> png = package.Png is { } pngMemory ? pngMemory.Span : default;
-            fixed (byte* pngPointer = png)
-            {
-                var written = MacNative.ClipboardWrite(
-                    package.Text, package.Html, pngPointer, png.Length,
-                    filePointers, files.Count,
-                    typePointers, dataPointers, lengths, custom.Length);
-                if (!written)
-                    throw new IOException("The system clipboard rejected the write.");
-            }
+            if (!MacNative.ClipboardWrite(&native))
+                throw new IOException("The system clipboard rejected the write.");
         }
         finally
         {
-            for (var i = 0; i < files.Count; i++)
-                Utf8StringMarshaller.Free(filePointers[i]);
-            for (var i = 0; i < custom.Length; i++)
-            {
-                Utf8StringMarshaller.Free(typePointers[i]);
-                NativeMemory.Free(dataPointers[i]);
-            }
-            NativeMemory.Free(filePointers);
-            NativeMemory.Free(typePointers);
-            NativeMemory.Free(dataPointers);
-            NativeMemory.Free(lengths);
+            MacNativePackage.Free(ref native);
         }
     }
 

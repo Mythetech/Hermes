@@ -3,6 +3,7 @@
 #define HERMES_TYPES_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 // Callback function pointer types
@@ -64,6 +65,26 @@ typedef struct {
     const char* CustomSchemeNames[16];
 
 } HermesWindowParams;
+
+// Data in several formats crossing the library boundary. Absent formats are NULL with a zero count or length.
+typedef struct {
+    char* Text;
+    char* Html;
+    char* Url;
+    uint8_t* Png;
+    int PngLength;
+    char** Files;
+    int FileCount;
+    char** CustomTypes;
+    uint8_t** CustomData;
+    int* CustomLengths;
+    int CustomCount;
+} HermesNativePackage;
+
+// MacNativePackage.cs mirrors this layout.
+_Static_assert(sizeof(HermesNativePackage) == 88, "HermesNativePackage no longer matches its managed mirror");
+_Static_assert(offsetof(HermesNativePackage, Files) == 40, "HermesNativePackage no longer matches its managed mirror");
+_Static_assert(offsetof(HermesNativePackage, CustomCount) == 80, "HermesNativePackage no longer matches its managed mirror");
 
 // Window light/dark appearance, values must match HermesWindowTheme in managed code
 typedef enum {

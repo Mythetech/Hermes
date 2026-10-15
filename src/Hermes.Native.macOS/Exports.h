@@ -223,12 +223,11 @@ int Hermes_Clipboard_GetFormats(void);
 bool Hermes_Clipboard_HasType(const char* mimeType);
 char* Hermes_Clipboard_ReadText(void);
 char* Hermes_Clipboard_ReadHtml(void);
+char* Hermes_Clipboard_ReadUrl(void);
 uint8_t* Hermes_Clipboard_ReadPng(int* length);
 char** Hermes_Clipboard_ReadFiles(int* count);
 uint8_t* Hermes_Clipboard_ReadCustom(const char* mimeType, int* length);
-bool Hermes_Clipboard_Write(const char* text, const char* html, const uint8_t* png, int pngLength,
-                            const char** files, int fileCount,
-                            const char** customTypes, const uint8_t** customData, const int* customLengths, int customCount);
+bool Hermes_Clipboard_Write(const HermesNativePackage* package);
 void Hermes_Clipboard_Clear(void);
 void Hermes_Clipboard_StartMonitoring(void (*callback)(void));
 void Hermes_Clipboard_StopMonitoring(void);
