@@ -27,6 +27,22 @@ public sealed class WicPngDecoderTests
         Assert.False(WicPngDecoder.TryDecodeToBgra(new byte[] { 1, 2, 3 }, 1024, out _, out _, out _));
 
     [Fact]
+    public void TryDecodeToBgra_OnAnStaThread_StillDecodes()
+    {
+        // The UI thread is STA, where the decoder's request for the MTA fails and it decodes in the STA as it is.
+        var png = PngEncoder.EncodeRgba(1, 1, [10, 20, 30, 255]);
+        var decoded = false;
+        byte[]? bgra = null;
+        var thread = new Thread(() => decoded = WicPngDecoder.TryDecodeToBgra(png, 1024, out _, out _, out bgra));
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        Assert.True(decoded);
+        Assert.Equal(new byte[] { 30, 20, 10, 255 }, bgra);
+    }
+
+    [Fact]
     public void TryDecodeToBgra_PixelsOverTheLimit_ReturnsFalse()
     {
         var png = PngEncoder.EncodeRgba(2, 1, new byte[8]);

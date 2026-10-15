@@ -47,6 +47,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     private readonly Dictionary<string, Func<string, (Stream? Content, string? ContentType)>> _customSchemeHandlers = new();
 
     private WindowsMenuBackend? _menuBackend;
+    private WindowsDragSource? _activeDrag;
     private WindowsCustomTitlebar? _customTitlebar;
     private HermesWindowTheme _theme;
 
@@ -426,6 +427,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         if (_isDisposed) return;
         _isDisposed = true;
 
+        _activeDrag?.Cancel();
         _invokeQueue.Dispose();
 
         _webViewController?.Close();
@@ -565,6 +567,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     private LRESULT HandleDestroy()
     {
         s_hwndToInstance.TryRemove(_hwnd, out _);
+        _activeDrag?.Cancel();
 
         _webViewController?.Close();
         _webViewController = null;
@@ -1095,6 +1098,38 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     #endregion
 
     #region Drag and Drop
+
+    public Task<HermesDragResult> StartDragAsync(HermesDataPackage package)
+    {
+        ThrowIfNotInitialized();
+        var drag = new WindowsDragSource(_hwnd, package);
+        _activeDrag = drag;
+
+        // SHDoDragDrop runs a modal loop, so it is queued to start after the caller's handler returns.
+        if (!Post(() => RunDrag(drag)))
+            drag.Cancel();
+
+        return drag.Completion;
+    }
+
+    private void RunDrag(WindowsDragSource drag)
+    {
+        drag.Run();
+        if (ReferenceEquals(_activeDrag, drag))
+            _activeDrag = null;
+    }
+
+    // Unlike BeginInvoke, never runs the action inline, even when called on the UI thread.
+    private bool Post(Action action)
+    {
+        if (!_invokeQueue.TryEnqueue(action, completion: null, out var wakeupNeeded))
+            return false;
+
+        if (wakeupNeeded)
+            PInvoke.PostMessage(_hwnd, WM_USER_INVOKE, 0, 0);
+
+        return true;
+    }
 
     private void HandleDropMessage(string message, CoreWebView2WebMessageReceivedEventArgs args)
     {
