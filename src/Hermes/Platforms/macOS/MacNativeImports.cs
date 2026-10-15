@@ -414,6 +414,19 @@ internal static partial class MacNative
 
     #endregion
 
+    #region Global Hotkeys
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Hotkeys_SetCallback")]
+    internal static partial void HotkeysSetCallback(IntPtr callback);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Hotkeys_Register")]
+    internal static partial int HotkeysRegister(uint hotkeyNumber, uint keyCode, uint modifiers);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Hotkeys_Unregister")]
+    internal static partial void HotkeysUnregister(uint hotkeyNumber);
+
+    #endregion
+
     #region Memory Management
 
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Free")]

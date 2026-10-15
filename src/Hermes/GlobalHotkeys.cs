@@ -232,8 +232,14 @@ public static class GlobalHotkeys
     }
 
     // Runs under s_lock, so a backend constructor must not wait on the UI thread.
-    private static IGlobalHotkeyBackend CreateBackend() =>
-        new UnsupportedGlobalHotkeyBackend("Global hotkeys are not supported on this platform.");
+    private static IGlobalHotkeyBackend CreateBackend()
+    {
+#if MACOS
+        if (OperatingSystem.IsMacOS())
+            return Platforms.macOS.MacGlobalHotkeyBackend.Create();
+#endif
+        return new UnsupportedGlobalHotkeyBackend("Global hotkeys are not supported on this platform.");
+    }
 
     private sealed class Registration(string accelerator)
     {
