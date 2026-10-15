@@ -6,6 +6,7 @@ using Hermes.Abstractions;
 using Hermes.Blazor;
 using Hermes.Contracts.DataTransfer;
 using Hermes.Contracts.Diagnostics;
+using Hermes.Contracts.Hotkeys;
 using Hermes.Contracts.Notifications;
 using Hermes.Contracts.Plugins;
 using Hermes.Diagnostics;
@@ -80,6 +81,11 @@ public sealed class ScenarioRunner : IDisposable
             await RunClipboardChangedTestAsync();
             await RunClipboardChangedMixedThreadsTestAsync();
         }
+
+        // Global hotkeys need no WebView
+        await RunHotkeysRegisterTestAsync();
+        if (!OperatingSystem.IsMacOS())
+            await RunHotkeysActivateTestAsync();
 
         // Web message test runs LAST - gives WebView2 maximum time to initialize
         // On Windows, WebView2 init is async and can take several seconds in CI
@@ -1084,6 +1090,67 @@ public sealed class ScenarioRunner : IDisposable
         }
 
         return true;
+    }
+
+    private static async Task RunHotkeysRegisterTestAsync()
+    {
+        const string testName = "hotkeys-register";
+        TestReporter.Start(testName);
+
+        try
+        {
+            var timeout = TimeSpan.FromSeconds(10);
+            var first = await GlobalHotkeys.RegisterAsync("integration.register", "Ctrl+Alt+Shift+F12", "Integration test hotkey").WaitAsync(timeout);
+            await GlobalHotkeys.UnregisterAsync("integration.register").WaitAsync(timeout);
+            var second = await GlobalHotkeys.RegisterAsync("integration.register", "Ctrl+Alt+Shift+F12", "Integration test hotkey").WaitAsync(timeout);
+            await GlobalHotkeys.UnregisterAsync("integration.register").WaitAsync(timeout);
+
+            TestReporter.Assert(testName,
+                first.Status == HermesHotkeyStatus.Registered && second.Status == HermesHotkeyStatus.Registered,
+                $"first: {first.Status} ({first.Reason}), second: {second.Status} ({second.Reason})");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail(testName, ex.Message);
+        }
+    }
+
+    private static async Task RunHotkeysActivateTestAsync()
+    {
+        const string testName = "hotkeys-activate";
+        TestReporter.Start(testName);
+        var activated = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnActivated(string id) => activated.TrySetResult(id);
+        GlobalHotkeys.Activated += OnActivated;
+
+        try
+        {
+            var result = await GlobalHotkeys.RegisterAsync("integration.activate", "Ctrl+Alt+Shift+F12", "Integration test hotkey")
+                .WaitAsync(TimeSpan.FromSeconds(10));
+            if (result.Status != HermesHotkeyStatus.Registered)
+            {
+                TestReporter.Fail(testName, $"Registration returned {result.Status} ({result.Reason})");
+                return;
+            }
+
+            ExternalHotkey.PressCtrlAltShiftF12();
+            var id = await activated.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            TestReporter.Assert(testName, id == "integration.activate", $"Activated reported '{id}'");
+        }
+        catch (TimeoutException)
+        {
+            TestReporter.Fail(testName, "No Activated within 5 s of the external key press");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail(testName, ex.Message);
+        }
+        finally
+        {
+            GlobalHotkeys.Activated -= OnActivated;
+            await GlobalHotkeys.UnregisterAsync("integration.activate").WaitAsync(TimeSpan.FromSeconds(10));
+        }
     }
 
     public void Dispose()

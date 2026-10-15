@@ -89,7 +89,7 @@ jobs:
           # libnotify4 is not preinstalled on ubuntu-24.04 runners but Photino's
           # and PhotinoX's prebuilt native libraries (benchmark app smoke boot)
           # link against libnotify.so.4
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev cmake xvfb libnotify4 xclip
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev cmake xvfb libnotify4 xclip xdotool
 
       - name: Build Native Library (Linux)
         if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
