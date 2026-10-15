@@ -1,6 +1,7 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 #include "HermesWindow.h"
 #include "Exports.h"
+#include "HermesClipboard.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,8 +44,17 @@ void Hermes_App_Init(int* argc, char*** argv) {
     g_gtkInitialized = TRUE;
 }
 
+gboolean hermes_gtk_ready(void) {
+    return g_gtkInitialized;
+}
+
+gboolean hermes_is_ui_thread(void) {
+    return g_gtkInitialized && pthread_equal(pthread_self(), g_uiThreadId);
+}
+
 void Hermes_App_Run(void) {
     gtk_main();
+    HermesClipboard_StoreOnExit();
 }
 
 void Hermes_App_Quit(void) {
@@ -840,6 +850,9 @@ void Hermes_Window_WaitForClose(void* window) {
     g_loopWindow = hw;
     gtk_main();
     g_loopWindow = outerLoopWindow;
+    if (outerLoopWindow == NULL) {
+        HermesClipboard_StoreOnExit();
+    }
 }
 
 void Hermes_Window_Destroy(void* window) {

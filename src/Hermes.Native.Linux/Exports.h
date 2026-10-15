@@ -238,6 +238,21 @@ int Hermes_Dialog_ShowMessage(void* parentWindow, const char* title, const char*
                                int buttons, int icon);
 
 // ============================================================================
+// Clipboard
+// ============================================================================
+
+// Strings and buffers are freed with Hermes_Free, string arrays with Hermes_FreeStringArray.
+bool Hermes_Clipboard_IsReady(void);
+char** Hermes_Clipboard_GetTargets(int* count);
+char* Hermes_Clipboard_ReadText(void);
+uint8_t* Hermes_Clipboard_ReadContents(const char* target, int* length);
+uint8_t* Hermes_Clipboard_ReadImageAsPng(int* length);
+bool Hermes_Clipboard_Write(const char** targets, const uint8_t** data, const int* lengths, int count);
+void Hermes_Clipboard_Clear(void);
+void Hermes_Clipboard_StartMonitoring(void (*callback)(void));
+void Hermes_Clipboard_StopMonitoring(void);
+
+// ============================================================================
 // Status Icon Operations (requires libappindicator3)
 // ============================================================================
 
