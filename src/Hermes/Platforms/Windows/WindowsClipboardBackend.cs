@@ -30,11 +30,9 @@ internal sealed class WindowsClipboardBackend : IClipboardBackend
 
     public string? UnsupportedReason => null;
 
-    public event Action? Changed
-    {
-        add { }
-        remove { }
-    }
+    private WindowsClipboardMonitor? _monitor;
+
+    public event Action? Changed;
 
     public HermesDataFormats GetFormats()
     {
@@ -116,17 +114,15 @@ internal sealed class WindowsClipboardBackend : IClipboardBackend
         PInvoke.EmptyClipboard();
     }
 
-    public void StartMonitoring()
-    {
-    }
+    public void StartMonitoring() => _monitor ??= new WindowsClipboardMonitor(() => Changed?.Invoke());
 
     public void StopMonitoring()
     {
+        _monitor?.Dispose();
+        _monitor = null;
     }
 
-    public void Dispose()
-    {
-    }
+    public void Dispose() => StopMonitoring();
 
     private static byte[]? CreateLegacyDib(ReadOnlySpan<byte> png)
     {
