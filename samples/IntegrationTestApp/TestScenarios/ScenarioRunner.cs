@@ -1,4 +1,5 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
+using System.Diagnostics;
 using System.Text;
 using Hermes;
 using Hermes.Abstractions;
@@ -70,6 +71,8 @@ public sealed class ScenarioRunner : IDisposable
         if (RichClipboardSupported)
         {
             RunClipboardRichRoundTripTest();
+            if (OperatingSystem.IsWindows())
+                RunClipboardBusyTest();
             await RunClipboardChangedTestAsync();
             await RunClipboardChangedMixedThreadsTestAsync();
         }
@@ -631,8 +634,8 @@ public sealed class ScenarioRunner : IDisposable
         }
     }
 
-    // Platforms whose clipboard backend reads and writes every format; PR 3 adds Windows.
-    private static bool RichClipboardSupported => OperatingSystem.IsMacOS() || OperatingSystem.IsLinux();
+    // Platforms whose clipboard backend reads and writes every format.
+    private static bool RichClipboardSupported => OperatingSystem.IsMacOS() || OperatingSystem.IsLinux() || OperatingSystem.IsWindows();
 
     private void RunClipboardRichRoundTripTest()
     {
@@ -748,6 +751,51 @@ public sealed class ScenarioRunner : IDisposable
         }
     }
 
+    private void RunClipboardBusyTest()
+    {
+        const string testName = "clipboard-busy";
+        TestReporter.Start(testName);
+
+        try
+        {
+            // Holds the clipboard open for three seconds from another process, as clipboard managers do.
+            var script = Path.Combine(Path.GetTempPath(), "hermes-hold-clipboard.ps1");
+            File.WriteAllText(script, """
+                Add-Type -Namespace W -Name U -MemberDefinition '[DllImport("user32.dll")] public static extern bool OpenClipboard(System.IntPtr h); [DllImport("user32.dll")] public static extern bool CloseClipboard();'
+                [W.U]::OpenClipboard([IntPtr]::Zero) | Out-Null
+                'held'
+                Start-Sleep -Seconds 3
+                [W.U]::CloseClipboard() | Out-Null
+                """);
+            using var holder = Process.Start(new ProcessStartInfo("powershell", $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\"")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+            })!;
+            holder.StandardOutput.ReadLine();
+
+            var watch = Stopwatch.StartNew();
+            var threw = false;
+            try
+            {
+                Clipboard.SetText("busy");
+            }
+            catch (IOException)
+            {
+                threw = true;
+            }
+            watch.Stop();
+            holder.WaitForExit(10_000);
+
+            TestReporter.Assert(testName, threw && watch.ElapsedMilliseconds < 1000,
+                $"Expected IOException within 1s while another process held the clipboard; threw={threw}, took {watch.ElapsedMilliseconds} ms");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail(testName, ex.Message);
+        }
+    }
+
     private async Task RunClipboardChangedTestAsync()
     {
         const string testName = "clipboard-changed";
@@ -818,6 +866,21 @@ public sealed class ScenarioRunner : IDisposable
     {
         if (OperatingSystem.IsMacOS())
             return Clipboard.HasCustom("image/tiff");
+
+        if (OperatingSystem.IsWindows())
+        {
+            // Windows PowerShell 5.1 runs STA, which System.Windows.Forms.Clipboard requires.
+            using var process = Process.Start(new ProcessStartInfo("powershell",
+                "-NoProfile -Sta -Command \"Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::ContainsImage()\"")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+            })!;
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit(10_000);
+            return output.Trim().Equals("True", StringComparison.OrdinalIgnoreCase);
+        }
+
         return true;
     }
 
