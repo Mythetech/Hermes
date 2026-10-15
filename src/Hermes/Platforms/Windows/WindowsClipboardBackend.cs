@@ -26,6 +26,7 @@ internal sealed class WindowsClipboardBackend : IClipboardBackend
     private static readonly Lazy<uint> s_htmlFormat = new(() => Register("HTML Format"));
     private static readonly Lazy<uint> s_pngFormat = new(() => Register("PNG"));
     private static readonly Lazy<uint> s_dropEffectFormat = new(() => Register("Preferred DropEffect"));
+    private static readonly Lazy<uint> s_urlFormat = new(() => Register("UniformResourceLocatorW"));
 
     public bool IsSupported => true;
 
@@ -46,6 +47,8 @@ internal sealed class WindowsClipboardBackend : IClipboardBackend
             formats |= HermesDataFormats.Png;
         if (IsAvailable(CfHdrop))
             formats |= HermesDataFormats.Files;
+        if (IsAvailable(s_urlFormat.Value))
+            formats |= HermesDataFormats.Url;
         return formats;
     }
 
@@ -63,6 +66,7 @@ internal sealed class WindowsClipboardBackend : IClipboardBackend
         byte[]? dibV5Bytes = null;
         byte[]? dibBytes = null;
         byte[]? dropBytes = null;
+        byte[]? urlBytes = null;
         var custom = new Dictionary<string, ReadOnlyMemory<byte>>(StringComparer.OrdinalIgnoreCase);
 
         // Only copy while the clipboard is open; decoding afterwards keeps other apps from waiting on it.
@@ -83,6 +87,8 @@ internal sealed class WindowsClipboardBackend : IClipboardBackend
             }
             if (formats.HasFlag(HermesDataFormats.Files))
                 dropBytes = GetData(CfHdrop);
+            if (formats.HasFlag(HermesDataFormats.Url))
+                urlBytes = GetData(s_urlFormat.Value);
             foreach (var (mimeType, format) in customFormats)
             {
                 if (GetData(format) is { } data)
@@ -97,40 +103,60 @@ internal sealed class WindowsClipboardBackend : IClipboardBackend
             Html = htmlBytes is null ? null : CfHtmlFormat.Parse(htmlBytes),
             Png = png is null ? null : new ReadOnlyMemory<byte>(png),
             Files = dropBytes is not null && DropFilesFormat.Parse(dropBytes) is { Count: > 0 } paths ? paths : null,
+            Url = urlBytes is null ? null : ParseUrl(urlBytes),
             Custom = custom,
         };
     }
 
     public void Write(HermesDataPackage package)
     {
-        // Decode and register first, so WIC does not hold the clipboard and a bad custom name fails before it is emptied.
-        var legacyDib = package.Png is { } pngToDecode ? CreateLegacyDib(pngToDecode.Span) : null;
-        var customFormats = RegisterCustomFormats(package);
+        // Encode first, so WIC does not hold the clipboard and a bad custom name fails before it is emptied.
+        var formats = EncodeFormats(package);
 
         using var scope = ClipboardScope.Open();
         if (!PInvoke.EmptyClipboard())
             throw new IOException("The clipboard could not be emptied.");
 
+        foreach (var (format, data) in formats)
+            SetData(format, data.Span);
+    }
+
+    /// <summary>
+    /// Every Windows format a package is written as, in write order. Outbound drags offer the same set.
+    /// </summary>
+    internal static IReadOnlyList<(uint Format, ReadOnlyMemory<byte> Data)> EncodeFormats(HermesDataPackage package)
+    {
+        var legacyDib = package.Png is { } pngToDecode ? CreateLegacyDib(pngToDecode.Span) : null;
+        var customFormats = RegisterCustomFormats(package);
+        var formats = new List<(uint Format, ReadOnlyMemory<byte> Data)>();
+
         if (package.Text is { } text)
-            SetData(CfUnicodeText, EncodeUtf16(text));
+            formats.Add((CfUnicodeText, EncodeUtf16(text)));
         if (package.Html is { } html)
-            SetData(s_htmlFormat.Value, WithTerminator(CfHtmlFormat.Build(html)));
+            formats.Add((s_htmlFormat.Value, WithTerminator(CfHtmlFormat.Build(html))));
         if (package.Png is { } png)
         {
-            SetData(s_pngFormat.Value, png.Span);
+            formats.Add((s_pngFormat.Value, png));
             if (legacyDib is not null)
-                SetData(CfDib, legacyDib);
+                formats.Add((CfDib, legacyDib));
         }
         if (package.Files is { } files)
         {
-            SetData(CfHdrop, DropFilesFormat.Build(files));
-            Span<byte> effect = stackalloc byte[4];
+            formats.Add((CfHdrop, DropFilesFormat.Build(files)));
+            var effect = new byte[4];
             BinaryPrimitives.WriteInt32LittleEndian(effect, DropEffectCopy);
-            SetData(s_dropEffectFormat.Value, effect);
+            formats.Add((s_dropEffectFormat.Value, effect));
         }
-        foreach (var (format, data) in customFormats)
-            SetData(format, data.Span);
+        if (package.Url is { } url)
+            formats.Add((s_urlFormat.Value, EncodeUtf16(url.AbsoluteUri)));
+
+        formats.AddRange(customFormats);
+        return formats;
     }
+
+    // Files travel as CF_HDROP, so a file URL here is not a link.
+    internal static Uri? ParseUrl(byte[] bytes) =>
+        Uri.TryCreate(DecodeUtf16(bytes).Trim(), UriKind.Absolute, out var url) && !url.IsFile ? url : null;
 
     public void Clear()
     {
