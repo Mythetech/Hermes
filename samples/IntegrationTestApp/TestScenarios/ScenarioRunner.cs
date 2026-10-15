@@ -765,14 +765,18 @@ public sealed class ScenarioRunner : IDisposable
             // Holds the clipboard open for three seconds from another process, as clipboard managers do.
             File.WriteAllText(script, """
                 param([string]$Marker)
+                Add-Type -AssemblyName System.Windows.Forms
                 Add-Type -Namespace W -Name U -MemberDefinition '[DllImport("user32.dll")] public static extern bool OpenClipboard(System.IntPtr h); [DllImport("user32.dll")] public static extern bool CloseClipboard();'
-                $opened = [W.U]::OpenClipboard([IntPtr]::Zero)
+                # A clipboard opened with a NULL owner does not lock out other processes; tie the open to a window.
+                $form = New-Object System.Windows.Forms.Form
+                $opened = [W.U]::OpenClipboard($form.Handle)
                 [System.IO.File]::WriteAllText($Marker, [string]$opened)
                 Start-Sleep -Seconds 3
                 [W.U]::CloseClipboard() | Out-Null
+                $form.Dispose()
                 """);
             holder = Process.Start(new ProcessStartInfo("powershell",
-                $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\" \"{marker}\"")
+                $"-NoProfile -Sta -ExecutionPolicy Bypass -File \"{script}\" \"{marker}\"")
             {
                 UseShellExecute = false,
             })!;
