@@ -105,9 +105,25 @@ static gboolean is_drop_target(HermesDragDrop* dd, const char* name) {
     return FALSE;
 }
 
+static void drop_unclaimed_captures(HermesDragDrop* dd) {
+    GList* link = dd->captures.head;
+    while (link != NULL) {
+        GList* next = link->next;
+        DropCapture* capture = link->data;
+        if (!capture->claimed) {
+            g_queue_delete_link(&dd->captures, link);
+            capture_free(capture);
+        }
+        link = next;
+    }
+}
+
 static gboolean on_drag_drop(GtkWidget* widget, GdkDragContext* context, gint x, gint y, guint time, gpointer user_data) {
     (void)widget; (void)x; (void)y;
     HermesDragDrop* dd = user_data;
+
+    // One slot per window: a drop the page ignored must never pair with a later claim.
+    drop_unclaimed_captures(dd);
 
     // Drags that start in this process belong to the page or to Hermes itself, not to another app.
     if (gtk_drag_get_source_widget(context) != NULL) {
