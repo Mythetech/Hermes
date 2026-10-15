@@ -117,6 +117,10 @@ internal static partial class MacNative
     [return: MarshalAs(UnmanagedType.U1)]
     internal static unsafe partial bool WindowTakeDropCapture(IntPtr window, HermesNativePackage* package);
 
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Window_StartDrag")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static unsafe partial bool WindowStartDrag(IntPtr window, HermesNativePackage* package);
+
     #endregion
 
     #region Threading

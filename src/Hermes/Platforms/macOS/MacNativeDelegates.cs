@@ -91,4 +91,10 @@ internal static class MacNativeDelegates
     /// </summary>
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void ClipboardChangedCallback();
+
+    /// <summary>
+    /// Called on the main thread when a drag the app started ends, or is canceled because its window closed.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void DragEndedCallback([MarshalAs(UnmanagedType.U1)] bool dropped);
 }

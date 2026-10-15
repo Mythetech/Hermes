@@ -53,6 +53,7 @@ static NSArray<NSString*>* SplitLines(const char* joined) {
         _onWebMessage = params->OnWebMessage;
         _onCustomScheme = params->OnCustomScheme;
         _onWebViewCrash = params->OnWebViewCrash;
+        _onDragEnded = params->OnDragEnded;
         _schemeHandlers = [NSMutableArray new];
         _pendingSchemes = [NSMutableArray new];
 
@@ -603,6 +604,10 @@ static NSArray<NSString*>* SplitLines(const char* joined) {
 #pragma mark - Drag Support
 
 - (void)setupDragMonitors {
+    if (_dragDrop) {
+        [self setupDragSourceMonitor];
+    }
+
     if (!_customTitleBar) return;
 
     __weak typeof(self) weakSelf = self;
@@ -677,6 +682,38 @@ static NSArray<NSString*>* SplitLines(const char* joined) {
     }];
 }
 
+// A native drag has to start from an event of the press still in progress, so keep the latest one.
+- (void)setupDragSourceMonitor {
+    __weak typeof(self) weakSelf = self;
+    NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp;
+    _dragEventMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:mask handler:^NSEvent*(NSEvent* event) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (strongSelf) {
+            BOOL pressHere = event.type != NSEventTypeLeftMouseUp && event.window == strongSelf.window;
+            strongSelf.lastMouseEvent = pressHere ? event : nil;
+        }
+        return event;
+    }];
+}
+
+- (BOOL)startDragWithPackage:(const HermesNativePackage*)package {
+    NSEvent* event = _lastMouseEvent;
+    _lastMouseEvent = nil;
+    if (event == nil || ([NSEvent pressedMouseButtons] & 1) == 0) {
+        return NO;
+    }
+    return [_webView startDragWithPackage:package event:event ended:_onDragEnded];
+}
+
+- (void)endDragAndDrop {
+    [_webView cancelDrag];
+    if (_dragEventMonitor) {
+        [NSEvent removeMonitor:_dragEventMonitor];
+        _dragEventMonitor = nil;
+    }
+    _lastMouseEvent = nil;
+}
+
 - (void)teardownDragMonitors {
     if (_mouseDownMonitor) {
         [NSEvent removeMonitor:_mouseDownMonitor];
@@ -694,6 +731,7 @@ static NSArray<NSString*>* SplitLines(const char* joined) {
 #pragma mark - Cleanup
 
 - (void)dealloc {
+    [self endDragAndDrop];
     [self teardownDragMonitors];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_webViewConfiguration.userContentController removeScriptMessageHandlerForName:@"hermesinterop"];

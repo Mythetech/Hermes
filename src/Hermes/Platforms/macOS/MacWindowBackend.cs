@@ -19,6 +19,7 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
     private bool _initialized;
     private bool _disposed;
     private bool _dragDrop;
+    private TaskCompletionSource<HermesDragResult>? _drag;
 
     // Keep strong references to delegates to prevent GC during window lifetime
     private readonly List<Delegate> _pinnedDelegates = new();
@@ -326,6 +327,32 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
 
     #endregion
 
+    #region Drag and Drop
+
+    public unsafe Task<HermesDragResult> StartDragAsync(HermesDataPackage package)
+    {
+        EnsureInitialized();
+
+        var native = MacNativePackage.Allocate(package);
+        try
+        {
+            var drag = new TaskCompletionSource<HermesDragResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            // Set before the call, so a drag that ends during it is still reported.
+            Volatile.Write(ref _drag, drag);
+            if (MacNative.WindowStartDrag(_windowHandle, &native))
+                return drag.Task;
+
+            Interlocked.CompareExchange(ref _drag, null, drag);
+            return Task.FromResult(HermesDragResult.Canceled);
+        }
+        finally
+        {
+            MacNativePackage.Free(ref native);
+        }
+    }
+
+    #endregion
+
     #region Threading
 
     public int UIThreadId => _uiThreadId;
@@ -489,6 +516,10 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
         var webViewCrashDelegate = new MacNativeDelegates.WebViewCrashCallback(OnNativeWebViewCrash);
         _pinnedDelegates.Add(webViewCrashDelegate);
         parameters.OnWebViewCrash = Marshal.GetFunctionPointerForDelegate(webViewCrashDelegate);
+
+        var dragEndedDelegate = new MacNativeDelegates.DragEndedCallback(OnNativeDragEnded);
+        _pinnedDelegates.Add(dragEndedDelegate);
+        parameters.OnDragEnded = Marshal.GetFunctionPointerForDelegate(dragEndedDelegate);
     }
 
     private bool OnNativeClosing()
@@ -522,6 +553,9 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
     {
         FocusOut?.Invoke();
     }
+
+    private void OnNativeDragEnded(bool dropped) =>
+        Interlocked.Exchange(ref _drag, null)?.TrySetResult(dropped ? HermesDragResult.Dropped : HermesDragResult.Canceled);
 
     private void OnNativeWebViewCrash()
     {
@@ -686,6 +720,8 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
     {
         if (_disposed) return;
         _disposed = true;
+
+        Interlocked.Exchange(ref _drag, null)?.TrySetResult(HermesDragResult.Canceled);
 
         if (_windowHandle != IntPtr.Zero)
         {

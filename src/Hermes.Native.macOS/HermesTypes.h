@@ -19,6 +19,7 @@ typedef void (*WebViewCrashCallback)(void);
 typedef void (*NotificationClickedCallback)(const char* notificationId);
 typedef void (*NotificationPermissionCallback)(void* context, bool granted);
 typedef void (*NotificationCompletionCallback)(void* context, const char* error);
+typedef void (*DragEndedCallback)(bool dropped);
 
 // Window initialization parameters
 typedef struct {
@@ -65,9 +66,11 @@ typedef struct {
     // Custom URL schemes to register (must be set before WebView creation)
     const char* CustomSchemeNames[16];
 
-    // With DragDrop: the page's drop script, and the custom MIME types to read from drops, one per line
+    // With DragDrop: the page's drop script, the custom MIME types to read from drops (one per line),
+    // and how a drag the app started ended
     const char* DragDropScript;
     const char* DropCustomTypes;
+    DragEndedCallback OnDragEnded;
 
 } HermesWindowParams;
 
@@ -75,7 +78,8 @@ typedef struct {
 _Static_assert(offsetof(HermesWindowParams, DragDrop) == 75, "HermesWindowParams no longer matches its managed mirror");
 _Static_assert(offsetof(HermesWindowParams, OnClosing) == 80, "HermesWindowParams no longer matches its managed mirror");
 _Static_assert(offsetof(HermesWindowParams, DragDropScript) == 272, "HermesWindowParams no longer matches its managed mirror");
-_Static_assert(sizeof(HermesWindowParams) == 288, "HermesWindowParams no longer matches its managed mirror");
+_Static_assert(offsetof(HermesWindowParams, OnDragEnded) == 288, "HermesWindowParams no longer matches its managed mirror");
+_Static_assert(sizeof(HermesWindowParams) == 296, "HermesWindowParams no longer matches its managed mirror");
 
 // Data in several formats crossing the library boundary. Absent formats are NULL with a zero count or length.
 // A package the library fills in is released with Hermes_FreeNativePackage.

@@ -280,6 +280,13 @@ bool Hermes_Window_TakeDropCapture(void* window, HermesNativePackage* package) {
     }
 }
 
+bool Hermes_Window_StartDrag(void* window, const HermesNativePackage* package) {
+    @autoreleasepool {
+        HermesWindow* hermesWindow = (__bridge HermesWindow*)window;
+        return [hermesWindow startDragWithPackage:package];
+    }
+}
+
 #pragma mark - Threading
 
 void Hermes_Window_Invoke(void* window, InvokeCallback callback) {

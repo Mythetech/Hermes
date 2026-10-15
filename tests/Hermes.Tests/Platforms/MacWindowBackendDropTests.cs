@@ -77,7 +77,16 @@ public sealed class MacWindowBackendDropTests
         Assert.Equal(75, (int)Marshal.OffsetOf<HermesWindowParams>(nameof(HermesWindowParams.DragDrop)));
         Assert.Equal(80, (int)Marshal.OffsetOf<HermesWindowParams>(nameof(HermesWindowParams.OnClosing)));
         Assert.Equal(272, (int)Marshal.OffsetOf<HermesWindowParams>(nameof(HermesWindowParams.DragDropScript)));
-        Assert.Equal(288, Marshal.SizeOf<HermesWindowParams>());
+        Assert.Equal(288, (int)Marshal.OffsetOf<HermesWindowParams>(nameof(HermesWindowParams.OnDragEnded)));
+        Assert.Equal(296, Marshal.SizeOf<HermesWindowParams>());
+    }
+
+    [Fact]
+    public async Task StartDragAsync_BeforeInitialize_Throws()
+    {
+        using var backend = new MacWindowBackend();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => backend.StartDragAsync(new HermesDataPackage { Text = "x" }));
     }
 }
 #endif

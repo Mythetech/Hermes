@@ -88,7 +88,9 @@ internal struct HermesWindowParams
     [MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)]
     public IntPtr[] CustomSchemeNames;
 
-    // With DragDrop: the page's drop script, and the custom MIME types to read from drops, one per line
+    // With DragDrop: the page's drop script, the custom MIME types to read from drops (one per line),
+    // and how a drag the app started ended
     public IntPtr DragDropScript;
     public IntPtr DropCustomTypes;
+    public IntPtr OnDragEnded;
 }

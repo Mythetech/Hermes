@@ -110,6 +110,10 @@ void Hermes_Window_RegisterCustomScheme(void* window, const char* scheme);
 /// Move the latest drop another app made on the window into package; free it with Hermes_FreeNativePackage
 bool Hermes_Window_TakeDropCapture(void* window, HermesNativePackage* package);
 
+/// Start a native drag of the package from the left-button press in progress; false when there is none.
+/// OnDragEnded reports the end of a drag that started.
+bool Hermes_Window_StartDrag(void* window, const HermesNativePackage* package);
+
 // ============================================================================
 // Threading
 // ============================================================================
