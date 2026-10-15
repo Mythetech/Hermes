@@ -421,6 +421,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         hostBuilder.Services.AddSingleton<IHermesPlatformService>(new HermesPlatformService(window));
         hostBuilder.Services.AddSingleton<IHermesMenuProvider>(new HermesMenuProvider(() => window.MenuBar));
         hostBuilder.Services.AddSingleton<IClipboard, DesktopClipboard>();
+        hostBuilder.Services.AddSingleton<IDragDrop>(new DesktopDragDrop(window));
         hostBuilder.Services.AddSingleton<INativeNotifications, DesktopNativeNotifications>();
 
         // Build the real IHost rather than a bare provider so AddHostedService
