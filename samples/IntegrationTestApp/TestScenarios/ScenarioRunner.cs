@@ -1096,22 +1096,36 @@ public sealed class ScenarioRunner : IDisposable
     {
         const string testName = "hotkeys-register";
         TestReporter.Start(testName);
+        var timeout = TimeSpan.FromSeconds(10);
+        var reported = false;
 
         try
         {
-            var timeout = TimeSpan.FromSeconds(10);
             var first = await GlobalHotkeys.RegisterAsync("integration.register", "Ctrl+Alt+Shift+F12", "Integration test hotkey").WaitAsync(timeout);
             await GlobalHotkeys.UnregisterAsync("integration.register").WaitAsync(timeout);
             var second = await GlobalHotkeys.RegisterAsync("integration.register", "Ctrl+Alt+Shift+F12", "Integration test hotkey").WaitAsync(timeout);
-            await GlobalHotkeys.UnregisterAsync("integration.register").WaitAsync(timeout);
 
+            reported = true;
             TestReporter.Assert(testName,
                 first.Status == HermesHotkeyStatus.Registered && second.Status == HermesHotkeyStatus.Registered,
                 $"first: {first.Status} ({first.Reason}), second: {second.Status} ({second.Reason})");
         }
         catch (Exception ex)
         {
+            reported = true;
             TestReporter.Fail(testName, ex.Message);
+        }
+        finally
+        {
+            try
+            {
+                await GlobalHotkeys.UnregisterAsync("integration.register").WaitAsync(timeout);
+            }
+            catch (Exception ex)
+            {
+                if (!reported)
+                    TestReporter.Fail(testName, "Cleanup unregister failed: " + ex.Message);
+            }
         }
     }
 
@@ -1122,34 +1136,59 @@ public sealed class ScenarioRunner : IDisposable
         var activated = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         void OnActivated(string id) => activated.TrySetResult(id);
         GlobalHotkeys.Activated += OnActivated;
+        var reported = false;
 
         try
         {
-            var result = await GlobalHotkeys.RegisterAsync("integration.activate", "Ctrl+Alt+Shift+F12", "Integration test hotkey")
-                .WaitAsync(TimeSpan.FromSeconds(10));
+            HermesHotkeyResult result;
+            try
+            {
+                result = await GlobalHotkeys.RegisterAsync("integration.activate", "Ctrl+Alt+Shift+F12", "Integration test hotkey")
+                    .WaitAsync(TimeSpan.FromSeconds(10));
+            }
+            catch (TimeoutException)
+            {
+                throw new TimeoutException("Registration did not complete within 10 s");
+            }
+
             if (result.Status != HermesHotkeyStatus.Registered)
             {
+                reported = true;
                 TestReporter.Fail(testName, $"Registration returned {result.Status} ({result.Reason})");
                 return;
             }
 
             ExternalHotkey.PressCtrlAltShiftF12();
-            var id = await activated.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            string id;
+            try
+            {
+                id = await activated.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            catch (TimeoutException)
+            {
+                throw new TimeoutException("No Activated within 5 s of the external key press");
+            }
 
+            reported = true;
             TestReporter.Assert(testName, id == "integration.activate", $"Activated reported '{id}'");
-        }
-        catch (TimeoutException)
-        {
-            TestReporter.Fail(testName, "No Activated within 5 s of the external key press");
         }
         catch (Exception ex)
         {
+            reported = true;
             TestReporter.Fail(testName, ex.Message);
         }
         finally
         {
             GlobalHotkeys.Activated -= OnActivated;
-            await GlobalHotkeys.UnregisterAsync("integration.activate").WaitAsync(TimeSpan.FromSeconds(10));
+            try
+            {
+                await GlobalHotkeys.UnregisterAsync("integration.activate").WaitAsync(TimeSpan.FromSeconds(10));
+            }
+            catch (Exception ex)
+            {
+                if (!reported)
+                    TestReporter.Fail(testName, "Cleanup unregister failed: " + ex.Message);
+            }
         }
     }
 
