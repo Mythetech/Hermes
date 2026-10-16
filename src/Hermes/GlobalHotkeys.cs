@@ -11,7 +11,7 @@ namespace Hermes;
 public static class GlobalHotkeys
 {
     /// <summary>The most hotkeys one app can register.</summary>
-    public const int MaxRegistrations = 128;
+    public static int MaxRegistrations { get; } = 128;
 
     private static readonly Lock s_lock = new();
     private static readonly SemaphoreSlim s_gate = new(1, 1);
