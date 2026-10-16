@@ -651,6 +651,15 @@ static void portal_register(const HotkeyRequest* request) {
     portal_sync();
 }
 
+static gboolean binding_contains(int number) {
+    for (guint i = 0; i < g_portal.binding->len; i++) {
+        if (g_array_index(g_portal.binding, int, i) == number) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
 static void portal_unregister(int number) {
     guint index = 0;
     if (g_portal.shortcuts == NULL || portal_find(number, &index) == NULL) {
@@ -658,10 +667,30 @@ static void portal_unregister(int number) {
     }
 
     PortalShortcut* shortcut = g_ptr_array_index(g_portal.shortcuts, index);
-    if (!shortcut->answered) {
+    gboolean unanswered = !shortcut->answered;
+    gboolean inFlight = g_portal.busy && binding_contains(number);
+    if (unanswered) {
         report(number, HotkeyStatus_Failed, NULL, "The hotkey was unregistered before the desktop answered.");
     }
     g_ptr_array_remove_index(g_portal.shortcuts, index);
+
+    if (unanswered && inFlight && g_portal.onResponse == on_shortcuts_bound && g_portal.requestPath != NULL) {
+        // Closing the request dismisses its consent dialog; the portal sends no Response afterwards.
+        g_dbus_connection_call(g_portal.bus, PORTAL_BUS_NAME, g_portal.requestPath, REQUEST_INTERFACE, "Close",
+                               NULL, NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, NULL, NULL);
+        g_portal.onResponse = NULL;
+        portal_end_request();
+        portal_refuse_pending(HotkeyStatus_Failed, "The desktop request was withdrawn.");
+        // A new session re-binds the approved shortcuts, which the portal accepts without prompting.
+        g_portal.dirty = TRUE;
+        portal_finish(TRUE, FALSE);
+        return;
+    }
+
+    if (inFlight) {
+        g_portal.dirty = TRUE;
+        return;
+    }
 
     // The portal cannot unbind one shortcut; the next bind leaves it out, and the last one closes the session.
     if (g_portal.shortcuts->len == 0) {
