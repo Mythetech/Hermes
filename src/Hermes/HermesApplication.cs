@@ -279,14 +279,17 @@ public static class HermesApplication
             return;
         }
 
-        try
+        foreach (var subscriber in handler.GetInvocationList())
         {
-            handler(exception);
-        }
-        catch (Exception handlerException)
-        {
-            Diagnostics.HermesLogger.Error(
-                "DispatcherUnhandledException subscriber threw.", handlerException);
+            try
+            {
+                ((Action<Exception>)subscriber)(exception);
+            }
+            catch (Exception handlerException)
+            {
+                Diagnostics.HermesLogger.Error(
+                    "DispatcherUnhandledException subscriber threw.", handlerException);
+            }
         }
     }
 
