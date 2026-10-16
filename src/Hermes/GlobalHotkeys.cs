@@ -70,7 +70,7 @@ public static class GlobalHotkeys
     /// <param name="ct">Cancels the registration.</param>
     /// <exception cref="ArgumentException">The id is blank, or the accelerator is invalid, has no modifier, uses an unsupported key, or is reserved.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="ct"/> was canceled before the registration completed; the hotkey is left unregistered.</exception>
-    /// <remarks>Await it rather than blocking on it: completing it can need the app's message loop, so a wait on the UI thread, before the loop runs, or in an <see cref="Activated"/> handler may never return. Canceling before it completes leaves the hotkey unregistered and throws <see cref="OperationCanceledException"/>; on Wayland it also withdraws a consent dialog that is still open.</remarks>
+    /// <remarks>Await it rather than blocking on it: completing it can need the app's message loop, so a wait on the UI thread, before the loop runs, or in an <see cref="Activated"/> handler may never return. On Wayland, canceling also withdraws a consent dialog that is still open.</remarks>
     public static async Task<HermesHotkeyResult> RegisterAsync(string id, string accelerator, string? description, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
@@ -114,9 +114,31 @@ public static class GlobalHotkeys
             if (ct.IsCancellationRequested)
             {
                 if (result.Status == HermesHotkeyStatus.Registered)
-                    await backend.UnregisterAsync(id);
+                {
+                    Registration? removed;
+                    lock (s_lock)
+                        s_registrations.Remove(id, out removed);
 
-                Forget(id);
+                    try
+                    {
+                        await backend.UnregisterAsync(id);
+                    }
+                    catch
+                    {
+                        if (removed is not null)
+                        {
+                            lock (s_lock)
+                                s_registrations[id] = removed;
+                        }
+
+                        throw;
+                    }
+                }
+                else
+                {
+                    Forget(id);
+                }
+
                 throw new OperationCanceledException(ct);
             }
 

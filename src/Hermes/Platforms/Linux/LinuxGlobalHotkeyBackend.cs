@@ -21,6 +21,8 @@ internal sealed class LinuxGlobalHotkeyBackend : IGlobalHotkeyBackend
     private static readonly LinuxNativeDelegates.HotkeyRegisteredCallback s_registeredCallback = OnNativeRegistered;
     private static LinuxGlobalHotkeyBackend? s_current;
 
+    private const int NativeStatusFailed = 4;
+
     private readonly Action<int, string, string, string, uint, string> _register;
     private readonly Action<int> _unregister;
     private readonly Lock _lock = new();
@@ -63,9 +65,18 @@ internal sealed class LinuxGlobalHotkeyBackend : IGlobalHotkeyBackend
             _register(number, id, description, keysym, HotkeyKeyMap.X11Modifiers(accelerator), trigger);
         }
 
-        // Unregistering a pending number answers it as Failed, and on Wayland withdraws its consent dialog.
-        using var registration = ct.Register(() => _unregister(number));
+        // Completing here frees the caller without the GTK loop; the queued unregister also withdraws a Wayland consent dialog.
+        using var registration = ct.Register(() => CancelPending(number));
         return await completion;
+    }
+
+    private void CancelPending(int number)
+    {
+        lock (_lock)
+        {
+            if (_table.Complete(number, NativeStatusFailed, null, "The registration was canceled."))
+                _unregister(number);
+        }
     }
 
     // Completes at once: the table stops presses now, and the GTK thread releases the grab in queue order.

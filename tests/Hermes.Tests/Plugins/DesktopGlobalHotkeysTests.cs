@@ -56,8 +56,8 @@ public sealed class DesktopGlobalHotkeysTests : IDisposable
         await canceled.CancelAsync();
 
         var result = await hotkeys.RegisterAsync("open", "Ctrl+Shift+K", "Open", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => hotkeys.RegisterAsync("other", "Ctrl+Shift+L", null, canceled.Token));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => hotkeys.UnregisterAsync("open", canceled.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => hotkeys.RegisterAsync("other", "Ctrl+Shift+L", null, canceled.Token).WaitAsync(TimeSpan.FromSeconds(5)));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => hotkeys.UnregisterAsync("open", canceled.Token).WaitAsync(TimeSpan.FromSeconds(5)));
         await hotkeys.UnregisterAsync("open", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Equal(HermesHotkeyStatus.Registered, result.Status);

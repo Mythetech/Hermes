@@ -15,7 +15,12 @@ public sealed class GlobalHotkeysCancellationTests : IDisposable
         GlobalHotkeys.SetBackendForTesting(_backend);
     }
 
-    public void Dispose() => GlobalHotkeys.SetBackendForTesting(null);
+    public void Dispose()
+    {
+        _backend.HoldRegister?.TrySetResult();
+        _backend.HoldUnregister?.TrySetResult();
+        GlobalHotkeys.SetBackendForTesting(null);
+    }
 
     [Fact]
     public async Task ATokenCanceledBeforeTheCall_Throws_NeverReachesTheBackend_AndLeavesTheIdFree()
@@ -40,7 +45,6 @@ public sealed class GlobalHotkeysCancellationTests : IDisposable
         using var cts = new CancellationTokenSource();
         var second = GlobalHotkeys.RegisterAsync("second", "Ctrl+Shift+L", null, cts.Token);
 
-        await Task.Delay(100);
         await cts.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => second.WaitAsync(s_timeout));
         hold.SetResult();
@@ -58,7 +62,6 @@ public sealed class GlobalHotkeysCancellationTests : IDisposable
         using var cts = new CancellationTokenSource();
         var register = GlobalHotkeys.RegisterAsync("x", "Ctrl+Shift+K", null, cts.Token);
 
-        await Task.Delay(100);
         await cts.CancelAsync();
         hold.SetResult();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => register.WaitAsync(s_timeout));
@@ -78,7 +81,6 @@ public sealed class GlobalHotkeysCancellationTests : IDisposable
         using var cts = new CancellationTokenSource();
         var register = GlobalHotkeys.RegisterAsync("x", "Ctrl+Shift+K", null, cts.Token);
 
-        await Task.Delay(100);
         await cts.CancelAsync();
         hold.SetResult();
         await Assert.ThrowsAsync<InvalidOperationException>(() => register.WaitAsync(s_timeout));
@@ -98,7 +100,6 @@ public sealed class GlobalHotkeysCancellationTests : IDisposable
         using var cts = new CancellationTokenSource();
         var register = GlobalHotkeys.RegisterAsync("x", "Ctrl+Shift+K", null, cts.Token);
 
-        await Task.Delay(100);
         await cts.CancelAsync();
         hold.SetResult();
         await Assert.ThrowsAsync<InvalidOperationException>(() => register.WaitAsync(s_timeout));
@@ -118,7 +119,6 @@ public sealed class GlobalHotkeysCancellationTests : IDisposable
         using var cts = new CancellationTokenSource();
         var unregister = GlobalHotkeys.UnregisterAsync("x", cts.Token);
 
-        await Task.Delay(100);
         await cts.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => unregister.WaitAsync(s_timeout));
         hold.SetResult();
@@ -128,5 +128,55 @@ public sealed class GlobalHotkeysCancellationTests : IDisposable
 
         Assert.DoesNotContain("unregister:x", _backend.Calls);
         Assert.Equal(HermesHotkeyStatus.Conflict, again.Status);
+    }
+
+    [Fact]
+    public async Task ACancelWhileInFlight_WithARefusedResult_ThrowsWithoutUnregistering_AndFreesTheId()
+    {
+        var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _backend.HoldRegister = hold;
+        _backend.RegisterResult = new HermesHotkeyResult(HermesHotkeyStatus.Conflict, null, "taken");
+        using var cts = new CancellationTokenSource();
+        var register = GlobalHotkeys.RegisterAsync("x", "Ctrl+Shift+K", null, cts.Token);
+
+        await cts.CancelAsync();
+        hold.SetResult();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => register.WaitAsync(s_timeout));
+        _backend.HoldRegister = null;
+        _backend.RegisterResult = null;
+        var again = await GlobalHotkeys.RegisterAsync("x", "Ctrl+Shift+K").WaitAsync(s_timeout);
+
+        Assert.DoesNotContain("unregister:x", _backend.Calls);
+        Assert.Equal(HermesHotkeyStatus.Registered, again.Status);
+    }
+
+    [Fact]
+    public async Task PressesDuringTheRollbackOfACanceledRegistration_AreDropped()
+    {
+        SynchronizationContext.SetSynchronizationContext(null);
+        var received = new List<string>();
+        Action<string> handler = received.Add;
+        GlobalHotkeys.Activated += handler;
+        try
+        {
+            var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _backend.HoldRegister = hold;
+            _backend.HoldUnregister = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var cts = new CancellationTokenSource();
+            var register = GlobalHotkeys.RegisterAsync("x", "Ctrl+Shift+K", null, cts.Token);
+
+            await cts.CancelAsync();
+            hold.SetResult();
+            await _backend.UnregisterEntered.Task.WaitAsync(s_timeout);
+            _backend.Activate("x");
+            _backend.HoldUnregister.SetResult();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => register.WaitAsync(s_timeout));
+        }
+        finally
+        {
+            GlobalHotkeys.Activated -= handler;
+        }
+
+        Assert.Empty(received);
     }
 }

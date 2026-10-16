@@ -14,6 +14,12 @@ internal sealed class ControlledGlobalHotkeyBackend : IGlobalHotkeyBackend
 
     public TaskCompletionSource? HoldRegister { get; set; }
 
+    public HermesHotkeyResult? RegisterResult { get; set; }
+
+    public TaskCompletionSource? HoldUnregister { get; set; }
+
+    public TaskCompletionSource UnregisterEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     public Exception? RegisterException { get; set; }
 
     public Exception? UnregisterException { get; set; }
@@ -42,13 +48,18 @@ internal sealed class ControlledGlobalHotkeyBackend : IGlobalHotkeyBackend
         if (RegisterException is { } ex)
             throw ex;
 
-        return new HermesHotkeyResult(HermesHotkeyStatus.Registered, HotkeyAccelerator.ToCanonicalString(accelerator), null);
+        return RegisterResult ?? new HermesHotkeyResult(HermesHotkeyStatus.Registered, HotkeyAccelerator.ToCanonicalString(accelerator), null);
     }
 
-    public Task UnregisterAsync(string id)
+    public async Task UnregisterAsync(string id)
     {
         Record("unregister:" + id);
-        return UnregisterException is { } ex ? Task.FromException(ex) : Task.CompletedTask;
+        UnregisterEntered.TrySetResult();
+        if (HoldUnregister is { } hold)
+            await hold.Task;
+
+        if (UnregisterException is { } ex)
+            throw ex;
     }
 
     public void Activate(string id) => Activated?.Invoke(id);

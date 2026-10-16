@@ -113,7 +113,7 @@ public sealed class LinuxGlobalHotkeyBackendTests
     }
 
     [Fact]
-    public async Task ACancelAfterRegistering_UnregistersThatRegistration_AndCompletesItAsFailed()
+    public async Task ACancel_CompletesTheRegistrationAsFailed_WithoutAnyAnswerFromTheNativeSide()
     {
         var backend = CreateBackend();
         using var cts = new CancellationTokenSource();
@@ -121,10 +121,59 @@ public sealed class LinuxGlobalHotkeyBackendTests
         var number = Assert.Single(_registered).Number;
 
         await cts.CancelAsync();
-        backend.OnRegistered(Assert.Single(_unregistered), 4, null, "Withdrawn.");
 
-        Assert.Equal(number, Assert.Single(_unregistered));
-        Assert.Equal(HermesHotkeyStatus.Failed, (await registration.WaitAsync(s_timeout)).Status);
+        var result = await registration.WaitAsync(s_timeout);
+        Assert.Equal(HermesHotkeyStatus.Failed, result.Status);
+        Assert.Equal(new[] { number }, _unregistered);
+    }
+
+    [Fact]
+    public async Task ALateNativeAnswerAfterACancel_ChangesNothing()
+    {
+        var backend = CreateBackend();
+        using var cts = new CancellationTokenSource();
+        var registration = backend.RegisterAsync("open", HotkeyAccelerator.Parse("Ctrl+K", "accelerator"), "open", cts.Token);
+        var number = Assert.Single(_registered).Number;
+        await cts.CancelAsync();
+        var canceled = await registration.WaitAsync(s_timeout);
+
+        backend.OnRegistered(number, 0, null, null);
+
+        Assert.Equal(HermesHotkeyStatus.Failed, canceled.Status);
+        Assert.Equal(new[] { number }, _unregistered);
+    }
+
+    [Fact]
+    public async Task APressForACanceledRegistration_RaisesNothing()
+    {
+        var backend = CreateBackend();
+        var pressed = new List<string>();
+        backend.Activated += pressed.Add;
+        using var cts = new CancellationTokenSource();
+        var registration = backend.RegisterAsync("open", HotkeyAccelerator.Parse("Ctrl+K", "accelerator"), "open", cts.Token);
+        var number = Assert.Single(_registered).Number;
+        await cts.CancelAsync();
+        await registration.WaitAsync(s_timeout);
+
+        backend.OnRegistered(number, 0, null, null);
+        backend.OnActivated(number);
+
+        Assert.Empty(pressed);
+    }
+
+    [Fact]
+    public async Task ACancelAfterTheRegistrationCompleted_DoesNotUnregister()
+    {
+        var backend = CreateBackend();
+        using var cts = new CancellationTokenSource();
+        var registration = backend.RegisterAsync("open", HotkeyAccelerator.Parse("Ctrl+K", "accelerator"), "open", cts.Token);
+        backend.OnRegistered(Assert.Single(_registered).Number, 0, null, null);
+        var result = await registration.WaitAsync(s_timeout);
+
+        await cts.CancelAsync();
+
+        Assert.Equal(HermesHotkeyStatus.Registered, result.Status);
+        Assert.Empty(_unregistered);
     }
 
     [Fact]

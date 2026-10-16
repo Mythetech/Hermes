@@ -15,7 +15,11 @@ public sealed class GlobalHotkeysBackendFailureTests : IDisposable
         GlobalHotkeys.SetBackendForTesting(_backend);
     }
 
-    public void Dispose() => GlobalHotkeys.SetBackendForTesting(null);
+    public void Dispose()
+    {
+        _backend.HoldRegister?.TrySetResult();
+        GlobalHotkeys.SetBackendForTesting(null);
+    }
 
     [Fact]
     public async Task ABackendRegisterThatThrows_PropagatesAndLeavesNoTrace()

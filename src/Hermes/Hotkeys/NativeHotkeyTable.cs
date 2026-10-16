@@ -35,15 +35,16 @@ internal sealed class NativeHotkeyTable
     /// <summary>
     /// Completes a registration with a native status (the <see cref="HermesHotkeyStatus"/> values); a refused one
     /// stops mapping its number, and a registered one without a bound trigger reports the requested accelerator.
+    /// Returns false when the number was not pending, so a late answer changes nothing.
     /// </summary>
-    public void Complete(int number, int nativeStatus, string? boundTrigger, string? reason)
+    public bool Complete(int number, int nativeStatus, string? boundTrigger, string? reason)
     {
         var status = ToStatus(nativeStatus);
         Pending pending;
         lock (_lock)
         {
             if (!_pending.Remove(number, out pending))
-                return;
+                return false;
 
             if (status != HermesHotkeyStatus.Registered && _idsByNumber.Remove(number, out var id)
                 && _numbersById.TryGetValue(id, out var current) && current == number)
@@ -55,6 +56,7 @@ internal sealed class NativeHotkeyTable
         pending.Source.TrySetResult(status == HermesHotkeyStatus.Registered
             ? new HermesHotkeyResult(status, boundTrigger ?? pending.CanonicalAccelerator, null)
             : new HermesHotkeyResult(status, null, reason ?? "The platform did not register the hotkey."));
+        return true;
     }
 
     /// <summary>Forgets an id and returns its number, or null when the id is not registered.</summary>
