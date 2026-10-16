@@ -14,7 +14,7 @@ internal sealed class UnsupportedGlobalHotkeyBackend(string reason) : IGlobalHot
 
     public string? UnsupportedReason => reason;
 
-    public Task<HermesHotkeyResult> RegisterAsync(string id, Accelerator accelerator, string description) =>
+    public Task<HermesHotkeyResult> RegisterAsync(string id, Accelerator accelerator, string description, CancellationToken ct) =>
         Task.FromResult(new HermesHotkeyResult(HermesHotkeyStatus.Unsupported, null, reason));
 
     public Task UnregisterAsync(string id) => Task.CompletedTask;

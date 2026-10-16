@@ -25,7 +25,7 @@ public sealed class LinuxGlobalHotkeyBackendTests
     {
         var backend = CreateBackend();
 
-        var registration = backend.RegisterAsync("open", HotkeyAccelerator.Parse("Ctrl+Alt+Shift+F12", "accelerator"), "Open the prompt");
+        var registration = backend.RegisterAsync("open", HotkeyAccelerator.Parse("Ctrl+Alt+Shift+F12", "accelerator"), "Open the prompt", CancellationToken.None);
         var sent = Assert.Single(_registered);
         backend.OnRegistered(sent.Number, 0, null, null);
 
@@ -38,7 +38,7 @@ public sealed class LinuxGlobalHotkeyBackendTests
     {
         var backend = CreateBackend();
 
-        var registration = backend.RegisterAsync("open", HotkeyAccelerator.Parse("Meta+K", "accelerator"), "open");
+        var registration = backend.RegisterAsync("open", HotkeyAccelerator.Parse("Meta+K", "accelerator"), "open", CancellationToken.None);
         backend.OnRegistered(Assert.Single(_registered).Number, 0, "Press <Super>j", null);
 
         Assert.Equal("Press <Super>j", (await registration.WaitAsync(s_timeout)).BoundAccelerator);
@@ -50,7 +50,7 @@ public sealed class LinuxGlobalHotkeyBackendTests
         var backend = CreateBackend();
         var pressed = new List<string>();
         backend.Activated += pressed.Add;
-        var registration = backend.RegisterAsync("open", HotkeyAccelerator.Parse("Ctrl+K", "accelerator"), "open");
+        var registration = backend.RegisterAsync("open", HotkeyAccelerator.Parse("Ctrl+K", "accelerator"), "open", CancellationToken.None);
         var number = Assert.Single(_registered).Number;
         backend.OnRegistered(number, 0, null, null);
         await registration.WaitAsync(s_timeout);
@@ -70,7 +70,7 @@ public sealed class LinuxGlobalHotkeyBackendTests
         var backend = CreateBackend();
         var pressed = new List<string>();
         backend.Activated += pressed.Add;
-        var registration = backend.RegisterAsync("open", HotkeyAccelerator.Parse("Ctrl+K", "accelerator"), "open");
+        var registration = backend.RegisterAsync("open", HotkeyAccelerator.Parse("Ctrl+K", "accelerator"), "open", CancellationToken.None);
         var number = Assert.Single(_registered).Number;
 
         backend.OnRegistered(number, 1, null, "Another application already uses this shortcut.");
@@ -94,7 +94,7 @@ public sealed class LinuxGlobalHotkeyBackendTests
                 routed = ex;
         };
         backend.Activated += _ => throw boom;
-        var registration = backend.RegisterAsync("open", HotkeyAccelerator.Parse("Ctrl+K", "accelerator"), "open");
+        var registration = backend.RegisterAsync("open", HotkeyAccelerator.Parse("Ctrl+K", "accelerator"), "open", CancellationToken.None);
         var number = Assert.Single(_registered).Number;
         backend.OnRegistered(number, 0, null, null);
         await registration.WaitAsync(s_timeout);
@@ -110,6 +110,34 @@ public sealed class LinuxGlobalHotkeyBackendTests
         }
 
         Assert.Same(boom, routed);
+    }
+
+    [Fact]
+    public async Task ACancelAfterRegistering_UnregistersThatRegistration_AndCompletesItAsFailed()
+    {
+        var backend = CreateBackend();
+        using var cts = new CancellationTokenSource();
+        var registration = backend.RegisterAsync("open", HotkeyAccelerator.Parse("Ctrl+K", "accelerator"), "open", cts.Token);
+        var number = Assert.Single(_registered).Number;
+
+        await cts.CancelAsync();
+        backend.OnRegistered(Assert.Single(_unregistered), 4, null, "Withdrawn.");
+
+        Assert.Equal(number, Assert.Single(_unregistered));
+        Assert.Equal(HermesHotkeyStatus.Failed, (await registration.WaitAsync(s_timeout)).Status);
+    }
+
+    [Fact]
+    public async Task ACanceledTokenBeforeTheCall_Throws_AndRegistersNothing()
+    {
+        var backend = CreateBackend();
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => backend.RegisterAsync("open", HotkeyAccelerator.Parse("Ctrl+K", "accelerator"), "open", cts.Token));
+
+        Assert.Empty(_registered);
     }
 }
 #endif

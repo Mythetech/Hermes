@@ -61,9 +61,20 @@ public sealed class MacGlobalHotkeyBackendTests
     {
         var backend = new MacGlobalHotkeyBackend();
 
-        var result = await backend.RegisterAsync("id", HotkeyAccelerator.Parse(accelerator, "accelerator"), "id");
+        var result = await backend.RegisterAsync("id", HotkeyAccelerator.Parse(accelerator, "accelerator"), "id", CancellationToken.None);
 
         Assert.Equal(new HermesHotkeyResult(HermesHotkeyStatus.Unsupported, null, $"Mac keyboards have no {key} key."), result);
+    }
+
+    [Fact]
+    public async Task Register_WithACanceledToken_ThrowsBeforeAnyNativeCall()
+    {
+        var backend = new MacGlobalHotkeyBackend();
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => backend.RegisterAsync("id", HotkeyAccelerator.Parse("Ctrl+K", "accelerator"), "id", cts.Token));
     }
 
     [Fact]

@@ -33,8 +33,9 @@ public sealed class RecordingGlobalHotkeyBackend : IGlobalHotkeyBackend
 
     public event Action<string>? Activated;
 
-    public Task<HermesHotkeyResult> RegisterAsync(string id, Accelerator accelerator, string description)
+    public Task<HermesHotkeyResult> RegisterAsync(string id, Accelerator accelerator, string description, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var canonical = HotkeyAccelerator.ToCanonicalString(accelerator);
         _registered.Add(new RecordedHotkey(id, canonical, description));
 

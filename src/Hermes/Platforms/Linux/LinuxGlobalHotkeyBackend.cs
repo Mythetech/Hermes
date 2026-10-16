@@ -47,19 +47,25 @@ internal sealed class LinuxGlobalHotkeyBackend : IGlobalHotkeyBackend
 
     public event Action<string>? Activated;
 
-    public Task<HermesHotkeyResult> RegisterAsync(string id, Accelerator accelerator, string description)
+    public async Task<HermesHotkeyResult> RegisterAsync(string id, Accelerator accelerator, string description, CancellationToken ct)
     {
         var keysym = HotkeyKeyMap.X11KeysymName(accelerator.Key)
             ?? throw new ArgumentException($"'{accelerator.Key}' has no X11 keysym.", nameof(accelerator));
+        ct.ThrowIfCancellationRequested();
         var trigger = PortalTrigger.From(accelerator);
 
+        int number;
+        Task<HermesHotkeyResult> completion;
         // Numbering and queueing happen together, so an unregister can never reach the GTK thread first.
         lock (_lock)
         {
-            var number = _table.Begin(id, HotkeyAccelerator.ToCanonicalString(accelerator), out var completion);
+            number = _table.Begin(id, HotkeyAccelerator.ToCanonicalString(accelerator), out completion);
             _register(number, id, description, keysym, HotkeyKeyMap.X11Modifiers(accelerator), trigger);
-            return completion;
         }
+
+        // Unregistering a pending number answers it as Failed, and on Wayland withdraws its consent dialog.
+        using var registration = ct.Register(() => _unregister(number));
+        return await completion;
     }
 
     // Completes at once: the table stops presses now, and the GTK thread releases the grab in queue order.

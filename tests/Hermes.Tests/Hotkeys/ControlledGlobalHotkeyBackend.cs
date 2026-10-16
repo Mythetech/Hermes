@@ -33,7 +33,7 @@ internal sealed class ControlledGlobalHotkeyBackend : IGlobalHotkeyBackend
 
     public event Action<string>? Activated;
 
-    public async Task<HermesHotkeyResult> RegisterAsync(string id, Accelerator accelerator, string description)
+    public async Task<HermesHotkeyResult> RegisterAsync(string id, Accelerator accelerator, string description, CancellationToken ct)
     {
         Record("register:" + id);
         if (HoldRegister is { } hold)

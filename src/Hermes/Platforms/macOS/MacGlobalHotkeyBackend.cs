@@ -55,8 +55,10 @@ internal sealed class MacGlobalHotkeyBackend : IGlobalHotkeyBackend
         return backend;
     }
 
-    public Task<HermesHotkeyResult> RegisterAsync(string id, Accelerator accelerator, string description)
+    public Task<HermesHotkeyResult> RegisterAsync(string id, Accelerator accelerator, string description, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
+
         if (HotkeyKeyMap.MacKeyCode(accelerator.Key) is not { } keyCode)
             return Task.FromResult(new HermesHotkeyResult(HermesHotkeyStatus.Unsupported, null, $"Mac keyboards have no {accelerator.Key} key."));
 

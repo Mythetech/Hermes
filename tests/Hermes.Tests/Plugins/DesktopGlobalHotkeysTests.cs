@@ -49,6 +49,23 @@ public sealed class DesktopGlobalHotkeysTests : IDisposable
     }
 
     [Fact]
+    public async Task ForwardsTheTokenOverloads()
+    {
+        IGlobalHotkeys hotkeys = new DesktopGlobalHotkeys();
+        using var canceled = new CancellationTokenSource();
+        await canceled.CancelAsync();
+
+        var result = await hotkeys.RegisterAsync("open", "Ctrl+Shift+K", "Open", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => hotkeys.RegisterAsync("other", "Ctrl+Shift+L", null, canceled.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => hotkeys.UnregisterAsync("open", canceled.Token));
+        await hotkeys.UnregisterAsync("open", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(HermesHotkeyStatus.Registered, result.Status);
+        Assert.Equal(new[] { "open" }, _backend.Unregistered);
+        Assert.Equal(new[] { "open" }, _backend.Registered.Select(r => r.Id));
+    }
+
+    [Fact]
     public void BlazorApps_ResolveIGlobalHotkeys()
     {
         var builder = HermesBlazorAppBuilder.CreateSlimBuilder();

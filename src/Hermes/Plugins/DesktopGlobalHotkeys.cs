@@ -18,5 +18,10 @@ public sealed class DesktopGlobalHotkeys : IGlobalHotkeys
     public Task<HermesHotkeyResult> RegisterAsync(string id, string accelerator, string? description = null) =>
         GlobalHotkeys.RegisterAsync(id, accelerator, description);
 
+    public Task<HermesHotkeyResult> RegisterAsync(string id, string accelerator, string? description, CancellationToken ct) =>
+        GlobalHotkeys.RegisterAsync(id, accelerator, description, ct);
+
     public Task UnregisterAsync(string id) => GlobalHotkeys.UnregisterAsync(id);
+
+    public Task UnregisterAsync(string id, CancellationToken ct) => GlobalHotkeys.UnregisterAsync(id, ct);
 }

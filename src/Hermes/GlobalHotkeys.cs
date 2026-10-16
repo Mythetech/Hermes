@@ -57,18 +57,33 @@ public static class GlobalHotkeys
     /// <param name="description">Shown in desktop shortcut settings where the platform has them; defaults to the id.</param>
     /// <exception cref="ArgumentException">The id is blank, or the accelerator is invalid, has no modifier, uses an unsupported key, or is reserved.</exception>
     /// <remarks>Await it rather than blocking on it: completing it can need the app's message loop, so a wait on the UI thread, before the loop runs, or in an <see cref="Activated"/> handler may never return.</remarks>
-    public static async Task<HermesHotkeyResult> RegisterAsync(string id, string accelerator, string? description = null)
+    public static Task<HermesHotkeyResult> RegisterAsync(string id, string accelerator, string? description = null) =>
+        RegisterAsync(id, accelerator, description, CancellationToken.None);
+
+    /// <summary>
+    /// Registers a hotkey under an app-defined id, in the menu accelerator syntax such as "Ctrl+Shift+K".
+    /// Ctrl means Command on macOS, and Meta means the Control key there.
+    /// </summary>
+    /// <param name="id">An app-defined id that <see cref="Activated"/> reports.</param>
+    /// <param name="accelerator">One key and at least one modifier.</param>
+    /// <param name="description">Shown in desktop shortcut settings where the platform has them; defaults to the id.</param>
+    /// <param name="ct">Cancels the registration.</param>
+    /// <exception cref="ArgumentException">The id is blank, or the accelerator is invalid, has no modifier, uses an unsupported key, or is reserved.</exception>
+    /// <exception cref="OperationCanceledException"><paramref name="ct"/> was canceled before the registration completed; the hotkey is left unregistered.</exception>
+    /// <remarks>Await it rather than blocking on it: completing it can need the app's message loop, so a wait on the UI thread, before the loop runs, or in an <see cref="Activated"/> handler may never return. Canceling before it completes leaves the hotkey unregistered and throws <see cref="OperationCanceledException"/>; on Wayland it also withdraws a consent dialog that is still open.</remarks>
+    public static async Task<HermesHotkeyResult> RegisterAsync(string id, string accelerator, string? description, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         var parsed = HotkeyAccelerator.Parse(accelerator, nameof(accelerator));
         var canonical = HotkeyAccelerator.ToCanonicalString(parsed);
+        ct.ThrowIfCancellationRequested();
 
         var backend = GetBackend();
         if (!backend.IsSupported)
             return new HermesHotkeyResult(HermesHotkeyStatus.Unsupported, null, backend.UnsupportedReason);
 
         // Registrations change one at a time, so an unregister can never cross a registration of the same id.
-        await s_gate.WaitAsync();
+        await s_gate.WaitAsync(ct);
         try
         {
             lock (s_lock)
@@ -88,12 +103,21 @@ public static class GlobalHotkeys
             HermesHotkeyResult result;
             try
             {
-                result = await backend.RegisterAsync(id, parsed, description ?? id);
+                result = await backend.RegisterAsync(id, parsed, description ?? id, ct);
             }
             catch
             {
                 Forget(id);
                 throw;
+            }
+
+            if (ct.IsCancellationRequested)
+            {
+                if (result.Status == HermesHotkeyStatus.Registered)
+                    await backend.UnregisterAsync(id);
+
+                Forget(id);
+                throw new OperationCanceledException(ct);
             }
 
             if (result.Status != HermesHotkeyStatus.Registered)
@@ -111,11 +135,20 @@ public static class GlobalHotkeys
     /// Unregisters a hotkey. Unknown ids are ignored. Presses not yet delivered when this completes are dropped.
     /// </summary>
     /// <remarks>Hotkey calls wait for a registration still in progress, such as one showing a desktop consent dialog, which never finishes once the message loop has ended.</remarks>
-    public static async Task UnregisterAsync(string id)
+    public static Task UnregisterAsync(string id) => UnregisterAsync(id, CancellationToken.None);
+
+    /// <summary>
+    /// Unregisters a hotkey. Unknown ids are ignored. Presses not yet delivered when this completes are dropped.
+    /// </summary>
+    /// <param name="id">The id the hotkey was registered under.</param>
+    /// <param name="ct">Stops the wait for an earlier hotkey call to finish.</param>
+    /// <exception cref="OperationCanceledException"><paramref name="ct"/> was canceled while waiting; the hotkey stays registered.</exception>
+    /// <remarks>The token stops the wait for an earlier hotkey call to finish; once the hotkey is being released, it completes. Hotkey calls wait for a registration still in progress, such as one showing a desktop consent dialog, which never finishes once the message loop has ended.</remarks>
+    public static async Task UnregisterAsync(string id, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
 
-        await s_gate.WaitAsync();
+        await s_gate.WaitAsync(ct);
         try
         {
             Registration? removed;

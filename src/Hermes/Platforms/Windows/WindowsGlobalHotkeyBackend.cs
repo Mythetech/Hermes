@@ -48,8 +48,10 @@ internal sealed class WindowsGlobalHotkeyBackend : IGlobalHotkeyBackend
     internal static HOT_KEY_MODIFIERS NativeModifiers(Accelerator accelerator) =>
         (HOT_KEY_MODIFIERS)HotkeyKeyMap.WindowsModifiers(accelerator) | HOT_KEY_MODIFIERS.MOD_NOREPEAT;
 
-    public Task<HermesHotkeyResult> RegisterAsync(string id, Accelerator accelerator, string description)
+    public Task<HermesHotkeyResult> RegisterAsync(string id, Accelerator accelerator, string description, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
+
         if (HotkeyKeyMap.WindowsVirtualKey(accelerator.Key) is not { } virtualKey)
             return Task.FromResult(new HermesHotkeyResult(HermesHotkeyStatus.Unsupported, null, $"{accelerator.Key} has no Windows key code."));
 

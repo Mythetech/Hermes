@@ -29,11 +29,24 @@ public sealed class WindowsGlobalHotkeyBackendTests
         Assert.Null(new WindowsGlobalHotkeyBackend().ThreadExit);
 
     [Fact]
+    public async Task Register_WithACanceledToken_Throws_AndStartsNoThread()
+    {
+        var backend = new WindowsGlobalHotkeyBackend();
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => backend.RegisterAsync("id", Parse("Ctrl+Alt+Shift+F19"), "id", cts.Token));
+
+        Assert.Null(backend.ThreadExit);
+    }
+
+    [Fact]
     public async Task AKeyWithoutAWindowsCode_IsUnsupported_AndStartsNoThread()
     {
         var backend = new WindowsGlobalHotkeyBackend();
 
-        var result = await backend.RegisterAsync("numlock", new Accelerator { Control = true, Key = "NumLock" }, "NumLock")
+        var result = await backend.RegisterAsync("numlock", new Accelerator { Control = true, Key = "NumLock" }, "NumLock", CancellationToken.None)
             .WaitAsync(s_timeout);
 
         Assert.Equal(HermesHotkeyStatus.Unsupported, result.Status);
@@ -46,9 +59,9 @@ public sealed class WindowsGlobalHotkeyBackendTests
         var backend = new WindowsGlobalHotkeyBackend();
         var accelerator = Parse("Ctrl+Alt+Shift+F19");
 
-        var first = await backend.RegisterAsync("first", accelerator, "First").WaitAsync(s_timeout);
+        var first = await backend.RegisterAsync("first", accelerator, "First", CancellationToken.None).WaitAsync(s_timeout);
         await backend.UnregisterAsync("first").WaitAsync(s_timeout);
-        var second = await backend.RegisterAsync("second", accelerator, "Second").WaitAsync(s_timeout);
+        var second = await backend.RegisterAsync("second", accelerator, "Second", CancellationToken.None).WaitAsync(s_timeout);
         await backend.UnregisterAsync("second").WaitAsync(s_timeout);
 
         Assert.Equal(new HermesHotkeyResult(HermesHotkeyStatus.Registered, "Ctrl+Alt+Shift+F19", null), first);
@@ -62,11 +75,11 @@ public sealed class WindowsGlobalHotkeyBackendTests
         var other = new WindowsGlobalHotkeyBackend();
         var accelerator = Parse("Ctrl+Alt+Shift+F20");
 
-        var owned = await owner.RegisterAsync("owner", accelerator, "Owner").WaitAsync(s_timeout);
-        var refused = await other.RegisterAsync("other", accelerator, "Other").WaitAsync(s_timeout);
+        var owned = await owner.RegisterAsync("owner", accelerator, "Owner", CancellationToken.None).WaitAsync(s_timeout);
+        var refused = await other.RegisterAsync("other", accelerator, "Other", CancellationToken.None).WaitAsync(s_timeout);
         var refusedLeftAThread = other.ThreadExit is not null;
         await owner.UnregisterAsync("owner").WaitAsync(s_timeout);
-        var retried = await other.RegisterAsync("other", accelerator, "Other").WaitAsync(s_timeout);
+        var retried = await other.RegisterAsync("other", accelerator, "Other", CancellationToken.None).WaitAsync(s_timeout);
         await other.UnregisterAsync("other").WaitAsync(s_timeout);
 
         Assert.Equal(HermesHotkeyStatus.Registered, owned.Status);
@@ -82,9 +95,9 @@ public sealed class WindowsGlobalHotkeyBackendTests
         var backend = new WindowsGlobalHotkeyBackend();
         var other = new WindowsGlobalHotkeyBackend();
 
-        await backend.RegisterAsync("a", Parse("Ctrl+Alt+Shift+F19"), "A").WaitAsync(s_timeout);
-        var replaced = await backend.RegisterAsync("a", Parse("Ctrl+Alt+Shift+F20"), "A").WaitAsync(s_timeout);
-        var freed = await other.RegisterAsync("b", Parse("Ctrl+Alt+Shift+F19"), "B").WaitAsync(s_timeout);
+        await backend.RegisterAsync("a", Parse("Ctrl+Alt+Shift+F19"), "A", CancellationToken.None).WaitAsync(s_timeout);
+        var replaced = await backend.RegisterAsync("a", Parse("Ctrl+Alt+Shift+F20"), "A", CancellationToken.None).WaitAsync(s_timeout);
+        var freed = await other.RegisterAsync("b", Parse("Ctrl+Alt+Shift+F19"), "B", CancellationToken.None).WaitAsync(s_timeout);
         await other.UnregisterAsync("b").WaitAsync(s_timeout);
         await backend.UnregisterAsync("a").WaitAsync(s_timeout);
 
@@ -97,8 +110,8 @@ public sealed class WindowsGlobalHotkeyBackendTests
     public async Task UnregisteringTheLastHotkey_EndsTheThread_AndTheNextRegistrationStartsAnother()
     {
         var backend = new WindowsGlobalHotkeyBackend();
-        await backend.RegisterAsync("a", Parse("Ctrl+Alt+Shift+F21"), "A").WaitAsync(s_timeout);
-        await backend.RegisterAsync("b", Parse("Ctrl+Alt+Shift+F22"), "B").WaitAsync(s_timeout);
+        await backend.RegisterAsync("a", Parse("Ctrl+Alt+Shift+F21"), "A", CancellationToken.None).WaitAsync(s_timeout);
+        await backend.RegisterAsync("b", Parse("Ctrl+Alt+Shift+F22"), "B", CancellationToken.None).WaitAsync(s_timeout);
         var exit = backend.ThreadExit;
         Assert.NotNull(exit);
 
@@ -110,7 +123,7 @@ public sealed class WindowsGlobalHotkeyBackendTests
         await exit.WaitAsync(s_timeout);
         Assert.Null(backend.ThreadExit);
 
-        var again = await backend.RegisterAsync("a", Parse("Ctrl+Alt+Shift+F21"), "A").WaitAsync(s_timeout);
+        var again = await backend.RegisterAsync("a", Parse("Ctrl+Alt+Shift+F21"), "A", CancellationToken.None).WaitAsync(s_timeout);
         var restarted = backend.ThreadExit;
         await backend.UnregisterAsync("a").WaitAsync(s_timeout);
 
@@ -126,8 +139,8 @@ public sealed class WindowsGlobalHotkeyBackendTests
         var pressed = new TaskCompletionSource<(string Id, string? ThreadName, bool IsBackground)>(
             TaskCreationOptions.RunContinuationsAsynchronously);
         backend.Activated += id => pressed.TrySetResult((id, Thread.CurrentThread.Name, Thread.CurrentThread.IsBackground));
-        await backend.RegisterAsync("first", Parse("Ctrl+Alt+Shift+F21"), "First").WaitAsync(s_timeout);
-        await backend.RegisterAsync("second", Parse("Ctrl+Alt+Shift+F22"), "Second").WaitAsync(s_timeout);
+        await backend.RegisterAsync("first", Parse("Ctrl+Alt+Shift+F21"), "First", CancellationToken.None).WaitAsync(s_timeout);
+        await backend.RegisterAsync("second", Parse("Ctrl+Alt+Shift+F22"), "Second", CancellationToken.None).WaitAsync(s_timeout);
 
         var posted = backend.SimulatePressForTesting("second");
         var (id, threadName, isBackground) = await pressed.Task.WaitAsync(s_timeout);
@@ -147,7 +160,7 @@ public sealed class WindowsGlobalHotkeyBackendTests
         SynchronizationContext.SetSynchronizationContext(null);
         var backend = new WindowsGlobalHotkeyBackend();
 
-        await backend.RegisterAsync("a", Parse("Ctrl+Alt+Shift+F23"), "A").WaitAsync(s_timeout);
+        await backend.RegisterAsync("a", Parse("Ctrl+Alt+Shift+F23"), "A", CancellationToken.None).WaitAsync(s_timeout);
         var afterRegister = Thread.CurrentThread.Name;
         await backend.UnregisterAsync("a").WaitAsync(s_timeout);
         var afterUnregister = Thread.CurrentThread.Name;
@@ -167,7 +180,7 @@ public sealed class WindowsGlobalHotkeyBackendTests
             var accelerator = Parse("Ctrl+Alt+Shift+" + key);
             for (var round = 0; round < 20; round++)
             {
-                var result = await backend.RegisterAsync($"{key}-{round}", accelerator, key).WaitAsync(s_timeout);
+                var result = await backend.RegisterAsync($"{key}-{round}", accelerator, key, CancellationToken.None).WaitAsync(s_timeout);
                 Assert.Equal(HermesHotkeyStatus.Registered, result.Status);
                 await backend.UnregisterAsync($"{key}-{round}").WaitAsync(s_timeout);
             }

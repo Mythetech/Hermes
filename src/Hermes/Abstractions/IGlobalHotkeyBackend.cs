@@ -14,7 +14,8 @@ internal interface IGlobalHotkeyBackend
     string? UnsupportedReason { get; }
 
     /// <summary>Registers one accelerator whose key is in canonical form; completes with the platform's result.</summary>
-    Task<HermesHotkeyResult> RegisterAsync(string id, Accelerator accelerator, string description);
+    /// <remarks>A backend that cannot stop a registration already in progress may finish it, because the facade unregisters a hotkey that completes after a cancel.</remarks>
+    Task<HermesHotkeyResult> RegisterAsync(string id, Accelerator accelerator, string description, CancellationToken ct);
 
     Task UnregisterAsync(string id);
 
