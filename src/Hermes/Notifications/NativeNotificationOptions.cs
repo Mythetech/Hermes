@@ -10,7 +10,7 @@ namespace Hermes.Notifications;
 /// </summary>
 public sealed class NativeNotificationOptions
 {
-    /// <summary>Stable application identifier. Defaults to the entry assembly name.</summary>
+    /// <summary>Stable application identifier. Defaults to <see cref="HermesApplication.AppId"/> when it is set, otherwise the entry assembly name.</summary>
     public string? AppId { get; set; }
 
     /// <summary>Name shown by the platform as the notification source. Defaults to <see cref="AppId"/>.</summary>
@@ -19,11 +19,13 @@ public sealed class NativeNotificationOptions
     /// <summary>Absolute path to the app icon used as the notification source icon.</summary>
     public string? IconPath { get; set; }
 
-    internal NativeNotificationOptions Resolve()
+    internal NativeNotificationOptions Resolve() => Resolve(HermesApplication.AppId);
+
+    internal NativeNotificationOptions Resolve(string? applicationAppId)
     {
-        var appId = string.IsNullOrWhiteSpace(AppId)
-            ? Assembly.GetEntryAssembly()?.GetName().Name ?? "HermesApp"
-            : AppId;
+        var appId = !string.IsNullOrWhiteSpace(AppId) ? AppId
+            : !string.IsNullOrWhiteSpace(applicationAppId) ? applicationAppId
+            : Assembly.GetEntryAssembly()?.GetName().Name ?? "HermesApp";
 
         return new NativeNotificationOptions
         {

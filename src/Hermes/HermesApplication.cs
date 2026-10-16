@@ -71,6 +71,7 @@ public static class HermesApplication
     /// <summary>
     /// Reverse-DNS application id, such as com.mythetech.Horizon. Linux desktop portals use it to identify the app,
     /// which Wayland global hotkeys need. Set it before creating any windows.
+    /// Notifications use it as their default app id when it is set before the first use of <see cref="Notifications"/>.
     /// </summary>
     /// <exception cref="ArgumentException">The value is not a reverse-DNS name with at least two elements.</exception>
     /// <exception cref="InvalidOperationException">A window has already been created.</exception>
