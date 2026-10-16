@@ -687,11 +687,6 @@ static void portal_unregister(int number) {
         return;
     }
 
-    if (inFlight) {
-        g_portal.dirty = TRUE;
-        return;
-    }
-
     // The portal cannot unbind one shortcut; the next bind leaves it out, and the last one closes the session.
     if (g_portal.shortcuts->len == 0) {
         g_portal.dirty = TRUE;
