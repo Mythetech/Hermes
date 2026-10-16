@@ -242,6 +242,23 @@ public static class GlobalHotkeys
         if (OperatingSystem.IsWindows())
             return new Platforms.Windows.WindowsGlobalHotkeyBackend();
 #endif
+#if LINUX
+        if (OperatingSystem.IsLinux())
+        {
+            try
+            {
+                return new Platforms.Linux.LinuxGlobalHotkeyBackend();
+            }
+            catch (DllNotFoundException ex)
+            {
+                return new UnsupportedGlobalHotkeyBackend($"The Hermes native library was not found: {ex.Message}");
+            }
+            catch (EntryPointNotFoundException ex)
+            {
+                return new UnsupportedGlobalHotkeyBackend($"The Hermes native library is out of date: {ex.Message}");
+            }
+        }
+#endif
         return new UnsupportedGlobalHotkeyBackend("Global hotkeys are not supported on this platform.");
     }
 
