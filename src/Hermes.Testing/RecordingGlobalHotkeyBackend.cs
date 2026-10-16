@@ -7,7 +7,8 @@ using Hermes.Menu;
 namespace Hermes.Testing;
 
 /// <summary>
-/// An in-memory global hotkey backend that records registrations and raises presses on demand.
+/// An in-memory global hotkey backend for Hermes's own tests, installed through <c>GlobalHotkeys.SetBackendForTesting</c>.
+/// App tests should substitute <c>IGlobalHotkeys</c> instead. It records registrations and raises presses on demand.
 /// </summary>
 public sealed class RecordingGlobalHotkeyBackend : IGlobalHotkeyBackend
 {

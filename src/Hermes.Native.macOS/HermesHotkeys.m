@@ -13,7 +13,7 @@ static _Atomic(HermesHotkeyPressedCallback) g_pressedCallback = NULL;
 static EventHandlerRef g_pressedHandler = NULL;
 static NSMutableDictionary<NSNumber*, NSValue*>* g_hotkeys = nil;
 
-// Unregisters requested on other threads, applied by the main thread before its next hotkey call.
+// Unregisters requested on other threads, applied before the main thread's next hotkey call and by the block posted to the main queue.
 static os_unfair_lock g_pendingLock = OS_UNFAIR_LOCK_INIT;
 static NSMutableArray<NSNumber*>* g_pendingUnregisters = nil;
 

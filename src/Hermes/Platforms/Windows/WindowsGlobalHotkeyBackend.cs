@@ -58,7 +58,7 @@ internal sealed class WindowsGlobalHotkeyBackend : IGlobalHotkeyBackend
         var completion = new TaskCompletionSource<HermesHotkeyResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_lock)
         {
-            // Registering an id the backend still holds replaces it, so the older hotkey is never left registered.
+            // The older hotkey is released before a supported key is registered again.
             if (_registrations.Remove(id, out var previous))
                 PostUnregister(previous, null);
 
@@ -100,7 +100,7 @@ internal sealed class WindowsGlobalHotkeyBackend : IGlobalHotkeyBackend
         thread.Post(() => thread.Unregister(number, completion));
     }
 
-    // Numbers count up, so a press still queued for an unregistered hotkey never reports a newer one.
+    // Numbers count up, so a press queued for an unregistered hotkey cannot report a newer one before the range wraps.
     private int NextNumber()
     {
         do

@@ -23,6 +23,7 @@ public static class GlobalHotkeys
     /// Raised with the id of a registered hotkey when it is pressed. Each handler runs on the
     /// <see cref="SynchronizationContext"/> that was current when it subscribed, or on the platform's thread if none was.
     /// </summary>
+    /// <remarks>Handlers must not block on hotkey calls; await them instead.</remarks>
     public static event Action<string>? Activated
     {
         add
@@ -55,6 +56,7 @@ public static class GlobalHotkeys
     /// <param name="accelerator">One key and at least one modifier.</param>
     /// <param name="description">Shown in desktop shortcut settings where the platform has them; defaults to the id.</param>
     /// <exception cref="ArgumentException">The id is blank, or the accelerator is invalid, has no modifier, uses an unsupported key, or is reserved.</exception>
+    /// <remarks>Await it rather than blocking on it: completing it can need the app's message loop, so a wait on the UI thread, before the loop runs, or in an <see cref="Activated"/> handler may never return.</remarks>
     public static async Task<HermesHotkeyResult> RegisterAsync(string id, string accelerator, string? description = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
@@ -108,6 +110,7 @@ public static class GlobalHotkeys
     /// <summary>
     /// Unregisters a hotkey. Unknown ids are ignored. Presses not yet delivered when this completes are dropped.
     /// </summary>
+    /// <remarks>Hotkey calls wait for a registration still in progress, such as one showing a desktop consent dialog, which never finishes once the message loop has ended.</remarks>
     public static async Task UnregisterAsync(string id)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
