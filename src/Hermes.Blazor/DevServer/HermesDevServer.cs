@@ -1,6 +1,8 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 
 namespace Hermes.Blazor.DevServer;
@@ -33,7 +35,8 @@ internal sealed class HermesDevServer : IAsyncDisposable
     /// </summary>
     internal static async Task<HermesDevServer> StartAsync(
         string hostPage,
-        string wwwrootPath)
+        string wwwrootPath,
+        HermesRequestHandlers? requestHandlers = null)
     {
         const int MaxRetries = 3;
         Exception? lastException = null;
@@ -42,7 +45,7 @@ internal sealed class HermesDevServer : IAsyncDisposable
         {
             try
             {
-                return await TryStartAsync(hostPage, wwwrootPath);
+                return await TryStartAsync(hostPage, wwwrootPath, requestHandlers);
             }
             catch (Exception ex) when (ex is System.Net.Sockets.SocketException or IOException)
             {
@@ -58,7 +61,8 @@ internal sealed class HermesDevServer : IAsyncDisposable
 
     private static async Task<HermesDevServer> TryStartAsync(
         string hostPage,
-        string wwwrootPath)
+        string wwwrootPath,
+        HermesRequestHandlers? requestHandlers)
     {
         // Resolve the source wwwroot directory from the static web assets manifest.
         // dotnet watch serves static files from source directories, not the build
@@ -102,6 +106,33 @@ internal sealed class HermesDevServer : IAsyncDisposable
             }
             await next();
         });
+
+        if (requestHandlers is { IsEmpty: false })
+        {
+            var contentTypes = new FileExtensionContentTypeProvider();
+            app.Use(async (context, next) =>
+            {
+                if (!requestHandlers.TryHandle(context.Request.Path, context.Request.GetDisplayUrl(), out var response))
+                {
+                    await next();
+                    return;
+                }
+
+                if (response.Content is not { } content)
+                {
+                    context.Response.StatusCode = StatusCodes.Status404NotFound;
+                    return;
+                }
+
+                await using (content)
+                {
+                    context.Response.ContentType = response.ContentType
+                        ?? (contentTypes.TryGetContentType(context.Request.Path.Value!, out var inferred) ? inferred : "application/octet-stream");
+                    context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+                    await content.CopyToAsync(context.Response.Body, context.RequestAborted);
+                }
+            });
+        }
 
         // Serve static files from the source wwwroot with no-cache headers
         app.UseStaticFiles(new StaticFileOptions

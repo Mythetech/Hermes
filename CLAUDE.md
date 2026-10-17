@@ -37,7 +37,7 @@ On every platform the loop ends when the window passed to `WaitForClose()` close
 ## Verification commands
 
 - Unit suite: `dotnet test tests/Hermes.Tests` (also builds the benchmark apps for the guard tests)
-- Integration scenarios: `HERMES_INTEGRATION_TEST=1 HERMES_INTEGRATION_TEST_EXIT=1 dotnet run --project samples/IntegrationTestApp` (expects 23/23 PASS on macOS, 24/24 on Linux, and 25/25 on Windows, `HERMES_TEARDOWN: PASSED`, exit 0)
+- Integration scenarios: `HERMES_INTEGRATION_TEST=1 HERMES_INTEGRATION_TEST_EXIT=1 dotnet run --project samples/IntegrationTestApp` (expects 24/24 PASS on macOS, 25/25 on Linux, and 26/26 on Windows, `HERMES_TEARDOWN: PASSED`, exit 0)
   - custom-titlebar-rendered is only reported from TitlebarPage, which the automated run never visits, so it is not counted in either total.
   - The Linux count needs an X11 session with xdotool installed, as in CI; under Wayland both hotkey scenarios go to the desktop portal.
 - Smoke mode: `HERMES_SMOKE_TEST=1 dotnet run --project samples/SmokeTestApp` (expects `HERMES_SMOKE_RESULT: PASSED`, exit 0). With `SMOKE_SAMPLE_FAULT=check|render|gate|log|dialog` every run must end `FAILED`. Integration runs do not enable smoke mode.

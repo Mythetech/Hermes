@@ -35,6 +35,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
     private bool _deferWindowShow;
     private bool? _forceDevServer;
     private HermesSmokeRuntime? _smokeRuntime;
+    private readonly HermesRequestHandlers _requestHandlers = new();
 
     private HermesBlazorAppBuilder(string[]? args, bool addDefaultConfiguration)
     {
@@ -220,6 +221,40 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
     }
 
     /// <summary>
+    /// Serves requests for <paramref name="path"/> and the paths below it on the app's own origin with
+    /// <paramref name="handler"/>, so the page can load content the app produces, such as images from disk, by URL.
+    /// </summary>
+    /// <remarks>
+    /// The handler receives the full URL; read its path and query, since the origin differs by platform and under hot reload.
+    /// It runs synchronously on the thread serving the WebView, the UI thread on macOS, so it should return content
+    /// that is already at hand. A null stream answers 404, and a null content type is inferred from the path's extension.
+    /// </remarks>
+    /// <param name="path">A path such as <c>/media</c>. It cannot be the root, or be under <c>/_framework</c>, <c>/_content</c> or <c>/_hermes</c>.</param>
+    /// <param name="handler">Returns the content for a request URL.</param>
+    public HermesBlazorAppBuilder MapRequestHandler(string path, Func<string, (Stream? Content, string? ContentType)> handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        _requestHandlers.Map(path, _ => handler);
+        return this;
+    }
+
+    /// <summary>
+    /// Serves requests for <paramref name="path"/> and the paths below it on the app's own origin with a
+    /// <typeparamref name="THandler"/> from the app's services, registered as a singleton unless the app registered it.
+    /// </summary>
+    /// <remarks>
+    /// The handler is called the same way as a delegate mapped with the other overload.
+    /// </remarks>
+    /// <param name="path">A path such as <c>/media</c>. It cannot be the root, or be under <c>/_framework</c>, <c>/_content</c> or <c>/_hermes</c>.</param>
+    public HermesBlazorAppBuilder MapRequestHandler<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler>(string path)
+        where THandler : class, IHermesRequestHandler
+    {
+        _requestHandlers.Map(path, services => services.GetRequiredService<THandler>().HandleRequest);
+        _hostBuilder.Services.TryAddSingleton<THandler>();
+        return this;
+    }
+
+    /// <summary>
     /// Runs this builder in smoke mode with a caller-supplied session, so tests can drive a smoke run.
     /// </summary>
     internal HermesBlazorAppBuilder UseSmokeSessionForTest(SmokeSession session)
@@ -298,7 +333,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         // deadlock.
         var compositionTask = Task.Run(() => ComposeServices(
             window, backend, syncContext, dispatcher, useDevServer, _hostPage,
-            _fileProvider, _hostBuilder));
+            _fileProvider, _hostBuilder, _requestHandlers));
 
         // The synchronization context must be installed before Show(). On
         // Windows, Show() starts async WebView2 initialization whose await
@@ -355,7 +390,8 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             baseUri: composition.DevBaseUri,
             isDevMode: composition.DevServer is not null,
             deferredHandler: deferredHandler,
-            smokeSession: _smokeRuntime?.Session);
+            smokeSession: _smokeRuntime?.Session,
+            requestHandlers: _requestHandlers);
 
         var app = new HermesBlazorApp(composition.ServiceProvider, _hostBuilder.Configuration, window, webViewManager, syncContext, _loadingHtml, windowShownDuringBuild: !_deferWindowShow, devServer: composition.DevServer, host: composition.Host, navigatedDuringBuild: navigatedDuringBuild);
 
@@ -381,7 +417,8 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         bool useDevServer,
         string hostPage,
         IFileProvider? explicitFileProvider,
-        HostApplicationBuilder hostBuilder)
+        HostApplicationBuilder hostBuilder,
+        HermesRequestHandlers requestHandlers)
     {
         var wwwrootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
         var fallbackProvider = Directory.Exists(wwwrootPath)
@@ -400,7 +437,8 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             {
                 devServer = DevServer.HermesDevServer.StartAsync(
                     hostPage,
-                    wwwrootPath).GetAwaiter().GetResult();
+                    wwwrootPath,
+                    requestHandlers).GetAwaiter().GetResult();
 
                 devBaseUri = devServer.BaseUrl;
             }
@@ -430,6 +468,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         // registrations; the host is started after first paint from the run path.
         var host = hostBuilder.Build();
         var serviceProvider = host.Services;
+        requestHandlers.Attach(serviceProvider);
 
         // Still on the worker thread, and the WebView is spawning its content
         // process concurrently: spend the wait pre-JITting the renderer stack
@@ -450,7 +489,8 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
             useDevServer: false,
             hostPage: builder._hostPage,
             explicitFileProvider: builder._fileProvider,
-            hostBuilder: builder._hostBuilder);
+            hostBuilder: builder._hostBuilder,
+            requestHandlers: builder._requestHandlers);
     }
 
     internal sealed record BuildComposition(

@@ -20,6 +20,22 @@ All notable changes to this project will be documented in this file.
   - On X11, GTK hands the app's clipboard contents to a running clipboard manager when the app exits; without one, they go away with the app. `xclip` used to keep a background process alive to serve them
 - Windows: `SetText` used to silently do nothing, and `GetText` returned null, when another app held the clipboard. Both now retry for about 100 ms, then throw `IOException`
 
+## [1.4.5] - 2026-10-17
+
+### Added
+
+- `HermesBlazorAppBuilder.MapRequestHandler` serves a path under the app's own origin, and the paths below it, from app code, so the page can load content the app produces, such as images from disk, by URL instead of receiving it through Blazor as data URIs. It takes a delegate, or an `IHermesRequestHandler` resolved from the app's services, and works the same on Windows, macOS and Linux, and under hot reload through the dev server
+  - The longest mapped path wins and matching ignores case. The root, `/_framework`, `/_content` and `/_hermes` cannot be mapped
+  - A handler runs synchronously on the thread serving the WebView, which is the UI thread on macOS. A null stream answers 404, a null content type is inferred from the extension, and a handler that throws is logged and answered with 404
+
+### Fixed
+
+- macOS and Linux: the stream a custom scheme handler returns is disposed once it has been read. A handler that returned a `FileStream` kept the file open until the stream was finalized
+
+### Changed
+
+- `IntegrationTestApp` maps `/hermes-test`, and its page loads an image from it, so CI checks request handlers on Windows, macOS and Linux
+
 ## [1.4.4] - 2026-10-12
 
 ### Fixed

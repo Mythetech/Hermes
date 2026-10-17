@@ -55,6 +55,7 @@ public static class Program
         builder.Services.AddFluentUIComponents();
         builder.Services.AddHostedService<TeardownProbe>();
         builder.Services.AddScoped<PageTeardownProbe>();
+        builder.MapRequestHandler(RequestHandlerProbe.Path, RequestHandlerProbe.Handle);
 
         builder.RootComponents.Add<App>("#app");
 

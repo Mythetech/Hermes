@@ -129,6 +129,24 @@ window.MenuBar.AddMenu("Plugins", plugins =>
 
 Accelerators automatically translate between platforms, `Ctrl+S` on Windows/Linux becomes `Cmd+S` on macOS.
 
+## Serving App Content
+
+Map a path under the app's own origin to a handler, and the page can load content the app produces, such as images from disk, by URL:
+
+```csharp
+builder.MapRequestHandler("/media", url =>
+{
+    var file = Path.Combine(mediaFolder, Path.GetFileName(new Uri(url).AbsolutePath));
+    return File.Exists(file) ? (File.OpenRead(file), null) : (null, null);
+});
+```
+
+```html
+<img src="/media/cover.png" />
+```
+
+A handler can also come from the app's services with `builder.MapRequestHandler<CoverImages>("/covers")`, where `CoverImages` implements `IHermesRequestHandler`. Handlers run synchronously on the thread serving the WebView, so they should return content that is already at hand. A null stream answers 404, and a null content type is inferred from the extension.
+
 ## Architecture
 
 Hermes minimizes native code by leveraging platform-specific .NET capabilities:

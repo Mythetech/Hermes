@@ -9,6 +9,7 @@ using Hermes.Diagnostics.Smoke;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebView;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.FileProviders;
 
 namespace Hermes.Blazor;
@@ -34,6 +35,7 @@ internal sealed class HermesWebViewManager : WebViewManager
     private readonly CancellationTokenSource _cts = new();
     private volatile bool _disposed;
     private readonly SmokeSession? _smokeSession;
+    private readonly HermesRequestHandlers? _requestHandlers;
 
     public HermesWebViewManager(
         IHermesWindowBackend backend,
@@ -56,13 +58,15 @@ internal sealed class HermesWebViewManager : WebViewManager
         string? baseUri,
         bool isDevMode,
         DeferredSchemeHandler? deferredHandler = null,
-        SmokeSession? smokeSession = null)
+        SmokeSession? smokeSession = null,
+        HermesRequestHandlers? requestHandlers = null)
         : base(services, dispatcher, new Uri(baseUri ?? AppBaseUri), fileProvider, jsComponents, hostPageRelativePath)
     {
         _backend = backend;
         _baseUri = new Uri(baseUri ?? AppBaseUri);
         _isDevMode = isDevMode;
         _smokeSession = smokeSession;
+        _requestHandlers = requestHandlers;
 
         // Unbounded with SingleReader gets the runtime's zero-allocation
         // SingleConsumerUnboundedChannel; Blazor's render-batch acknowledgment
@@ -158,6 +162,10 @@ internal sealed class HermesWebViewManager : WebViewManager
     {
         var uri = new Uri(url);
         var path = uri.AbsolutePath;
+
+        if (_requestHandlers is not null && _baseUri.IsBaseOf(uri)
+            && _requestHandlers.TryHandle(PathString.FromUriComponent(uri), url, out var handled))
+            return handled;
 
         if (path.Contains("blazor.web.js") || path.Contains("aspnetcore-browser-refresh.js"))
             return (null, null);
