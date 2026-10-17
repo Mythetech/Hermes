@@ -559,7 +559,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
                 if (stream is not null)
                 {
                     using var ms = new MemoryStream();
-                    stream.CopyTo(ms);
+                    using (stream)
+                        stream.CopyTo(ms);
                     var data = ms.ToArray();
 
                     numBytes = data.Length;
