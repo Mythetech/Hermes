@@ -30,6 +30,9 @@ internal static partial class LinuxNative
     [LibraryImport(LibraryName, EntryPoint = "Hermes_App_ActivateProcessWindow")]
     internal static partial void AppActivateProcessWindow(int pid);
 
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_App_SetAppId", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void AppSetAppId(string appId);
+
     #endregion
 
     #region Window Lifecycle
@@ -306,6 +309,57 @@ internal static partial class LinuxNative
 
     #endregion
 
+    #region Clipboard
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_IsReady")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static partial bool ClipboardIsReady();
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_GetTargets")]
+    internal static partial IntPtr ClipboardGetTargets(out int count);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_ReadText")]
+    internal static partial IntPtr ClipboardReadText();
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_ReadContents", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial IntPtr ClipboardReadContents(string target, out int length);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_ReadImageAsPng")]
+    internal static partial IntPtr ClipboardReadImageAsPng(out int length);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_Write")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static unsafe partial bool ClipboardWrite(byte** targets, byte** data, int* lengths, int count);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_Clear")]
+    internal static partial void ClipboardClear();
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_StartMonitoring")]
+    internal static partial void ClipboardStartMonitoring(IntPtr callback);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_StopMonitoring")]
+    internal static partial void ClipboardStopMonitoring();
+
+    #endregion
+
+    #region Drag and Drop
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DragDrop_Attach", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial IntPtr DragDropAttach(IntPtr window, string script, string[] dropTargets, int dropTargetCount,
+                                                  IntPtr claimed, IntPtr ended);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DragDrop_Claim")]
+    internal static partial void DragDropClaim(IntPtr dragDrop, long claimId);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DragDrop_BeginDrag")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static unsafe partial bool DragDropBeginDrag(IntPtr dragDrop, byte** targets, byte** data, int* lengths, int count);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_DragDrop_Detach")]
+    internal static partial void DragDropDetach(IntPtr dragDrop);
+
+    #endregion
+
     #region Memory Management
 
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Free")]
@@ -340,6 +394,19 @@ internal static partial class LinuxNative
 
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Notifications_Destroy")]
     internal static partial void NotificationsDestroy(IntPtr center);
+
+    #endregion
+
+    #region Global Hotkeys
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Hotkeys_Start")]
+    internal static partial void HotkeysStart(IntPtr activatedCallback, IntPtr registeredCallback);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Hotkeys_Register", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void HotkeysRegister(int number, string id, string description, string keysym, uint modifiers, string portalTrigger);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Hotkeys_Unregister")]
+    internal static partial void HotkeysUnregister(int number);
 
     #endregion
 }

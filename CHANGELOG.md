@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **Rich clipboard API (preview, documented with 1.5)**: `HermesDataPackage` in `Hermes.Contracts.DataTransfer` carries text, HTML, PNG, file paths and custom MIME formats; `Clipboard.Read`, `Write`, `GetFormats`, `HasCustom`, `Clear` and the `Changed` event use it, and `IClipboard` gains matching members with text-only default implementations
+- macOS: the clipboard reads and writes HTML (rich text that Cocoa apps copy as RTF reads back as HTML), images (as PNG, with TIFF added for older apps), file paths and custom MIME formats through `NSPasteboard`, and raises `Clipboard.Changed` by polling the pasteboard's change count every 500 ms while subscribed. `pbcopy` and `pbpaste` are no longer used, and clipboard calls now run on the main thread like native dialogs, so calling one from a background thread while the UI thread waits on that thread will hang
+- Linux: the clipboard reads and writes HTML (including the UTF-16 HTML some apps offer), images (as PNG), file paths (`text/uri-list` and GNOME's copied-files format) and custom MIME formats through GTK, and raises `Clipboard.Changed` from GTK's owner-change signal. `xclip` is no longer needed
+- Windows: the clipboard reads and writes HTML (CF_HTML), images (the registered PNG format, with a DIB added for older apps, and bitmap-only screenshots read back as PNG), file paths (CF_HDROP) and custom MIME formats, and raises `Clipboard.Changed` from a clipboard listener on its own background thread, so monitoring works in tray-only apps. Opening the clipboard retries for about 100 ms when another app holds it, then throws `IOException`
+
+### Changed
+
+- Linux: the clipboard goes through GTK instead of `xclip`, which changes how existing `SetText` and `GetText` calls behave
+  - Clipboard calls need a Hermes window to exist first. Before one, they throw `InvalidOperationException`; `xclip` worked without one
+  - Clipboard calls run on the GTK thread like native dialogs, so calling one from a background thread hangs while the GTK thread waits on that thread, or once the app's loop has ended
+  - On Wayland, `Clipboard.Changed` is raised only while the app has keyboard focus, because GTK delivers owner-change to the focused window. Contents the app writes do not outlive it, because GTK keeps clipboard contents past exit only on X11
+  - On X11, GTK hands the app's clipboard contents to a running clipboard manager when the app exits; without one, they go away with the app. `xclip` used to keep a background process alive to serve them
+- Windows: `SetText` used to silently do nothing, and `GetText` returned null, when another app held the clipboard. Both now retry for about 100 ms, then throw `IOException`
+
 ## [1.4.5] - 2026-10-17
 
 ### Added

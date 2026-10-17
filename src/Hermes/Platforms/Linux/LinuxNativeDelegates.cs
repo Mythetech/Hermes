@@ -91,4 +91,34 @@ internal static class LinuxNativeDelegates
     /// </summary>
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void NotificationCompletionCallback(IntPtr context, IntPtr errorPtr);
+
+    /// <summary>
+    /// Called on the GTK thread when the system clipboard's owner changes.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void ClipboardChangedCallback();
+
+    /// <summary>
+    /// Called on the GTK thread with a claimed drop's targets and data; count is -1 when no capture was waiting.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void DropClaimedCallback(long claimId, IntPtr targets, IntPtr data, IntPtr lengths, int count);
+
+    /// <summary>
+    /// Called on the GTK thread when a drag started by the window ends.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void DragEndedCallback([MarshalAs(UnmanagedType.U1)] bool dropped);
+
+    /// <summary>
+    /// Called on the GTK thread with the number of a pressed global hotkey.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void HotkeyActivatedCallback(int number);
+
+    /// <summary>
+    /// Called on the GTK thread with the outcome of a global hotkey registration. Either string may be null.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void HotkeyRegisteredCallback(int number, int status, IntPtr boundTriggerPtr, IntPtr reasonPtr);
 }

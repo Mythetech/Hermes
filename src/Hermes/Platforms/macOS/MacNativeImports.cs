@@ -111,6 +111,18 @@ internal static partial class MacNative
 
     #endregion
 
+    #region Drag and Drop
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Window_TakeDropCapture")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static unsafe partial bool WindowTakeDropCapture(IntPtr window, HermesNativePackage* package);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Window_StartDrag")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static unsafe partial bool WindowStartDrag(IntPtr window, HermesNativePackage* package);
+
+    #endregion
+
     #region Threading
 
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Window_Invoke")]
@@ -360,6 +372,61 @@ internal static partial class MacNative
 
     #endregion
 
+    #region Clipboard
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_GetFormats")]
+    internal static partial int ClipboardGetFormats();
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_HasType", StringMarshalling = StringMarshalling.Utf8)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static partial bool ClipboardHasType(string mimeType);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_ReadText")]
+    internal static partial IntPtr ClipboardReadText();
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_ReadHtml")]
+    internal static partial IntPtr ClipboardReadHtml();
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_ReadUrl")]
+    internal static partial IntPtr ClipboardReadUrl();
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_ReadPng")]
+    internal static partial IntPtr ClipboardReadPng(out int length);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_ReadFiles")]
+    internal static partial IntPtr ClipboardReadFiles(out int count);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_ReadCustom", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial IntPtr ClipboardReadCustom(string mimeType, out int length);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_Write")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static unsafe partial bool ClipboardWrite(HermesNativePackage* package);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_Clear")]
+    internal static partial void ClipboardClear();
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_StartMonitoring")]
+    internal static partial void ClipboardStartMonitoring(IntPtr callback);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Clipboard_StopMonitoring")]
+    internal static partial void ClipboardStopMonitoring();
+
+    #endregion
+
+    #region Global Hotkeys
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Hotkeys_SetCallback")]
+    internal static partial void HotkeysSetCallback(IntPtr callback);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Hotkeys_Register")]
+    internal static partial int HotkeysRegister(uint hotkeyNumber, uint keyCode, uint modifiers);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Hotkeys_Unregister")]
+    internal static partial void HotkeysUnregister(uint hotkeyNumber);
+
+    #endregion
+
     #region Memory Management
 
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Free")]
@@ -367,6 +434,9 @@ internal static partial class MacNative
 
     [LibraryImport(LibraryName, EntryPoint = "Hermes_FreeStringArray")]
     internal static partial void FreeStringArray(IntPtr array, int count);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_FreeNativePackage")]
+    internal static unsafe partial void FreeNativePackage(HermesNativePackage* package);
 
     #endregion
 

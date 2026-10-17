@@ -47,5 +47,7 @@ struct _HermesWindow {
 // Internal functions
 HermesWindow* hermes_window_new(const HermesWindowParams* params);
 void hermes_window_destroy(HermesWindow* hw);
+gboolean hermes_is_ui_thread(void);
+gboolean hermes_gtk_ready(void);
 
 #endif // HERMES_WINDOW_H

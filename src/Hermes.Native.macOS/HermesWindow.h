@@ -5,6 +5,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "HermesTypes.h"
+#import "HermesWebView.h"
 
 @class HermesWindowDelegate;
 @class HermesUiDelegate;
@@ -21,7 +22,7 @@
 @interface HermesWindow : NSObject
 
 @property (nonatomic, strong) NSWindow* window;
-@property (nonatomic, strong) WKWebView* webView;
+@property (nonatomic, strong) HermesWebView* webView;
 @property (nonatomic, strong) WKWebViewConfiguration* webViewConfiguration;
 @property (nonatomic, strong) HermesWindowDelegate* windowDelegate;
 @property (nonatomic, strong) HermesUiDelegate* uiDelegate;
@@ -37,6 +38,7 @@
 @property (nonatomic, assign) WebMessageCallback onWebMessage;
 @property (nonatomic, assign) CustomSchemeCallback onCustomScheme;
 @property (nonatomic, assign) WebViewCrashCallback onWebViewCrash;
+@property (nonatomic, assign) DragEndedCallback onDragEnded;
 
 // State
 @property (nonatomic, assign) int64_t uiThreadId;
@@ -45,6 +47,9 @@
 @property (nonatomic, assign) BOOL devToolsEnabled;
 @property (nonatomic, assign) BOOL customTitleBar;
 @property (nonatomic, assign) BOOL transparent;
+@property (nonatomic, assign) BOOL dragDrop;
+@property (nonatomic, copy) NSString* dragDropScript;
+@property (nonatomic, copy) NSArray<NSString*>* dropCustomTypes;
 
 // Drag tracking (hybrid approach - JS informs about no-drag regions)
 @property (nonatomic, strong) id mouseDownMonitor;
@@ -56,6 +61,10 @@
 @property (nonatomic, assign) NSTimeInterval lastClickTime;
 @property (nonatomic, assign) NSPoint lastClickLocation;
 @property (nonatomic, assign) BOOL clickIsInNoDragRegion;
+
+// Native drag source: the latest left mouse event of a press in this window, while the press lasts
+@property (nonatomic, strong) id dragEventMonitor;
+@property (nonatomic, strong) NSEvent* lastMouseEvent;
 
 // Initialization
 - (instancetype)initWithParams:(const HermesWindowParams*)params;
@@ -106,6 +115,12 @@
 // Drag support
 - (void)setupDragMonitors;
 - (void)teardownDragMonitors;
+
+/// Starts a native drag from the left-button press in progress in this window. Returns NO when there is none.
+- (BOOL)startDragWithPackage:(const HermesNativePackage*)package;
+
+/// Ends drag and drop for a closing window: an active drag ends as canceled and the event monitor goes.
+- (void)endDragAndDrop;
 
 @end
 

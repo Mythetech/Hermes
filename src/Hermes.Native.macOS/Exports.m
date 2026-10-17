@@ -7,6 +7,8 @@
 #import "HermesStatusIcon.h"
 #import "HermesNotifications.h"
 #import "HermesDialogs.h"
+#import "HermesClipboard.h"
+#import "HermesHotkeys.h"
 #import "HermesAppDelegate.h"
 #import <Cocoa/Cocoa.h>
 
@@ -267,6 +269,22 @@ void Hermes_Window_RegisterCustomScheme(void* window, const char* scheme) {
     @autoreleasepool {
         HermesWindow* hermesWindow = (__bridge HermesWindow*)window;
         [hermesWindow registerCustomScheme:[NSString stringWithUTF8String:scheme]];
+    }
+}
+
+#pragma mark - Drag and Drop
+
+bool Hermes_Window_TakeDropCapture(void* window, HermesNativePackage* package) {
+    @autoreleasepool {
+        HermesWindow* hermesWindow = (__bridge HermesWindow*)window;
+        return [hermesWindow.webView takeDropCapture:package];
+    }
+}
+
+bool Hermes_Window_StartDrag(void* window, const HermesNativePackage* package) {
+    @autoreleasepool {
+        HermesWindow* hermesWindow = (__bridge HermesWindow*)window;
+        return [hermesWindow startDragWithPackage:package];
     }
 }
 
@@ -560,6 +578,33 @@ int Hermes_Dialog_ShowMessage(const char* title, const char* message,
                                int buttons, int icon) {
     return Hermes_ShowMessageDialog(title, message, buttons, icon);
 }
+
+#pragma mark - Clipboard Operations
+
+int Hermes_Clipboard_GetFormats(void) { return HermesClipboard_GetFormats(); }
+bool Hermes_Clipboard_HasType(const char* mimeType) { return HermesClipboard_HasType(mimeType); }
+char* Hermes_Clipboard_ReadText(void) { return HermesClipboard_ReadText(); }
+char* Hermes_Clipboard_ReadHtml(void) { return HermesClipboard_ReadHtml(); }
+char* Hermes_Clipboard_ReadUrl(void) { return HermesClipboard_ReadUrl(); }
+uint8_t* Hermes_Clipboard_ReadPng(int* length) { return HermesClipboard_ReadPng(length); }
+char** Hermes_Clipboard_ReadFiles(int* count) { return HermesClipboard_ReadFiles(count); }
+uint8_t* Hermes_Clipboard_ReadCustom(const char* mimeType, int* length) { return HermesClipboard_ReadCustom(mimeType, length); }
+
+bool Hermes_Clipboard_Write(const HermesNativePackage* package) { return HermesClipboard_Write(package); }
+
+void Hermes_Clipboard_Clear(void) { HermesClipboard_Clear(); }
+void Hermes_Clipboard_StartMonitoring(void (*callback)(void)) { HermesClipboard_StartMonitoring(callback); }
+void Hermes_Clipboard_StopMonitoring(void) { HermesClipboard_StopMonitoring(); }
+
+#pragma mark - Global Hotkeys
+
+void Hermes_Hotkeys_SetCallback(void (*callback)(uint32_t hotkeyNumber)) { HermesHotkeys_SetCallback(callback); }
+
+int32_t Hermes_Hotkeys_Register(uint32_t hotkeyNumber, uint32_t keyCode, uint32_t modifiers) {
+    return HermesHotkeys_Register(hotkeyNumber, keyCode, modifiers);
+}
+
+void Hermes_Hotkeys_Unregister(uint32_t hotkeyNumber) { HermesHotkeys_Unregister(hotkeyNumber); }
 
 #pragma mark - Dock Menu Operations
 
@@ -881,6 +926,12 @@ void Hermes_Notifications_Destroy(void* center) {
 void Hermes_Free(void* ptr) {
     if (ptr) {
         free(ptr);
+    }
+}
+
+void Hermes_FreeNativePackage(HermesNativePackage* package) {
+    if (package) {
+        HermesNativePackage_Free(package);
     }
 }
 

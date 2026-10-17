@@ -104,6 +104,17 @@ void Hermes_Window_SendWebMessage(void* window, const char* message);
 void Hermes_Window_RegisterCustomScheme(void* window, const char* scheme);
 
 // ============================================================================
+// Drag and Drop (main thread only)
+// ============================================================================
+
+/// Move the latest drop another app made on the window into package; free it with Hermes_FreeNativePackage
+bool Hermes_Window_TakeDropCapture(void* window, HermesNativePackage* package);
+
+/// Start a native drag of the package from the left-button press in progress; false when there is none.
+/// OnDragEnded reports the end of a drag that started.
+bool Hermes_Window_StartDrag(void* window, const HermesNativePackage* package);
+
+// ============================================================================
 // Threading
 // ============================================================================
 
@@ -215,6 +226,37 @@ int Hermes_Dialog_ShowMessage(const char* title, const char* message,
                                int buttons, int icon);
 
 // ============================================================================
+// Clipboard Operations
+// ============================================================================
+
+// Strings and buffers are freed with Hermes_Free, string arrays with Hermes_FreeStringArray.
+int Hermes_Clipboard_GetFormats(void);
+bool Hermes_Clipboard_HasType(const char* mimeType);
+char* Hermes_Clipboard_ReadText(void);
+char* Hermes_Clipboard_ReadHtml(void);
+char* Hermes_Clipboard_ReadUrl(void);
+uint8_t* Hermes_Clipboard_ReadPng(int* length);
+char** Hermes_Clipboard_ReadFiles(int* count);
+uint8_t* Hermes_Clipboard_ReadCustom(const char* mimeType, int* length);
+bool Hermes_Clipboard_Write(const HermesNativePackage* package);
+void Hermes_Clipboard_Clear(void);
+void Hermes_Clipboard_StartMonitoring(void (*callback)(void));
+void Hermes_Clipboard_StopMonitoring(void);
+
+// ============================================================================
+// Global Hotkeys
+// ============================================================================
+
+/// Set the function the main thread calls with the number of a pressed hotkey. Safe from any thread.
+void Hermes_Hotkeys_SetCallback(void (*callback)(uint32_t hotkeyNumber));
+
+/// Register a Carbon hotkey on the main thread, waiting for it from other threads. Returns the OSStatus.
+int32_t Hermes_Hotkeys_Register(uint32_t hotkeyNumber, uint32_t keyCode, uint32_t modifiers);
+
+/// Unregister a hotkey. Never waits; from another thread, the main thread applies it next.
+void Hermes_Hotkeys_Unregister(uint32_t hotkeyNumber);
+
+// ============================================================================
 // Status Icon Operations
 // ============================================================================
 
@@ -285,6 +327,9 @@ void Hermes_Free(void* ptr);
 
 /// Free an array of strings allocated by Hermes
 void Hermes_FreeStringArray(char** array, int count);
+
+/// Free the contents of a package filled in by Hermes
+void Hermes_FreeNativePackage(HermesNativePackage* package);
 
 // ============================================================================
 // Notifications

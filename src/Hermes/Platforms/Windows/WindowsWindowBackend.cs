@@ -5,7 +5,9 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text.Json;
 using Hermes.Abstractions;
+using Hermes.Contracts.DataTransfer;
 using Hermes.Contracts.Diagnostics;
+using Hermes.DataTransfer;
 using Hermes.Infrastructure;
 using Microsoft.Web.WebView2.Core;
 using Windows.Win32;
@@ -45,6 +47,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     private readonly Dictionary<string, Func<string, (Stream? Content, string? ContentType)>> _customSchemeHandlers = new();
 
     private WindowsMenuBackend? _menuBackend;
+    private WindowsDragSource? _activeDrag;
     private WindowsCustomTitlebar? _customTitlebar;
     private HermesWindowTheme _theme;
 
@@ -56,6 +59,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     public event Action<string>? WebMessageReceived;
     public event Action? Maximized;
     public event Action? Restored;
+    public event Action<HermesDropReport>? DropReported;
 
     public Func<bool>? CloseRequestedHandler { get; set; }
 
@@ -423,6 +427,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         if (_isDisposed) return;
         _isDisposed = true;
 
+        _activeDrag?.Cancel();
         _invokeQueue.Dispose();
 
         _webViewController?.Close();
@@ -562,6 +567,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     private LRESULT HandleDestroy()
     {
         s_hwndToInstance.TryRemove(_hwnd, out _);
+        _activeDrag?.Cancel();
 
         _webViewController?.Close();
         _webViewController = null;
@@ -703,6 +709,11 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
                 await _webView.AddScriptToExecuteOnDocumentCreatedAsync(GetDragDetectionScript());
             }
 
+            if (_options.DragDrop)
+            {
+                await _webView.AddScriptToExecuteOnDocumentCreatedAsync(DragDropScript.Source);
+            }
+
             if (isSmokeTest) Console.WriteLine("WEBVIEW_INIT:script_injected");
 
             _webView.WebMessageReceived += (sender, args) =>
@@ -712,6 +723,12 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
                 if (_customTitlebar is not null && message?.StartsWith("{\"type\":\"hermes-drag\"") == true)
                 {
                     HandleDragMessage(message);
+                    return;
+                }
+
+                if (_options.DragDrop && message is not null && DropMessage.IsDropProtocol(message))
+                {
+                    HandleDropMessage(message, args);
                     return;
                 }
 
@@ -1076,6 +1093,81 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         {
             // Ignore malformed messages
         }
+    }
+
+    #endregion
+
+    #region Drag and Drop
+
+    public Task<HermesDragResult> StartDragAsync(HermesDataPackage package)
+    {
+        ThrowIfNotInitialized();
+        var drag = new WindowsDragSource(_hwnd, package);
+        _activeDrag = drag;
+
+        // SHDoDragDrop runs a modal loop, so it is queued to start after the caller's handler returns.
+        if (!Post(() => RunDrag(drag)))
+            drag.Cancel();
+
+        return drag.Completion;
+    }
+
+    private void RunDrag(WindowsDragSource drag)
+    {
+        drag.Run();
+        if (ReferenceEquals(_activeDrag, drag))
+            _activeDrag = null;
+    }
+
+    // Unlike BeginInvoke, never runs the action inline, even when called on the UI thread.
+    private bool Post(Action action)
+    {
+        if (!_invokeQueue.TryEnqueue(action, completion: null, out var wakeupNeeded))
+            return false;
+
+        if (wakeupNeeded)
+            PInvoke.PostMessage(_hwnd, WM_USER_INVOKE, 0, 0);
+
+        return true;
+    }
+
+    private void HandleDropMessage(string message, CoreWebView2WebMessageReceivedEventArgs args)
+    {
+        var drop = DropMessage.TryParse(message);
+        if (drop is null)
+            return;
+
+        try
+        {
+            DropReported?.Invoke(drop.Kind == HermesDropReportKind.Drop
+                ? drop.ToReport(drop.ToPackage(ReadDroppedPaths(args)))
+                : drop.ToReport(null));
+        }
+        catch (Exception ex)
+        {
+            // A subscriber's exception goes to the dispatcher sink rather than out of the WebView2 event.
+            HermesApplication.RaiseDispatcherUnhandledException(ex);
+        }
+    }
+
+    // The page hands over its File objects, so paths reach .NET without ever entering JavaScript.
+    private static List<string> ReadDroppedPaths(CoreWebView2WebMessageReceivedEventArgs args)
+    {
+        var paths = new List<string>();
+        try
+        {
+            foreach (var item in args.AdditionalObjects ?? [])
+            {
+                if (item is CoreWebView2File { Path: { Length: > 0 } path })
+                    paths.Add(path);
+            }
+        }
+        catch (Exception)
+        {
+            // An older runtime or an unreadable file, or any other failure, still leaves the drop's text, HTML and URL.
+        }
+
+        return paths;
     }
 
     #endregion

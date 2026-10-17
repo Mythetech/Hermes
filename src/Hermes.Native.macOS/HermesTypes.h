@@ -3,6 +3,7 @@
 #define HERMES_TYPES_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 // Callback function pointer types
@@ -18,6 +19,7 @@ typedef void (*WebViewCrashCallback)(void);
 typedef void (*NotificationClickedCallback)(const char* notificationId);
 typedef void (*NotificationPermissionCallback)(void* context, bool granted);
 typedef void (*NotificationCompletionCallback)(void* context, const char* error);
+typedef void (*DragEndedCallback)(bool dropped);
 
 // Window initialization parameters
 typedef struct {
@@ -49,6 +51,7 @@ typedef struct {
     bool ContextMenuEnabled;
     bool CustomTitleBar;
     bool Transparent;
+    bool DragDrop;
 
     // Event callbacks
     ClosingCallback OnClosing;
@@ -63,7 +66,41 @@ typedef struct {
     // Custom URL schemes to register (must be set before WebView creation)
     const char* CustomSchemeNames[16];
 
+    // With DragDrop: the page's drop script, the custom MIME types to read from drops (one per line),
+    // and how a drag the app started ended
+    const char* DragDropScript;
+    const char* DropCustomTypes;
+    DragEndedCallback OnDragEnded;
+
 } HermesWindowParams;
+
+// MacNativeParams.cs mirrors this layout.
+_Static_assert(offsetof(HermesWindowParams, DragDrop) == 75, "HermesWindowParams no longer matches its managed mirror");
+_Static_assert(offsetof(HermesWindowParams, OnClosing) == 80, "HermesWindowParams no longer matches its managed mirror");
+_Static_assert(offsetof(HermesWindowParams, DragDropScript) == 272, "HermesWindowParams no longer matches its managed mirror");
+_Static_assert(offsetof(HermesWindowParams, OnDragEnded) == 288, "HermesWindowParams no longer matches its managed mirror");
+_Static_assert(sizeof(HermesWindowParams) == 296, "HermesWindowParams no longer matches its managed mirror");
+
+// Data in several formats crossing the library boundary. Absent formats are NULL with a zero count or length.
+// A package the library fills in is released with Hermes_FreeNativePackage.
+typedef struct {
+    char* Text;
+    char* Html;
+    char* Url;
+    uint8_t* Png;
+    int PngLength;
+    char** Files;
+    int FileCount;
+    char** CustomTypes;
+    uint8_t** CustomData;
+    int* CustomLengths;
+    int CustomCount;
+} HermesNativePackage;
+
+// MacNativePackage.cs mirrors this layout.
+_Static_assert(sizeof(HermesNativePackage) == 88, "HermesNativePackage no longer matches its managed mirror");
+_Static_assert(offsetof(HermesNativePackage, Files) == 40, "HermesNativePackage no longer matches its managed mirror");
+_Static_assert(offsetof(HermesNativePackage, CustomCount) == 80, "HermesNativePackage no longer matches its managed mirror");
 
 // Window light/dark appearance, values must match HermesWindowTheme in managed code
 typedef enum {

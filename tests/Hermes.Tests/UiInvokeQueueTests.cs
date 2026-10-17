@@ -226,4 +226,32 @@ public class DispatcherUnhandledExceptionTests
             HermesApplication.DispatcherUnhandledException -= subscriber;
         }
     }
+
+    [Fact]
+    public void RaiseDispatcherUnhandledException_SubscriberThrows_StillDeliversToLaterSubscribers()
+    {
+        var thrown = new InvalidOperationException("original");
+        Exception? received = null;
+        Action<Exception> throwing = _ => throw new InvalidOperationException("subscriber boom");
+        Action<Exception> recording = ex =>
+        {
+            if (ReferenceEquals(ex, thrown))
+                received = ex;
+        };
+        HermesApplication.DispatcherUnhandledException += throwing;
+        HermesApplication.DispatcherUnhandledException += recording;
+
+        try
+        {
+            var raiseException = Record.Exception(() => HermesApplication.RaiseDispatcherUnhandledException(thrown));
+
+            Assert.Null(raiseException);
+            Assert.Same(thrown, received);
+        }
+        finally
+        {
+            HermesApplication.DispatcherUnhandledException -= recording;
+            HermesApplication.DispatcherUnhandledException -= throwing;
+        }
+    }
 }

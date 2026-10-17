@@ -211,3 +211,36 @@ GlobalUnlock
 GlobalFree
 CLIPBOARD_FORMAT
 GLOBAL_ALLOC_FLAGS
+RegisterClipboardFormatW
+AddClipboardFormatListener
+RemoveClipboardFormatListener
+GlobalSize
+WM_CLIPBOARDUPDATE
+
+// COM initialization for WIC on threads that have not initialized COM
+CoInitializeEx
+CoUninitialize
+
+// WIC: decodes PNG for the legacy bitmap written beside clipboard PNGs
+IWICImagingFactory
+IWICStream
+IWICBitmapDecoder
+IWICBitmapFrameDecode
+IWICBitmapSource
+IWICFormatConverter
+GUID_WICPixelFormat32bppBGRA
+WICDecodeOptions
+WICBitmapDitherType
+WICBitmapPaletteType
+
+// Outbound drag and drop
+OleInitialize
+SHCreateDataObject
+SHDoDragDrop
+GetAsyncKeyState
+
+// Global hotkeys
+RegisterHotKey
+UnregisterHotKey
+HOT_KEY_MODIFIERS
+WM_HOTKEY

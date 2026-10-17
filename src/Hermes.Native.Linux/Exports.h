@@ -27,6 +27,10 @@ void Hermes_App_SetAccessoryMode(void);
 /// Activate (bring to front) the main window of another process by its PID
 void Hermes_App_ActivateProcessWindow(int pid);
 
+/// Set the reverse-DNS application id; call on the GTK thread right after Hermes_App_Init.
+/// On Wayland it registers the id with the desktop portal's host Registry.
+void Hermes_App_SetAppId(const char* appId);
+
 // ============================================================================
 // Window Lifecycle
 // ============================================================================
@@ -238,6 +242,38 @@ int Hermes_Dialog_ShowMessage(void* parentWindow, const char* title, const char*
                                int buttons, int icon);
 
 // ============================================================================
+// Clipboard
+// ============================================================================
+
+// Strings and buffers are freed with Hermes_Free, string arrays with Hermes_FreeStringArray.
+bool Hermes_Clipboard_IsReady(void);
+char** Hermes_Clipboard_GetTargets(int* count);
+char* Hermes_Clipboard_ReadText(void);
+uint8_t* Hermes_Clipboard_ReadContents(const char* target, int* length);
+uint8_t* Hermes_Clipboard_ReadImageAsPng(int* length);
+bool Hermes_Clipboard_Write(const char** targets, const uint8_t** data, const int* lengths, int count);
+void Hermes_Clipboard_Clear(void);
+void Hermes_Clipboard_StartMonitoring(void (*callback)(void));
+void Hermes_Clipboard_StopMonitoring(void);
+
+// ============================================================================
+// Drag and Drop
+// ============================================================================
+
+/// Install the drop script and capture other apps' drops on the window's web view. Callbacks run on the GTK thread.
+void* Hermes_DragDrop_Attach(void* window, const char* script, const char** dropTargets, int dropTargetCount,
+                             DropClaimedCallback claimed, DragEndedCallback ended);
+
+/// Hand the newest unclaimed capture to the claimed callback, waiting up to 2 s for it to finish.
+void Hermes_DragDrop_Claim(void* dragDrop, int64_t claimId);
+
+/// Start a drag of the targets while the primary button is held; false when no drag started.
+bool Hermes_DragDrop_BeginDrag(void* dragDrop, const char** targets, const uint8_t** data, const int* lengths, int count);
+
+/// Cancel an active drag, drop pending captures and disconnect from the web view.
+void Hermes_DragDrop_Detach(void* dragDrop);
+
+// ============================================================================
 // Status Icon Operations (requires libappindicator3)
 // ============================================================================
 
@@ -336,6 +372,21 @@ void Hermes_Notifications_DismissAll(void* center);
 
 /// Destroy the client.
 void Hermes_Notifications_Destroy(void* center);
+
+// ============================================================================
+// Global Hotkeys
+// ============================================================================
+
+/// Set the callbacks; both are called on the GTK thread.
+void Hermes_Hotkeys_Start(HotkeyActivatedCallback activated, HotkeyRegisteredCallback registered);
+
+/// Queue a registration for the GTK thread; the registered callback reports its outcome.
+/// Work queued before Hermes_App_Init runs once the GTK main loop runs.
+void Hermes_Hotkeys_Register(int number, const char* id, const char* description,
+                             const char* keysym, unsigned int modifiers, const char* portalTrigger);
+
+/// Queue an unregistration for the GTK thread.
+void Hermes_Hotkeys_Unregister(int number);
 
 #ifdef __cplusplus
 }
