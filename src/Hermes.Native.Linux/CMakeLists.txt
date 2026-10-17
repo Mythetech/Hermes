@@ -38,6 +38,7 @@ set(SOURCES
     HermesNotifications.c
     HermesClipboard.c
     HermesDragDrop.c
+    HermesHotkeys.c
     Exports.c
 )
 

@@ -18,6 +18,7 @@ public static class HermesApplication
     private static readonly List<NativeStatusIcon> _statusIcons = new();
     private static readonly object _statusIconsLock = new();
     private static bool _accessoryMode;
+    private static string? _appId;
     private static bool _windowCreated;
     private static NativeNotificationCenter? _notifications;
     private static NativeNotificationOptions? _notificationOptions;
@@ -65,6 +66,28 @@ public static class HermesApplication
             Platforms.Linux.LinuxNative.AppSetAccessoryMode();
         }
 #endif
+    }
+
+    /// <summary>
+    /// Reverse-DNS application id, such as com.mythetech.Horizon. Linux desktop portals use it to identify the app,
+    /// which Wayland global hotkeys need. Set it before creating any windows.
+    /// Notifications use it as their default app id when it is set before the first use of <see cref="Notifications"/>.
+    /// </summary>
+    /// <exception cref="ArgumentException">The value is not a reverse-DNS name with at least two elements.</exception>
+    /// <exception cref="InvalidOperationException">A window has already been created.</exception>
+    public static string? AppId
+    {
+        get => _appId;
+        set
+        {
+            if (value is not null && !Hotkeys.AppIdValidator.IsValid(value))
+                throw new ArgumentException($"'{value}' is not a reverse-DNS application id such as com.example.App.", nameof(value));
+
+            if (_windowCreated)
+                throw new InvalidOperationException("AppId must be set before creating any windows.");
+
+            _appId = value;
+        }
     }
 
     internal static void MarkWindowCreated() => _windowCreated = true;
@@ -256,14 +279,17 @@ public static class HermesApplication
             return;
         }
 
-        try
+        foreach (var subscriber in handler.GetInvocationList())
         {
-            handler(exception);
-        }
-        catch (Exception handlerException)
-        {
-            Diagnostics.HermesLogger.Error(
-                "DispatcherUnhandledException subscriber threw.", handlerException);
+            try
+            {
+                ((Action<Exception>)subscriber)(exception);
+            }
+            catch (Exception handlerException)
+            {
+                Diagnostics.HermesLogger.Error(
+                    "DispatcherUnhandledException subscriber threw.", handlerException);
+            }
         }
     }
 

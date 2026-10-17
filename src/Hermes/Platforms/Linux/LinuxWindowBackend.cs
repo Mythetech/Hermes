@@ -568,8 +568,25 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
             int argc = 0;
             IntPtr argv = IntPtr.Zero;
             LinuxNative.AppInit(ref argc, ref argv);
+            RegisterAppId();
 
             s_gtkInitialized = true;
+        }
+    }
+
+    // The portal Registry call must precede every other portal call, so it is made as soon as GTK is up.
+    private static void RegisterAppId()
+    {
+        if (HermesApplication.AppId is not { } appId)
+            return;
+
+        try
+        {
+            LinuxNative.AppSetAppId(appId);
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            Diagnostics.HermesLogger.Warning($"The Hermes native library is out of date, so the AppId was not registered with the desktop portal: {ex.Message}");
         }
     }
 

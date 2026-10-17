@@ -5,7 +5,7 @@
 CC = xcrun clang
 
 # Frameworks
-FRAMEWORKS = -framework Cocoa -framework WebKit -framework UniformTypeIdentifiers -framework QuartzCore -framework UserNotifications
+FRAMEWORKS = -framework Cocoa -framework WebKit -framework UniformTypeIdentifiers -framework QuartzCore -framework UserNotifications -framework Carbon
 
 # Compiler flags
 # Note: Some SDK versions have format_arg issues in headers, suppress these warnings
@@ -33,6 +33,7 @@ SOURCES = HermesWindow.m \
           HermesNotifications.m \
           HermesAppDelegate.m \
           HermesClipboard.m \
+          HermesHotkeys.m \
           Exports.m
 
 # Object directories

@@ -6,6 +6,7 @@ using Hermes.Abstractions;
 using Hermes.Blazor;
 using Hermes.Contracts.DataTransfer;
 using Hermes.Contracts.Diagnostics;
+using Hermes.Contracts.Hotkeys;
 using Hermes.Contracts.Notifications;
 using Hermes.Contracts.Plugins;
 using Hermes.Diagnostics;
@@ -80,6 +81,11 @@ public sealed class ScenarioRunner : IDisposable
             await RunClipboardChangedTestAsync();
             await RunClipboardChangedMixedThreadsTestAsync();
         }
+
+        // Global hotkeys need no WebView
+        await RunHotkeysRegisterTestAsync();
+        if (!OperatingSystem.IsMacOS())
+            await RunHotkeysActivateTestAsync();
 
         // Web message test runs LAST - gives WebView2 maximum time to initialize
         // On Windows, WebView2 init is async and can take several seconds in CI
@@ -1084,6 +1090,106 @@ public sealed class ScenarioRunner : IDisposable
         }
 
         return true;
+    }
+
+    private static async Task RunHotkeysRegisterTestAsync()
+    {
+        const string testName = "hotkeys-register";
+        TestReporter.Start(testName);
+        var timeout = TimeSpan.FromSeconds(10);
+        var reported = false;
+
+        try
+        {
+            var first = await GlobalHotkeys.RegisterAsync("integration.register", "Ctrl+Alt+Shift+F12", "Integration test hotkey").WaitAsync(timeout);
+            await GlobalHotkeys.UnregisterAsync("integration.register").WaitAsync(timeout);
+            var second = await GlobalHotkeys.RegisterAsync("integration.register", "Ctrl+Alt+Shift+F12", "Integration test hotkey").WaitAsync(timeout);
+
+            reported = true;
+            TestReporter.Assert(testName,
+                first.Status == HermesHotkeyStatus.Registered && second.Status == HermesHotkeyStatus.Registered,
+                $"first: {first.Status} ({first.Reason}), second: {second.Status} ({second.Reason})");
+        }
+        catch (Exception ex)
+        {
+            reported = true;
+            TestReporter.Fail(testName, ex.Message);
+        }
+        finally
+        {
+            try
+            {
+                await GlobalHotkeys.UnregisterAsync("integration.register").WaitAsync(timeout);
+            }
+            catch (Exception ex)
+            {
+                if (!reported)
+                    TestReporter.Fail(testName, "Cleanup unregister failed: " + ex.Message);
+            }
+        }
+    }
+
+    private static async Task RunHotkeysActivateTestAsync()
+    {
+        const string testName = "hotkeys-activate";
+        TestReporter.Start(testName);
+        var activated = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnActivated(string id) => activated.TrySetResult(id);
+        GlobalHotkeys.Activated += OnActivated;
+        var reported = false;
+
+        try
+        {
+            HermesHotkeyResult result;
+            try
+            {
+                result = await GlobalHotkeys.RegisterAsync("integration.activate", "Ctrl+Alt+Shift+F12", "Integration test hotkey")
+                    .WaitAsync(TimeSpan.FromSeconds(10));
+            }
+            catch (TimeoutException)
+            {
+                throw new TimeoutException("Registration did not complete within 10 s");
+            }
+
+            if (result.Status != HermesHotkeyStatus.Registered)
+            {
+                reported = true;
+                TestReporter.Fail(testName, $"Registration returned {result.Status} ({result.Reason})");
+                return;
+            }
+
+            ExternalHotkey.PressCtrlAltShiftF12();
+            string id;
+            try
+            {
+                id = await activated.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            catch (TimeoutException)
+            {
+                throw new TimeoutException("No Activated within 5 s of the external key press");
+            }
+
+            reported = true;
+            TestReporter.Assert(testName, id == "integration.activate", $"Activated reported '{id}'");
+        }
+        catch (Exception ex)
+        {
+            reported = true;
+            TestReporter.Fail(testName, ex.Message);
+        }
+        finally
+        {
+            GlobalHotkeys.Activated -= OnActivated;
+            try
+            {
+                await GlobalHotkeys.UnregisterAsync("integration.activate").WaitAsync(TimeSpan.FromSeconds(10));
+            }
+            catch (Exception ex)
+            {
+                if (!reported)
+                    TestReporter.Fail(testName, "Cleanup unregister failed: " + ex.Message);
+            }
+        }
     }
 
     public void Dispose()

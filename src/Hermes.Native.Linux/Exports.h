@@ -27,6 +27,10 @@ void Hermes_App_SetAccessoryMode(void);
 /// Activate (bring to front) the main window of another process by its PID
 void Hermes_App_ActivateProcessWindow(int pid);
 
+/// Set the reverse-DNS application id; call on the GTK thread right after Hermes_App_Init.
+/// On Wayland it registers the id with the desktop portal's host Registry.
+void Hermes_App_SetAppId(const char* appId);
+
 // ============================================================================
 // Window Lifecycle
 // ============================================================================
@@ -368,6 +372,21 @@ void Hermes_Notifications_DismissAll(void* center);
 
 /// Destroy the client.
 void Hermes_Notifications_Destroy(void* center);
+
+// ============================================================================
+// Global Hotkeys
+// ============================================================================
+
+/// Set the callbacks; both are called on the GTK thread.
+void Hermes_Hotkeys_Start(HotkeyActivatedCallback activated, HotkeyRegisteredCallback registered);
+
+/// Queue a registration for the GTK thread; the registered callback reports its outcome.
+/// Work queued before Hermes_App_Init runs once the GTK main loop runs.
+void Hermes_Hotkeys_Register(int number, const char* id, const char* description,
+                             const char* keysym, unsigned int modifiers, const char* portalTrigger);
+
+/// Queue an unregistration for the GTK thread.
+void Hermes_Hotkeys_Unregister(int number);
 
 #ifdef __cplusplus
 }

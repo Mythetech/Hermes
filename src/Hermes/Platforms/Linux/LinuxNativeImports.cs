@@ -30,6 +30,9 @@ internal static partial class LinuxNative
     [LibraryImport(LibraryName, EntryPoint = "Hermes_App_ActivateProcessWindow")]
     internal static partial void AppActivateProcessWindow(int pid);
 
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_App_SetAppId", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void AppSetAppId(string appId);
+
     #endregion
 
     #region Window Lifecycle
@@ -391,6 +394,19 @@ internal static partial class LinuxNative
 
     [LibraryImport(LibraryName, EntryPoint = "Hermes_Notifications_Destroy")]
     internal static partial void NotificationsDestroy(IntPtr center);
+
+    #endregion
+
+    #region Global Hotkeys
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Hotkeys_Start")]
+    internal static partial void HotkeysStart(IntPtr activatedCallback, IntPtr registeredCallback);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Hotkeys_Register", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void HotkeysRegister(int number, string id, string description, string keysym, uint modifiers, string portalTrigger);
+
+    [LibraryImport(LibraryName, EntryPoint = "Hermes_Hotkeys_Unregister")]
+    internal static partial void HotkeysUnregister(int number);
 
     #endregion
 }
