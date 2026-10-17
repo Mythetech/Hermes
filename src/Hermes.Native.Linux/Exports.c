@@ -9,10 +9,12 @@
 // - HermesStatusIcon.c (system tray / status icon operations, requires libappindicator3)
 // - HermesClipboard.c (clipboard operations, forwarded below)
 // - HermesDragDrop.c (drag and drop, forwarded below)
+// - HermesHotkeys.c (global hotkeys and the portal AppId, forwarded below)
 
 #include "Exports.h"
 #include "HermesClipboard.h"
 #include "HermesDragDrop.h"
+#include "HermesHotkeys.h"
 #include "HermesWindow.h"
 
 // All exports are implemented in the respective .c files.
@@ -49,3 +51,13 @@ bool Hermes_DragDrop_BeginDrag(void* dragDrop, const char** targets, const uint8
     return HermesDragDrop_BeginDrag(dragDrop, targets, data, lengths, count);
 }
 void Hermes_DragDrop_Detach(void* dragDrop) { HermesDragDrop_Detach(dragDrop); }
+
+void Hermes_App_SetAppId(const char* appId) { HermesHotkeys_SetAppId(appId); }
+void Hermes_Hotkeys_Start(HotkeyActivatedCallback activated, HotkeyRegisteredCallback registered) {
+    HermesHotkeys_Start(activated, registered);
+}
+void Hermes_Hotkeys_Register(int number, const char* id, const char* description,
+                             const char* keysym, unsigned int modifiers, const char* portalTrigger) {
+    HermesHotkeys_Register(number, id, description, keysym, modifiers, portalTrigger);
+}
+void Hermes_Hotkeys_Unregister(int number) { HermesHotkeys_Unregister(number); }

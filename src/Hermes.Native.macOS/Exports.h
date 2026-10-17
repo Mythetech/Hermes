@@ -244,6 +244,19 @@ void Hermes_Clipboard_StartMonitoring(void (*callback)(void));
 void Hermes_Clipboard_StopMonitoring(void);
 
 // ============================================================================
+// Global Hotkeys
+// ============================================================================
+
+/// Set the function the main thread calls with the number of a pressed hotkey. Safe from any thread.
+void Hermes_Hotkeys_SetCallback(void (*callback)(uint32_t hotkeyNumber));
+
+/// Register a Carbon hotkey on the main thread, waiting for it from other threads. Returns the OSStatus.
+int32_t Hermes_Hotkeys_Register(uint32_t hotkeyNumber, uint32_t keyCode, uint32_t modifiers);
+
+/// Unregister a hotkey. Never waits; from another thread, the main thread applies it next.
+void Hermes_Hotkeys_Unregister(uint32_t hotkeyNumber);
+
+// ============================================================================
 // Status Icon Operations
 // ============================================================================
 

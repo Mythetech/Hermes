@@ -22,6 +22,18 @@ typedef void (*NotificationCompletionCallback)(void* context, const char* error)
 typedef void (*DropClaimedCallback)(int64_t claimId, const char** targets, const uint8_t** data, const int* lengths, int count);
 typedef void (*DragEndedCallback)(bool dropped);
 
+typedef void (*HotkeyActivatedCallback)(int number);
+typedef void (*HotkeyRegisteredCallback)(int number, int status, const char* boundTrigger, const char* reason);
+
+// Outcome of a global hotkey registration; the values match Hermes.Contracts.Hotkeys.HermesHotkeyStatus.
+typedef enum {
+    HotkeyStatus_Registered = 0,
+    HotkeyStatus_Conflict = 1,
+    HotkeyStatus_Denied = 2,
+    HotkeyStatus_Unsupported = 3,
+    HotkeyStatus_Failed = 4
+} HotkeyStatus;
+
 // Window initialization parameters
 typedef struct {
     // String properties (UTF-8)

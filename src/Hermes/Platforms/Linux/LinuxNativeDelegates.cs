@@ -109,4 +109,16 @@ internal static class LinuxNativeDelegates
     /// </summary>
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void DragEndedCallback([MarshalAs(UnmanagedType.U1)] bool dropped);
+
+    /// <summary>
+    /// Called on the GTK thread with the number of a pressed global hotkey.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void HotkeyActivatedCallback(int number);
+
+    /// <summary>
+    /// Called on the GTK thread with the outcome of a global hotkey registration. Either string may be null.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void HotkeyRegisteredCallback(int number, int status, IntPtr boundTriggerPtr, IntPtr reasonPtr);
 }

@@ -238,3 +238,9 @@ OleInitialize
 SHCreateDataObject
 SHDoDragDrop
 GetAsyncKeyState
+
+// Global hotkeys
+RegisterHotKey
+UnregisterHotKey
+HOT_KEY_MODIFIERS
+WM_HOTKEY

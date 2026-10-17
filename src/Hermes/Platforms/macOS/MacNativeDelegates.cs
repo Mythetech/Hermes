@@ -97,4 +97,10 @@ internal static class MacNativeDelegates
     /// </summary>
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void DragEndedCallback([MarshalAs(UnmanagedType.U1)] bool dropped);
+
+    /// <summary>
+    /// Called on the main thread with the number of a pressed global hotkey.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void HotkeyPressedCallback(uint hotkeyNumber);
 }
