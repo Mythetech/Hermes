@@ -103,6 +103,18 @@
                         var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
                         window.external.sendMessage(JSON.stringify({ type: 'color-scheme', value: dark ? 'dark' : 'light' }));
                     }
+
+                    // Loads an image from a path the app maps to a request handler
+                    if (msg === 'request-handler-query' || msg.type === 'request-handler-query') {
+                        var img = new Image();
+                        img.onload = function() {
+                            window.external.sendMessage(JSON.stringify({ type: 'request-handler', loaded: true, width: img.naturalWidth, height: img.naturalHeight }));
+                        };
+                        img.onerror = function() {
+                            window.external.sendMessage(JSON.stringify({ type: 'request-handler', loaded: false }));
+                        };
+                        img.src = '/hermes-test/pixel.png?probe=' + Date.now();
+                    }
                 });
 
                 // Signal that JS message handler is ready

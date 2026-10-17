@@ -75,6 +75,9 @@ public sealed class ScenarioRunner : IDisposable
         // Theme reads prefers-color-scheme back from the page, so it also needs the WebView up
         await RunWindowThemeTestAsync();
 
+        // The page loads an image from a mapped path, so it also needs the WebView up
+        await RunRequestHandlerTestAsync();
+
         // Print summary
         TestReporter.PrintSummary();
 
@@ -316,6 +319,33 @@ public sealed class ScenarioRunner : IDisposable
         catch (Exception ex)
         {
             TestReporter.Fail("window-theme", ex.Message);
+        }
+    }
+
+    private async Task RunRequestHandlerTestAsync()
+    {
+        TestReporter.Start("request-handler");
+        try
+        {
+            var reply = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _app.MainWindow.OnWebMessage(msg =>
+            {
+                if (msg.Contains("\"request-handler\""))
+                    reply.TrySetResult(msg);
+            });
+
+            _app.MainWindow.Invoke(() => _app.MainWindow.SendMessage("request-handler-query"));
+            var result = await reply.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+            var expected = $"\"loaded\":true,\"width\":{RequestHandlerProbe.Width},\"height\":{RequestHandlerProbe.Height}";
+            var lastUrl = RequestHandlerProbe.LastUrl;
+            TestReporter.Assert("request-handler",
+                result.Contains(expected) && lastUrl is not null && lastUrl.Contains("/hermes-test/pixel.png?probe="),
+                $"The page reported {result}, and the handler was last asked for '{lastUrl}'");
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail("request-handler", ex.Message);
         }
     }
 
