@@ -7,7 +7,7 @@ using Hermes.Diagnostics;
 namespace Hermes.SingleInstance;
 
 /// <summary>
-/// Ensures only one instance of an application runs at a time.
+/// Ensures only one instance of an application runs at a time for the current user.
 /// The first instance acquires a mutex and listens for args from subsequent instances.
 /// Subsequent instances detect the mutex, forward their args via named pipe, and should exit.
 /// </summary>
@@ -45,7 +45,10 @@ public sealed class SingleInstanceGuard : IDisposable
         var mutexName = $"Hermes_SI_{applicationId}";
         _pipeName = $"Hermes_SI_{applicationId}";
 
-        _mutex = new Mutex(initiallyOwned: true, name: mutexName, createdNew: out _isFirstInstance);
+        // A Unix session is one terminal tab or launchd, so Unix scopes the lock to the user; Windows keeps its per-login scope.
+        var unix = !OperatingSystem.IsWindows();
+        var scope = new NamedWaitHandleOptions { CurrentUserOnly = unix, CurrentSessionOnly = !unix };
+        _mutex = new Mutex(initiallyOwned: true, name: mutexName, options: scope, createdNew: out _isFirstInstance);
 
         if (_isFirstInstance)
         {
