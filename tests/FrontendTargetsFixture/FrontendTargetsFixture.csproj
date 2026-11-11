@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Built by FrontendTargets tests in Hermes.Tests from a temp copy; not part of the solution. -->
+  <PropertyGroup>
+    <TargetFramework>net$(BundledNETCoreAppTargetFrameworkVersion)</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <_StubDist>$(HermesFrontendDist)</_StubDist>
+    <_StubDist Condition="'$(_StubDist)' == ''">dist</_StubDist>
+  </PropertyGroup>
+
+  <!-- Stub commands log each run outside the frontend folder, so the logs are never build inputs. -->
+  <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+    <HermesFrontendInstallCommand>(if not exist node_modules mkdir node_modules) &amp;&amp; echo installed&gt;&gt; ..\install.log</HermesFrontendInstallCommand>
+    <HermesFrontendBuildCommand>(if not exist $(_StubDist)\assets mkdir $(_StubDist)\assets) &amp;&amp; echo stub&gt; $(_StubDist)\index.html &amp;&amp; echo stub&gt; $(_StubDist)\assets\app.js &amp;&amp; echo built&gt;&gt; ..\build.log</HermesFrontendBuildCommand>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
+    <HermesFrontendInstallCommand>mkdir -p node_modules &amp;&amp; echo installed &gt;&gt; ../install.log</HermesFrontendInstallCommand>
+    <HermesFrontendBuildCommand>mkdir -p $(_StubDist)/assets &amp;&amp; echo stub &gt; $(_StubDist)/index.html &amp;&amp; echo stub &gt; $(_StubDist)/assets/app.js &amp;&amp; echo built &gt;&gt; ../build.log</HermesFrontendBuildCommand>
+  </PropertyGroup>
+
+  <Import Project="$(HermesWebTargets)" />
+
+</Project>
