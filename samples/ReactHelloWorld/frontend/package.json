@@ -16,8 +16,8 @@
     "vite": "^6.0.0"
   },
   "dependencies": {
-    "@hermes/bridge": "file:../../../packages/hermes-bridge",
-    "@hermes/react": "file:../../../packages/hermes-react",
+    "@mythetech/hermes-bridge": "file:../../../packages/hermes-bridge",
+    "@mythetech/hermes-react": "file:../../../packages/hermes-react",
     "react": "^18.0.0",
     "react-dom": "^18.0.0"
   }

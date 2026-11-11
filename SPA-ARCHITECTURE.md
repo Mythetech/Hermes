@@ -4,7 +4,7 @@
 Enable frontend SPA frameworks (React, Svelte, vanilla JS, and future frameworks) to build native desktop apps with Hermes, using a shared interop bridge for bidirectional communication between JavaScript and .NET.
 
 ## Key Decisions
-- **Framework-agnostic core** - `@hermes/bridge` provides universal JS↔.NET communication; framework adapters are thin wrappers
+- **Framework-agnostic core** - `@mythetech/hermes-bridge` provides universal JS↔.NET communication; framework adapters are thin wrappers
 - **Vite-based toolchain** - All SPA samples use Vite for dev server and production builds
 - **AOT-safe serialization** - JSON source generation (`JsonSerializerContext`) throughout, no reflection
 - **Platform-transparent hosting** - `StaticFileHost` abstracts scheme differences (`http://` on Windows, `app://` on macOS/Linux)
@@ -17,13 +17,13 @@ Enable frontend SPA frameworks (React, Svelte, vanilla JS, and future frameworks
 ┌──────────────────────────────────────────────────────┐
 │                   SPA Frontend                       │
 │  ┌──────────┐  ┌──────────────┐  ┌───────────────┐  │
-│  │ Vanilla  │  │ @hermes/react│  │ @hermes/svelte│  │
+│  │ Vanilla  │  │ hermes-react │  │ hermes-svelte │  │
 │  │   JS     │  │  (useInvoke) │  │   (stores)    │  │
 │  └────┬─────┘  └──────┬───────┘  └──────┬────────┘  │
 │       │               │                 │            │
 │       └───────────┬───┘─────────────────┘            │
 │             ┌─────┴──────┐                           │
-│             │@hermes/bridge│ ← core JS bridge        │
+│             │hermes-bridge│ ← core JS bridge         │
 │             └─────┬──────┘                           │
 ├───────────────────┼──────────────────────────────────┤
 │          window.external                             │
@@ -49,7 +49,7 @@ Enable frontend SPA frameworks (React, Svelte, vanilla JS, and future frameworks
 
 ```
 packages/
-├── hermes-bridge/          # @hermes/bridge - core JS↔.NET communication
+├── hermes-bridge/          # @mythetech/hermes-bridge - core JS↔.NET communication
 │   ├── src/
 │   │   ├── bridge.ts       # HermesBridge class, message dispatch
 │   │   ├── types.ts        # InvokeOptions, HermesExternal interface
@@ -57,17 +57,17 @@ packages/
 │   ├── tsconfig.json       # ESM output
 │   └── tsconfig.cjs.json   # CJS output (dual-publish)
 │
-├── hermes-react/           # @hermes/react - React hooks
+├── hermes-react/           # @mythetech/hermes-react - React hooks
 │   ├── src/
 │   │   ├── useInvoke.ts    # useInvoke<T> hook
 │   │   └── index.ts
-│   └── package.json        # peer: @hermes/bridge, react
+│   └── package.json        # peer: @mythetech/hermes-bridge, react
 │
-└── hermes-svelte/          # @hermes/svelte - Svelte stores
+└── hermes-svelte/          # @mythetech/hermes-svelte - Svelte stores
     ├── src/
     │   ├── stores.ts       # hermesConnected, createInvokeStore, createEventStore
     │   └── index.ts
-    └── package.json        # peer: @hermes/bridge, svelte
+    └── package.json        # peer: @mythetech/hermes-bridge, svelte
 ```
 
 ### NuGet Package
@@ -245,10 +245,10 @@ C#: bridge.Send("tick", 42)
 
 ## JavaScript Bridge API
 
-### Core Bridge (`@hermes/bridge`)
+### Core Bridge (`@mythetech/hermes-bridge`)
 
 ```typescript
-import { bridge } from '@hermes/bridge';
+import { bridge } from '@mythetech/hermes-bridge';
 
 // Detect environment
 if (bridge.isHermes) { /* running in Hermes window */ }
@@ -271,10 +271,10 @@ bridge.send('userAction', { type: 'click', target: 'button' });
 unsub();
 ```
 
-### React Adapter (`@hermes/react`)
+### React Adapter (`@mythetech/hermes-react`)
 
 ```typescript
-import { useInvoke } from '@hermes/react';
+import { useInvoke } from '@mythetech/hermes-react';
 
 function GreetCard() {
     const [name, setName] = useState('World');
@@ -298,11 +298,11 @@ function GreetCard() {
 3. `refetch()` re-invokes with the last-used arguments
 4. Prevents state updates on unmounted components via `mountedRef`
 
-### Svelte Adapter (`@hermes/svelte`)
+### Svelte Adapter (`@mythetech/hermes-svelte`)
 
 ```svelte
 <script>
-    import { hermesConnected, createInvokeStore, createEventStore } from '@hermes/svelte';
+    import { hermesConnected, createInvokeStore, createEventStore } from '@mythetech/hermes-svelte';
 
     const greet = createInvokeStore<string>('greet', 'World');
     const tick = createEventStore<number>('tick');
@@ -449,9 +449,9 @@ packages/hermes-<framework>/
 
 ```json
 {
-  "name": "@hermes/<framework>",
+  "name": "@mythetech/hermes-<framework>",
   "peerDependencies": {
-    "@hermes/bridge": ">=1.0.0-preview.1",
+    "@mythetech/hermes-bridge": ">=1.0.0-preview.1",
     "<framework>": "^X.0.0"
   }
 }
@@ -485,9 +485,9 @@ Three samples demonstrate the full stack:
 
 | Sample | Framework | Bridge Package | Key Patterns |
 |--------|-----------|---------------|--------------|
-| `samples/WebHelloWorld/` | Vanilla TS | `@hermes/bridge` | Direct `bridge.invoke()` calls |
-| `samples/ReactHelloWorld/` | React + TS | `@hermes/react` | `useInvoke` hook, component state |
-| `samples/SvelteHelloWorld/` | Svelte + TS | `@hermes/svelte` | Reactive stores, C#→JS event push |
+| `samples/WebHelloWorld/` | Vanilla TS | `@mythetech/hermes-bridge` | Direct `bridge.invoke()` calls |
+| `samples/ReactHelloWorld/` | React + TS | `@mythetech/hermes-react` | `useInvoke` hook, component state |
+| `samples/SvelteHelloWorld/` | Svelte + TS | `@mythetech/hermes-svelte` | Reactive stores, C#→JS event push |
 
 All samples share the same C# backend pattern (greet, getRuntime, getPlatform handlers) and use Vite for both development and production builds.
 

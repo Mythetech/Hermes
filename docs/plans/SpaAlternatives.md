@@ -13,7 +13,7 @@ Hermes.Web enables React, Vue, Angular, Svelte, and other JS/TS frameworks as al
 - Depends on `Mythetech.Hermes` (core only, no Blazor dependency)
 - Targets `net11.0`
 
-**npm:** `@hermes/bridge`
+**npm:** `@mythetech/hermes-bridge`
 
 - Vanilla TypeScript, zero dependencies
 - Framework-agnostic, adapter-ready (SvelteKit-inspired adapter model)
@@ -57,10 +57,10 @@ var app = builder.Build();
 app.Run();
 ```
 
-## TypeScript API Design (`@hermes/bridge`)
+## TypeScript API Design (`@mythetech/hermes-bridge`)
 
 ```typescript
-import { bridge } from '@hermes/bridge';
+import { bridge } from '@mythetech/hermes-bridge';
 
 // Invoke C# method, returns a promise
 const greeting = await bridge.invoke<string>('greet', 'World');
@@ -142,7 +142,7 @@ Errors follow the same path with `{"type":"error","id":"abc123","message":"..."}
 
 When using a dev server, the interop bridge script needs to reach the WebView since it won't come from the static file host. Two approaches under consideration:
 
-1. **Script tag approach:** Developer adds `<script>` or imports `@hermes/bridge` in their app. The npm package sets up the `window.external` listener on import. Explicit and doesn't fight with framework hydration.
+1. **Script tag approach:** Developer adds `<script>` or imports `@mythetech/hermes-bridge` in their app. The npm package sets up the `window.external` listener on import. Explicit and doesn't fight with framework hydration.
 
 2. **Auto-injection:** Inject via `WebView.ExecuteScriptAsync` after page load. Zero setup for the developer but may conflict with framework hydration timing.
 
@@ -167,11 +167,11 @@ v1 ships with string-based JSON invoke (`bridge.invoke('method', ...args)`). The
 
 ### Framework Adapters (SvelteKit-inspired)
 
-`@hermes/bridge` stays vanilla and dependency-free. Framework-specific adapters published separately:
+`@mythetech/hermes-bridge` stays vanilla and dependency-free. Framework-specific adapters published separately:
 
-- `@hermes/bridge-react` - `useHermesBridge()` hook, `useInvoke()` for queries
-- `@hermes/bridge-vue` - `useHermes()` composable
-- `@hermes/bridge-svelte` - Svelte stores or runes wrapping bridge events
+- `@mythetech/hermes-bridge-react` - `useHermesBridge()` hook, `useInvoke()` for queries
+- `@mythetech/hermes-bridge-vue` - `useHermes()` composable
+- `@mythetech/hermes-bridge-svelte` - Svelte stores or runes wrapping bridge events
 
 Adapters are thin wrappers and community-contribution friendly.
 

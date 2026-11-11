@@ -179,6 +179,66 @@ public sealed class StaticFileHostTests
     }
 
     [Fact]
+    public void HandleRequest_SiblingDirectorySharingRootPrefix_ReturnsNull()
+    {
+        var (host, dir) = CreateHost();
+        var sibling = dir + "-private";
+        try
+        {
+            Directory.CreateDirectory(sibling);
+            File.WriteAllText(Path.Combine(sibling, "secret.txt"), "secret");
+
+            var (content, contentType) = host.HandleRequest($"../{Path.GetFileName(sibling)}/secret.txt");
+
+            Assert.Null(content);
+            Assert.Null(contentType);
+        }
+        finally
+        {
+            Cleanup(dir);
+            Cleanup(sibling);
+        }
+    }
+
+    [Fact]
+    public void HandleRequest_PercentEncodedPath_ReturnsFile()
+    {
+        var (host, dir) = CreateHost();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "assets", "my file.js"), "console.log('spaced');");
+
+            var (content, contentType) = host.HandleRequest("app://localhost/assets/my%20file.js");
+
+            Assert.Equal("console.log('spaced');", ReadStream(content));
+            Assert.Equal("application/javascript", contentType);
+        }
+        finally { Cleanup(dir); }
+    }
+
+    [Fact]
+    public void HandleRequest_PercentEncodedTraversal_ReturnsNull()
+    {
+        var (host, dir) = CreateHost();
+        var sibling = dir + "-private";
+        try
+        {
+            Directory.CreateDirectory(sibling);
+            File.WriteAllText(Path.Combine(sibling, "secret.txt"), "secret");
+
+            var (content, contentType) = host.HandleRequest($"%2e%2e/{Path.GetFileName(sibling)}/secret.txt");
+
+            Assert.Null(content);
+            Assert.Null(contentType);
+        }
+        finally
+        {
+            Cleanup(dir);
+            Cleanup(sibling);
+        }
+    }
+
+    [Fact]
     public void HandleRequest_CustomSchemeUrl_ExtractsPathCorrectly()
     {
         var (host, dir) = CreateHost();

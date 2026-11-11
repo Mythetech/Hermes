@@ -1,6 +1,6 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 import { useState } from 'react';
-import { useInvoke } from '@hermes/react';
+import { useInvoke } from '@mythetech/hermes-react';
 import './GreetCard.css';
 
 function GreetCard() {
