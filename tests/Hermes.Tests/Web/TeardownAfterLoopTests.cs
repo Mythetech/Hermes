@@ -48,6 +48,7 @@ public class TeardownAfterLoopTests
         Assert.True(teardown.Completed, "DisposeAsync did not complete after the message loop had ended.");
     }
 
+#if NET11_0_OR_GREATER
     [Fact]
     public void Dispose_Completes_AndJavaScriptCallsFailAsDisconnected_WhenAPageServiceCallsJavaScript()
     {
@@ -69,6 +70,20 @@ public class TeardownAfterLoopTests
         Assert.True(teardown.Completed, "DisposeAsync did not complete after the message loop had ended.");
         Assert.IsType<JSDisconnectedException>(thrown);
     }
+#else
+    // .NET 10's WebView never fails a JavaScript call made during page teardown, so DisposeAsync waits out ShutdownTimeout.
+    [Fact]
+    public void Dispose_CompletesAfterTheShutdownTimeout_WhenAPageServiceCallsJavaScript()
+    {
+        var teardown = RunThenDispose(
+            async page => await page.JavaScript.InvokeVoidAsync("cleanUp"),
+            configure: builder => builder.Services.Configure<HostOptions>(
+                options => options.ShutdownTimeout = TimeSpan.FromMilliseconds(200)));
+
+        Assert.True(teardown.PageServiceDisposeStarted, "The page service was never disposed.");
+        Assert.True(teardown.Completed, "DisposeAsync waited past the shutdown timeout on a JavaScript call.");
+    }
+#endif
 
     [Fact]
     public void Dispose_DisposesTheWindowOnTheUiThread_WhenAPageServiceResumesFromAnotherThread()

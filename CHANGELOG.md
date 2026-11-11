@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Every package targets `net10.0` and `net11.0`, so apps on .NET 10 (LTS) can use Hermes again. `Hermes.Blazor` references the `Microsoft.AspNetCore.Components.WebView` build from each framework's .NET major, `10.0.12` and `11.0.0`
+  - On .NET 10, a component or service that calls JavaScript while its page disposes after the window has closed holds up `DisposeAsync()` until `HostOptions.ShutdownTimeout` (5 seconds by default), which then logs an error and carries on. .NET 10's WebView never fails that call; .NET 11's fails it with `JSDisconnectedException`. Lower the timeout through `HostOptions` to shorten the wait
 - .NET 11 GA: the SDK is `11.0.100`, and `Microsoft.AspNetCore.Components.WebView` and the WebAssembly packages are `11.0.0`. `Hermes.Blazor` no longer depends on a prerelease package, so `NU5104` is no longer suppressed
 - Linux: the clipboard goes through GTK instead of `xclip`, which changes how existing `SetText` and `GetText` calls behave
   - Clipboard calls need a Hermes window to exist first. Before one, they throw `InvalidOperationException`; `xclip` worked without one
