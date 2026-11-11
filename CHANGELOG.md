@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- Breaking (`Hermes.Web` preview): bridge handlers are registered on the built app with `app.Bridge.Handle` and `HandleAsync` instead of `UseInteropBridge`, and run on the thread pool, so a slow handler no longer freezes the window
+  - Handlers take up to four arguments; `HandleAsync` handlers can also take a `CancellationToken`, which is cancelled when the window closes
+  - Results, arguments and event data can be any JSON-serializable type, such as records, arrays and dictionaries, written with web defaults (camelCase). Trimmed and native AOT apps add a `JsonSerializerContext` for their types to `app.Bridge.SerializerOptions`
+  - A call with the wrong number of arguments is rejected with a message naming the method and both counts, and a handler's exception rejects the call with its message and is logged
+  - `app.Bridge` is never null, `On` returns a subscription to dispose, events are handled one at a time in arrival order, and `Send` can be called from any thread
+
 ## [1.4.6] - 2026-11-10
 
 ### Added
