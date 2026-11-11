@@ -81,21 +81,15 @@ public sealed class InteropBridgeStopTests
 
         public ThreadPoolHold()
         {
-            // Below its minimum the pool adds threads without delay, so every one of them has to be held.
-            ThreadPool.GetMinThreads(out var minimum, out _);
-            var threads = Math.Max(ThreadPool.ThreadCount, minimum);
-            var held = 0;
-            for (var i = 0; i < threads + 8; i++)
+            // The pool can grow while this runs, so keep queueing until work stays queued behind every thread.
+            var deadline = DateTime.UtcNow + Wait;
+            while (ThreadPool.PendingWorkItemCount < 16)
             {
-                ThreadPool.UnsafeQueueUserWorkItem<object?>(_ =>
-                {
-                    Interlocked.Increment(ref held);
-                    _release.Wait();
-                }, null, preferLocal: false);
+                Assert.True(DateTime.UtcNow < deadline, "The thread pool was not held.");
+                for (var i = 0; i < 8; i++)
+                    ThreadPool.UnsafeQueueUserWorkItem(static release => release.Wait(), _release, preferLocal: false);
+                Thread.Sleep(5);
             }
-
-            Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref held) >= threads, Wait), "The thread pool was not held.");
-            Assert.True(ThreadPool.PendingWorkItemCount >= 4, "The thread pool has no work left queued.");
         }
 
         public void Dispose() => _release.Set();
