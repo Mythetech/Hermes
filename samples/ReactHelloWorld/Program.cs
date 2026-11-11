@@ -26,7 +26,7 @@ internal static class Program
 #if DEBUG
         builder.UseDevServer("http://localhost:5176");
 #else
-        builder.UseStaticFiles("frontend/dist");
+        builder.UseStaticFiles();
         builder.UseSpaFallback();
 #endif
 
