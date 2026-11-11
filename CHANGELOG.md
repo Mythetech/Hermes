@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- `Hermes.Web`: static files whose names need URL escaping, such as a space or a non-ASCII character, are served. They used to answer 404
+- `Hermes.Web`: a request can no longer reach a sibling directory whose name starts with the static root's name, such as `dist-private` next to `dist`
+
+### Changed
+
+- The npm packages moved to the `@mythetech` scope: `@mythetech/hermes-bridge`, `@mythetech/hermes-react` and `@mythetech/hermes-svelte`. Nothing was published under `@hermes`
+- CI builds the npm packages and the web samples on every PR, and fails when a build writes into the sources
+
 ## [1.4.6] - 2026-11-10
 
 ### Added
