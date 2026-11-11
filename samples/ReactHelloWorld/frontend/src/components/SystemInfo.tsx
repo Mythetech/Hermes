@@ -1,5 +1,5 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
-import { useInvoke } from '@hermes/react';
+import { useInvoke } from '@mythetech/hermes-react';
 import './SystemInfo.css';
 
 function SystemInfo() {

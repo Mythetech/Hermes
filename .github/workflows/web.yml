@@ -1,0 +1,71 @@
+name: Web Packages and Samples
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build npm Packages and Web Samples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # The other packages and every sample resolve @mythetech/hermes-bridge through a file: link to its
+      # built output, so the packages are built first and in dependency order.
+      - name: Build @mythetech/hermes-bridge
+        working-directory: packages/hermes-bridge
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build @mythetech/hermes-react
+        working-directory: packages/hermes-react
+        run: |
+          npm ci
+          npm run build
+
+      # @mythetech/hermes-svelte ships its TypeScript sources, so there is nothing to build; its dependencies
+      # are installed so the Svelte sample's type check can resolve them.
+      - name: Install @mythetech/hermes-svelte
+        working-directory: packages/hermes-svelte
+        run: npm ci
+
+      - name: Build Sample Frontends
+        run: |
+          for sample in WebHelloWorld ReactHelloWorld SvelteHelloWorld; do
+            echo "::group::$sample"
+            (cd "samples/$sample/frontend" && npm ci && npm run build)
+            echo "::endgroup::"
+          done
+
+      - name: Type Check Svelte Sample
+        working-directory: samples/SvelteHelloWorld/frontend
+        run: npm run check
+
+      # A frontend build that writes into the sources (tsc emitting next to the .ts files) is how
+      # stale transpiled files ended up committed.
+      - name: Verify Builds Leave the Sources Untouched
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "FAIL: building the packages and samples changed the working tree"
+            exit 1
+          fi
+
+      - name: Build Sample Apps
+        run: |
+          for sample in WebHelloWorld ReactHelloWorld SvelteHelloWorld; do
+            dotnet build "samples/$sample" -c Release
+          done

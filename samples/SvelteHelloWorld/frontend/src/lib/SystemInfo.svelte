@@ -1,6 +1,6 @@
 <!-- Copyright (c) Mythetech. Licensed under the MIT License. -->
 <script lang="ts">
-  import { createInvokeStore } from '@hermes/svelte';
+  import { createInvokeStore } from '@mythetech/hermes-svelte';
 
   const runtime = createInvokeStore<string>('getRuntime');
   const platform = createInvokeStore<string>('getPlatform');

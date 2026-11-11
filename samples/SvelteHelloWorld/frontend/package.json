@@ -18,7 +18,7 @@
     "vite": "^6.0.0"
   },
   "dependencies": {
-    "@hermes/bridge": "file:../../../packages/hermes-bridge",
-    "@hermes/svelte": "file:../../../packages/hermes-svelte"
+    "@mythetech/hermes-bridge": "file:../../../packages/hermes-bridge",
+    "@mythetech/hermes-svelte": "file:../../../packages/hermes-svelte"
   }
 }
