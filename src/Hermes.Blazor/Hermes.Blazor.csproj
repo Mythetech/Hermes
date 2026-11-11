@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
   <PropertyGroup>
-    <TargetFramework>net11.0</TargetFramework>
+    <TargetFrameworks>$(HermesTargetFrameworks)</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsAotCompatible>true</IsAotCompatible>
@@ -17,7 +17,7 @@
 
   <!-- NuGet Package Metadata -->
   <PropertyGroup>
-    <VersionPrefix>1.4.5</VersionPrefix>
+    <VersionPrefix>1.4.6</VersionPrefix>
     <PackageId>Mythetech.Hermes.Blazor</PackageId>
     <Authors>Mythetech</Authors>
     <Description>Blazor integration for Hermes desktop framework</Description>
@@ -50,22 +50,20 @@
 
   <!-- MSBuild targets for static web asset handling (auto-imported by consuming projects) -->
   <ItemGroup>
+    <None Include="build/Hermes.Blazor.targets" Pack="true" PackagePath="buildTransitive/net10.0/Mythetech.Hermes.Blazor.targets" />
+    <None Include="build/Hermes.Blazor.targets" Pack="true" PackagePath="build/net10.0/Mythetech.Hermes.Blazor.targets" />
     <None Include="build/Hermes.Blazor.targets" Pack="true" PackagePath="buildTransitive/net11.0/Mythetech.Hermes.Blazor.targets" />
     <None Include="build/Hermes.Blazor.targets" Pack="true" PackagePath="build/net11.0/Mythetech.Hermes.Blazor.targets" />
   </ItemGroup>
 
-  <!-- The FrameworkReference below puts consuming apps on the Microsoft.AspNetCore.App shared
-       framework, which supplies the Components.Web runtime, so the WebView package (and the
-       blazor.webview.js it embeds) must track the same .NET 11 build. A 10.x package runs its
-       old script against the 11 runtime and every new interop entry point, Virtualize's
-       setAnchorMode for one, fails at first render. NU5104 is relaxed only until the 11.0.0
-       GA package replaces the RC build. -->
-  <PropertyGroup>
-    <NoWarn>$(NoWarn);NU5104</NoWarn>
-  </PropertyGroup>
+  <!-- The shared framework supplies Components.Web, so each framework's WebView package, and the
+       blazor.webview.js it embeds, must be a GA build from that framework's .NET major. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="10.0.12" />
+  </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="11.0.0-rc.1.26425.128" />
+  <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="11.0.0" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,4 +1,10 @@
 <Project>
+  <!-- Every package is built for each .NET version in the LTS support window. net10.0 is the floor;
+       add newer versions here, and their package paths in Hermes.csproj and Hermes.Blazor.csproj. -->
+  <PropertyGroup>
+    <HermesTargetFrameworks>net10.0;net11.0</HermesTargetFrameworks>
+  </PropertyGroup>
+
   <PropertyGroup>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <PackageIcon>icon.png</PackageIcon>

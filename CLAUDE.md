@@ -36,7 +36,7 @@ On every platform the loop ends when the window passed to `WaitForClose()` close
 
 ## Verification commands
 
-- Unit suite: `dotnet test tests/Hermes.Tests` (also builds the benchmark apps for the guard tests)
+- Unit suite: `dotnet test tests/Hermes.Tests` (runs on every target framework; also builds the benchmark apps for the guard tests)
 - Integration scenarios: `HERMES_INTEGRATION_TEST=1 HERMES_INTEGRATION_TEST_EXIT=1 dotnet run --project samples/IntegrationTestApp` (expects 24/24 PASS on macOS, 25/25 on Linux, and 26/26 on Windows, `HERMES_TEARDOWN: PASSED`, exit 0)
   - custom-titlebar-rendered is only reported from TitlebarPage, which the automated run never visits, so it is not counted in either total.
   - The Linux count needs an X11 session with xdotool installed, as in CI; under Wayland both hotkey scenarios go to the desktop portal.
@@ -47,5 +47,6 @@ Run the unit suite after every change. Run the integration scenarios before decl
 
 ## Conventions
 
+- Packages target every .NET version in the LTS support window. The list is `HermesTargetFrameworks` in `src/Directory.Build.props` and `net10.0` is the floor: do not use an API that only exists in a newer .NET without a per-framework fallback. `Hermes.Blazor` references a different `Microsoft.AspNetCore.Components.WebView` version per target framework, and each must come from that framework's .NET major (a mismatch broke 1.3.0). Samples stay on one framework; `SmokeTestApp` builds for another with `-p:SmokeTargetFramework=net10.0`, which is how CI boots it on the floor.
 - Planning and design docs go in `.internal/`, not `docs/`.
 - Tests: xUnit. In tests that call `app.Run()`, restore the `SynchronizationContext` afterward so the Hermes context does not stay on the test thread (see the `RunApp` helper in `HostedServiceTests`). The recording backend never pumps, so after `Run()` returns it models the dead loop; `TeardownAfterLoopTests` relies on that.

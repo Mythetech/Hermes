@@ -88,15 +88,16 @@ Enable React, Vue, Angular, Svelte and other JS/TS frameworks as an alternative 
 
 ### .NET LTS Support (Multi-Targeting)
 
-**Status:** Planned for 1.5
+**Status:** In progress for 1.5
 **Platforms:** All
 
-Publish every package for each .NET version in the LTS support window, not only the newest release. The floor is .NET 10, so 1.5 targets `net10.0` and `net11.0`. The source already compiles for `net10.0` unchanged; the work is in packaging.
+Publish every package for each .NET version in the LTS support window, not only the newest release. The floor is .NET 10, so 1.5 targets `net10.0` and `net11.0`. The list lives in `HermesTargetFrameworks` in `src/Directory.Build.props`.
 
-- [ ] Multi-target `Hermes`, `Hermes.Contracts`, `Hermes.Blazor`, `Hermes.Web` and `Hermes.Testing`
-- [ ] Per-framework `Microsoft.AspNetCore.Components.WebView` version in `Hermes.Blazor`, matching each shared framework
-- [ ] Per-framework package layout (`runtimes/<rid>/lib/<tfm>`, `build/` and `buildTransitive/` targets) in the nuspec and the publish workflow
-- [ ] CI builds and tests both frameworks, and a preview publish validates the package before release
+- [x] Multi-target `Hermes`, `Hermes.Contracts`, `Hermes.Blazor`, `Hermes.Web` and `Hermes.Testing`
+- [x] Per-framework `Microsoft.AspNetCore.Components.WebView` version in `Hermes.Blazor`, matching each shared framework
+- [x] Per-framework package layout (`runtimes/<rid>/lib/<tfm>`, `build/` and `buildTransitive/` targets) and publish workflow artifacts
+- [x] CI runs the unit tests on both frameworks and boots `SmokeTestApp` on `net10.0` on every platform
+- [ ] A preview publish validates the packages from a consuming app before the 1.5 release
 
 ---
 

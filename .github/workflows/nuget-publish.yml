@@ -34,8 +34,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The .NET 10 SDK brings the runtimes the net10.0 builds run on; global.json picks the SDK that builds.
       - uses: actions/setup-dotnet@v4
         with:
+          dotnet-version: 10.0.x
           global-json-file: global.json
 
       # macOS: Build native library
@@ -71,7 +73,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dll-${{ matrix.rid }}
+          # Both frameworks; the artifact keeps the net10.0/ and net11.0/ folders the pack step expects.
           path: |
+            src/Hermes/bin/Release/net10.0/Hermes.dll
+            src/Hermes/bin/Release/net10.0/Hermes.pdb
             src/Hermes/bin/Release/net11.0/Hermes.dll
             src/Hermes/bin/Release/net11.0/Hermes.pdb
           retention-days: 14
@@ -126,14 +131,30 @@ jobs:
             rid: linux-arm64
           - os: macos-latest
             rid: osx-x64
+          # The same app on the oldest supported framework. These are extra entries, so the names of
+          # the checks above stay as they are.
+          - os: windows-latest
+            rid: win-x64
+            framework: net10.0
+          - os: ubuntu-latest
+            rid: linux-x64
+            framework: net10.0
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
+            framework: net10.0
+          - os: macos-latest
+            rid: osx-x64
+            framework: net10.0
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
 
+      # The .NET 10 SDK brings the runtimes the net10.0 builds run on; global.json picks the SDK that builds.
       - uses: actions/setup-dotnet@v4
         with:
+          dotnet-version: 10.0.x
           global-json-file: global.json
 
       # macOS: Build native library
@@ -164,7 +185,7 @@ jobs:
         run: dotnet restore
 
       - name: Build Sample App
-        run: dotnet build samples/SmokeTestApp -c Release --no-restore
+        run: dotnet build samples/SmokeTestApp -c Release ${{ matrix.framework && format('-p:SmokeTargetFramework={0}', matrix.framework) || '--no-restore' }}
 
       - name: Checkout shared smoke verdict
         uses: actions/checkout@v4
@@ -178,13 +199,13 @@ jobs:
         env:
           DISPLAY: ':99'
           GDK_BACKEND: x11
-        run: ./.github/scripts/Test-SmokeFaults.ps1 -AppPath 'samples/SmokeTestApp/bin/Release/net11.0/${{ runner.os == 'Windows' && 'SmokeTestApp.exe' || 'SmokeTestApp' }}' -VerdictScript .workflows/actions/smoke-verdict/SmokeVerdict.ps1 -OutputDir smoke-output
+        run: ./.github/scripts/Test-SmokeFaults.ps1 -AppPath 'samples/SmokeTestApp/bin/Release/${{ matrix.framework || 'net11.0' }}/${{ runner.os == 'Windows' && 'SmokeTestApp.exe' || 'SmokeTestApp' }}' -VerdictScript .workflows/actions/smoke-verdict/SmokeVerdict.ps1 -OutputDir smoke-output
 
       - name: Upload smoke output
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-output-${{ matrix.rid }}
+          name: smoke-output-${{ matrix.rid }}${{ matrix.framework && format('-{0}', matrix.framework) || '' }}
           path: smoke-output
           retention-days: 14
 
