@@ -155,7 +155,7 @@ public sealed partial class InteropBridge
         {
             await foreach (var envelope in _eventQueue.Reader.ReadAllAsync(cancellationToken))
             {
-                if (cancellationToken.IsCancellationRequested)
+                if (IsStopping(cancellationToken))
                     break;
 
                 await DispatchEventAsync(envelope, cancellationToken);
@@ -260,7 +260,7 @@ public sealed partial class InteropBridge
 
         foreach (var subscription in subscriptions)
         {
-            if (cancellationToken.IsCancellationRequested)
+            if (IsStopping(cancellationToken))
                 return;
 
             try
@@ -276,6 +276,10 @@ public sealed partial class InteropBridge
             }
         }
     }
+
+    // Stop sets the flag before it returns; the cancellation it queues on the thread pool can come later.
+    private bool IsStopping(CancellationToken cancellationToken) =>
+        cancellationToken.IsCancellationRequested || Volatile.Read(ref _stopped);
 
     private void Post(string json)
     {
