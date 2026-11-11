@@ -26,6 +26,11 @@ public sealed class WindowStateStore
     {
     }
 
+    internal WindowStateStore(string filePath)
+    {
+        _filePath = filePath;
+    }
+
     /// <summary>
     /// Tries to load window state for the given key.
     /// </summary>
@@ -69,7 +74,7 @@ public sealed class WindowStateStore
         if (_cache is not null)
             return;
 
-        _filePath = GetFilePath();
+        _filePath ??= GetFilePath();
         _cache = LoadFromDisk();
     }
 
@@ -105,6 +110,8 @@ public sealed class WindowStateStore
         if (_filePath is null || _cache is null)
             return;
 
+        // A temp file per write keeps the rename atomic when two copies of the app save at once.
+        var tempPath = $"{_filePath}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
         try
         {
             var directory = Path.GetDirectoryName(_filePath);
@@ -115,8 +122,6 @@ public sealed class WindowStateStore
 
             var json = JsonSerializer.Serialize(_cache, WindowStateJsonContext.Default.DictionaryStringWindowState);
 
-            // Write atomically using temp file + rename
-            var tempPath = _filePath + ".tmp";
             File.WriteAllText(tempPath, json);
             File.Move(tempPath, _filePath, overwrite: true);
 
@@ -125,7 +130,22 @@ public sealed class WindowStateStore
         catch (Exception ex)
         {
             HermesLogger.Error($"Failed to save window state to {_filePath}: {ex.Message}");
+            DeleteQuietly(tempPath);
             // Don't rethrow - window closing should not fail due to state persistence
+        }
+    }
+
+    private static void DeleteQuietly(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
         }
     }
 }
