@@ -1,5 +1,6 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Hermes;
 using Hermes.SingleInstance;
 
@@ -7,6 +8,7 @@ public static class Program
 {
     private const string AppId = "hermes-si-test";
     private const string SecondInstanceFlag = "--second-instance";
+    private const string NewSessionFlag = "--new-session";
     private const string TestArg1 = "--open";
     private const string TestArg2 = "test-file.txt";
 
@@ -155,6 +157,49 @@ public static class Program
             failed++;
         }
 
+        // Test 5: a launch from another terminal tab or the Dock runs in a different Unix session
+        if (!OperatingSystem.IsWindows())
+        {
+            Console.WriteLine("HERMES_TEST_START: si-cross-session");
+            receivedArgs = null;
+            argsReceived.Reset();
+
+            var psi3 = new ProcessStartInfo
+            {
+                FileName = exePath,
+                Arguments = $"{SecondInstanceFlag} {NewSessionFlag} --cross-session",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+
+            using var child3 = Process.Start(psi3);
+            if (child3 is null)
+            {
+                Console.WriteLine("HERMES_TEST_FAIL: si-cross-session - Failed to start child process");
+                failed++;
+            }
+            else
+            {
+                var child3Output = child3.StandardOutput.ReadToEnd();
+                child3.WaitForExit(TimeSpan.FromMilliseconds(15000));
+                Console.WriteLine($"  Child output: {child3Output.Trim()}");
+
+                if (child3.ExitCode == 0 &&
+                    argsReceived.Wait(TimeSpan.FromSeconds(10)) &&
+                    receivedArgs is ["--cross-session"])
+                {
+                    Console.WriteLine("HERMES_TEST_PASS: si-cross-session");
+                    passed++;
+                }
+                else
+                {
+                    Console.WriteLine($"HERMES_TEST_FAIL: si-cross-session - Child exited with code {child3.ExitCode}");
+                    failed++;
+                }
+            }
+        }
+
         // Summary
         Console.WriteLine();
         var total = passed + failed;
@@ -168,11 +213,20 @@ public static class Program
 
     private static int RunAsSecondInstance()
     {
-        // Skip the --second-instance flag, forward remaining args
         var argsToForward = Environment.GetCommandLineArgs()
             .Skip(1) // executable path
             .Skip(1) // --second-instance flag
             .ToArray();
+
+        if (argsToForward.FirstOrDefault() == NewSessionFlag)
+        {
+            argsToForward = argsToForward[1..];
+            if (setsid() == -1)
+            {
+                Console.WriteLine($"ERROR: setsid failed with errno {Marshal.GetLastPInvokeError()}");
+                return 2;
+            }
+        }
 
         using var guard = HermesApplication.SingleInstance(AppId);
 
@@ -189,4 +243,7 @@ public static class Program
 
         return success ? 0 : 1;
     }
+
+    [DllImport("libc", SetLastError = true)]
+    private static extern int setsid();
 }

@@ -20,6 +20,10 @@ All notable changes to this project will be documented in this file.
   - On X11, GTK hands the app's clipboard contents to a running clipboard manager when the app exits; without one, they go away with the app. `xclip` used to keep a background process alive to serve them
 - Windows: `SetText` used to silently do nothing, and `GetText` returned null, when another app held the clipboard. Both now retry for about 100 ms, then throw `IOException`
 
+### Fixed
+
+- macOS and Linux: single-instance mode let a second copy run when it was launched from a different Unix session, such as another terminal tab, or a terminal and the Dock. The lock was scoped to the session that launched the app and is now scoped to the user, across all of their sessions. Windows already scoped it to the user's login and is unchanged
+
 ## [1.4.5] - 2026-10-17
 
 ### Added
