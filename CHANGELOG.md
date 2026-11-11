@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- Saved window state is no longer lost or corrupted when two copies of an app save it at the same moment. Every save now writes its own temp file before the atomic rename; they used to share one
+
 ## [1.4.6] - 2026-11-10
 
 ### Added
