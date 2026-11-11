@@ -40,6 +40,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Hermes\Hermes.csproj" />
+    <ProjectReference Include="..\Hermes.Hosting\Hermes.Hosting.csproj" />
   </ItemGroup>
 
   <!-- Allow benchmarks to access internal members -->

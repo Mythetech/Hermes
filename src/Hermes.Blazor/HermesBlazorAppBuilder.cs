@@ -6,6 +6,7 @@ using Hermes.Blazor.Threading;
 using Hermes.Contracts.Diagnostics;
 using Hermes.Contracts.Plugins;
 using Hermes.Diagnostics.Smoke;
+using Hermes.Hosting;
 using Hermes.Plugins;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
@@ -46,26 +47,9 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         });
 
         if (addDefaultConfiguration)
-        {
-            _hostBuilder.Configuration
-                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                .AddJsonFile($"appsettings.{_hostBuilder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
-                .AddEnvironmentVariables()
-                .AddCommandLine(args ?? []);
-        }
+            HermesHostDefaults.AddDefaultConfiguration(_hostBuilder, args);
 
-        // The window loop owns process lifetime; the default ConsoleLifetime
-        // would install console signal handling that fights the native loop.
-        _hostBuilder.Services.AddSingleton<IHostLifetime, WindowHostLifetime>();
-
-        // Hosted services start after first paint, so one slow StartAsync must
-        // not serialize the rest, and window close should not hang on a long
-        // shutdown. Both stay user-overridable via Configure<HostOptions>.
-        _hostBuilder.Services.Configure<HostOptions>(options =>
-        {
-            options.ServicesStartConcurrently = true;
-            options.ShutdownTimeout = TimeSpan.FromSeconds(5);
-        });
+        HermesHostDefaults.AddWindowHost(_hostBuilder.Services);
 
         if (HermesSmokeTest.IsEnabled)
         {
