@@ -13,6 +13,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Every package targets `net10.0` and `net11.0`, so apps on .NET 10 (LTS) can use Hermes again. `Hermes.Blazor` references the `Microsoft.AspNetCore.Components.WebView` build from each framework's .NET major, `10.0.12` and `11.0.0`
+- .NET 11 GA: the SDK is `11.0.100`, and `Microsoft.AspNetCore.Components.WebView` and the WebAssembly packages are `11.0.0`. `Hermes.Blazor` no longer depends on a prerelease package, so `NU5104` is no longer suppressed
 - Linux: the clipboard goes through GTK instead of `xclip`, which changes how existing `SetText` and `GetText` calls behave
   - Clipboard calls need a Hermes window to exist first. Before one, they throw `InvalidOperationException`; `xclip` worked without one
   - Clipboard calls run on the GTK thread like native dialogs, so calling one from a background thread hangs while the GTK thread waits on that thread, or once the app's loop has ended

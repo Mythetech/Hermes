@@ -56,23 +56,14 @@
     <None Include="build/Hermes.Blazor.targets" Pack="true" PackagePath="build/net11.0/Mythetech.Hermes.Blazor.targets" />
   </ItemGroup>
 
-  <!-- The FrameworkReference below puts consuming apps on the Microsoft.AspNetCore.App shared
-       framework, which supplies the Components.Web runtime, so the WebView package (and the
-       blazor.webview.js it embeds) must come from the same .NET major as each target framework.
-       A 10.x package runs its old script against the 11 runtime and every new interop entry
-       point, Virtualize's setAnchorMode for one, fails at first render. Never share one version
-       across target frameworks. NU5104 is relaxed only until the 11.0.0 GA package replaces the
-       RC build. -->
-  <PropertyGroup>
-    <NoWarn>$(NoWarn);NU5104</NoWarn>
-  </PropertyGroup>
-
+  <!-- The shared framework supplies Components.Web, so each framework's WebView package, and the
+       blazor.webview.js it embeds, must be a GA build from that framework's .NET major. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="11.0.0-rc.1.26425.128" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="11.0.0" />
   </ItemGroup>
 
   <ItemGroup>
