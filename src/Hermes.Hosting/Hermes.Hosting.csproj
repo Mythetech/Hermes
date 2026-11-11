@@ -38,8 +38,9 @@
     <ProjectReference Include="..\Hermes\Hermes.csproj" />
   </ItemGroup>
 
+  <!-- No higher than the WebView floor in Hermes.Blazor, so apps that pin a Microsoft.Extensions package to it still restore. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.15" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
