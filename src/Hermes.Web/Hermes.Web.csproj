@@ -36,6 +36,11 @@
     <None Include="../../README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="build/**" Pack="true" PackagePath="build/" />
+    <None Include="buildTransitive/**" Pack="true" PackagePath="buildTransitive/" />
+  </ItemGroup>
+
 
   <ItemGroup>
     <ProjectReference Include="..\Hermes\Hermes.csproj" />

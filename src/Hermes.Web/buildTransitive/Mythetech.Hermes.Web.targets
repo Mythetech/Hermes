@@ -1,0 +1,3 @@
+<Project>
+  <Import Project="../build/Mythetech.Hermes.Web.targets" />
+</Project>
