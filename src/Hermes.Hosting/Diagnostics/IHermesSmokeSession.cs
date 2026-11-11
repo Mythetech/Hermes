@@ -1,5 +1,5 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
-namespace Hermes.Blazor.Diagnostics;
+namespace Hermes.Diagnostics;
 
 /// <summary>
 /// The running smoke session. Always resolvable; when smoke mode is off every member does nothing,

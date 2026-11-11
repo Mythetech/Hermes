@@ -5,6 +5,7 @@ using Hermes.Blazor.Diagnostics;
 using Hermes.Blazor.Threading;
 using Hermes.Contracts.Diagnostics;
 using Hermes.Contracts.Plugins;
+using Hermes.Diagnostics;
 using Hermes.Diagnostics.Smoke;
 using Hermes.Hosting;
 using Hermes.Plugins;
@@ -62,7 +63,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         }
         else
         {
-            _hostBuilder.Services.TryAddSingleton<IHermesSmokeSession>(NoOpHermesSmokeSession.Instance);
+            HermesSmokeHosting.UseNoOpSession(_hostBuilder.Services);
         }
     }
 
@@ -249,12 +250,9 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
 
     private void EnableSmokeMode(SmokeSession session)
     {
-        session.Start();
+        HermesSmokeHosting.Enable(_hostBuilder, session);
         _smokeRuntime = new HermesSmokeRuntime(session);
-        _hostBuilder.Services.RemoveAll<IHermesSmokeSession>();
-        _hostBuilder.Services.AddSingleton<IHermesSmokeSession>(new ActiveHermesSmokeSession(session));
         _hostBuilder.Services.AddSingleton(_smokeRuntime);
-        _hostBuilder.Logging.AddProvider(new SmokeLoggerProvider(session));
     }
 
     /// <summary>
@@ -357,10 +355,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         var composition = compositionTask.GetAwaiter().GetResult();
 
         if (_smokeRuntime is not null)
-        {
-            foreach (var gate in composition.ServiceProvider.GetServices<SmokeGateRegistration>())
-                _smokeRuntime.Session.RequireGate(gate.Name);
-        }
+            HermesSmokeHosting.RequireRegisteredGates(composition.ServiceProvider, _smokeRuntime.Session);
 
         var jsComponents = new JSComponentConfigurationStore();
 

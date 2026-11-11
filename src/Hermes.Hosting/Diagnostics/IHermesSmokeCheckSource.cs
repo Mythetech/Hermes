@@ -1,5 +1,5 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
-namespace Hermes.Blazor.Diagnostics;
+namespace Hermes.Diagnostics;
 
 /// <summary>
 /// Supplies smoke checks resolved some other way, for layers that wrap Hermes behind their own check

@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- `Mythetech.Hermes.Hosting`: the generic host and smoke mode plumbing shared by Hermes apps. `Hermes.Blazor` depends on it
+
+### Changed
+
+- Breaking: the smoke mode types moved from `Hermes.Blazor.Diagnostics` to `Hermes.Diagnostics` in `Mythetech.Hermes.Hosting`: `IHermesSmokeCheck`, `IHermesSmokeCheckSource`, `IHermesSmokeSession`, `AddHermesSmokeCheck`, `AddHermesSmokeCheckSource` and `AddHermesSmokeGate`. Replace `using Hermes.Blazor.Diagnostics;` with `using Hermes.Diagnostics;`
+
 ## [1.4.6] - 2026-11-10
 
 ### Added

@@ -1,6 +1,7 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using System.Diagnostics;
 using Hermes.Blazor.Diagnostics;
+using Hermes.Diagnostics;
 using Hermes.Blazor.Threading;
 using Hermes.Testing;
 using Xunit;

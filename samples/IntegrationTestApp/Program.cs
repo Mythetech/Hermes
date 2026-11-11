@@ -1,7 +1,7 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using Hermes;
 using Hermes.Blazor;
-using Hermes.Blazor.Diagnostics;
+using Hermes.Diagnostics;
 using IntegrationTestApp;
 using IntegrationTestApp.TestScenarios;
 using Microsoft.Extensions.DependencyInjection;

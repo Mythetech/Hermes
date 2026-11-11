@@ -1,6 +1,7 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using Bunit;
 using Hermes.Blazor.Diagnostics;
+using Hermes.Diagnostics;
 using Hermes.Diagnostics.Smoke;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Rendering;

@@ -1,5 +1,5 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
-namespace Hermes.Blazor.Diagnostics;
+namespace Hermes.Diagnostics;
 
 /// <summary>
 /// A named check that runs once in smoke mode, after the first render and every smoke gate.

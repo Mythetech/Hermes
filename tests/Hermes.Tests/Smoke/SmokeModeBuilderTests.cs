@@ -1,6 +1,7 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using Hermes.Blazor;
 using Hermes.Blazor.Diagnostics;
+using Hermes.Diagnostics;
 using Hermes.Diagnostics.Smoke;
 using Hermes.Testing;
 using Microsoft.AspNetCore.Components;

@@ -2,7 +2,7 @@
 using Hermes.Diagnostics.Smoke;
 using Microsoft.Extensions.Logging;
 
-namespace Hermes.Blazor.Diagnostics;
+namespace Hermes.Diagnostics;
 
 /// <summary>
 /// Turns every Error and Critical log entry during a smoke run into a run error. Many failures, such as

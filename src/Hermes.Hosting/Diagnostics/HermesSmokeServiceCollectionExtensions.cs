@@ -3,7 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace Hermes.Blazor.Diagnostics;
+namespace Hermes.Diagnostics;
 
 /// <summary>
 /// Registers smoke checks and gates. Registration is cheap and always allowed; nothing is created or
