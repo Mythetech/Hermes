@@ -1,9 +1,12 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using Hermes.Diagnostics;
+using Hermes.Tests.Smoke;
 using Xunit;
 
 namespace Hermes.Tests;
 
+// The handlers are process-wide, so a test running alongside could log through them.
+[Collection(nameof(ProcessWideEventsCollection))]
 public class HermesLoggerTests : IDisposable
 {
     public HermesLoggerTests()
