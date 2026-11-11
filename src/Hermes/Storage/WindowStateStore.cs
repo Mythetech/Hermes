@@ -31,6 +31,18 @@ public sealed class WindowStateStore
         _filePath = filePath;
     }
 
+    /// <summary>Points the store at another file before it has loaded one, so a test run never writes the user's data.</summary>
+    internal void UseFileForTest(string filePath)
+    {
+        lock (_lock)
+        {
+            if (_cache is not null)
+                throw new InvalidOperationException("The window state store has already loaded its file.");
+
+            _filePath = filePath;
+        }
+    }
+
     /// <summary>
     /// Tries to load window state for the given key.
     /// </summary>

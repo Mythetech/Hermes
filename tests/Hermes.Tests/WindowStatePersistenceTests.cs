@@ -99,9 +99,7 @@ public class WindowStatePersistenceTests
             X = 10, Y = 20, Width = 800, Height = 600, IsMaximized = true
         });
 
-        var appName = AppDataDirectories.GetApplicationName();
-        var filePath = Path.Combine(AppDataDirectories.GetUserDataPath("WindowState"), $"{appName}.json");
-        var json = File.ReadAllText(filePath);
+        var json = File.ReadAllText(WindowStateIsolation.FilePath);
 
         Assert.Contains(Environment.NewLine, json);
 
