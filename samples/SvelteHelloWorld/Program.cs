@@ -30,20 +30,17 @@ internal static class Program
         builder.UseSpaFallback();
 #endif
 
-        builder.UseInteropBridge(bridge =>
-        {
-            bridge.Register<string, string>("greet", name => $"Hello from C#, {name}!");
-            bridge.Register("getRuntime", () => $".NET {Environment.Version}");
-            bridge.Register("getPlatform", () => Environment.OSVersion.Platform.ToString());
-        });
-
         var app = builder.Build();
+
+        app.Bridge.Handle("greet", (string name) => $"Hello from C#, {name}!");
+        app.Bridge.Handle("getRuntime", () => $".NET {Environment.Version}");
+        app.Bridge.Handle("getPlatform", () => Environment.OSVersion.Platform.ToString());
 
         var seconds = 0;
         using var ticker = new System.Threading.Timer(_ =>
         {
             seconds++;
-            app.Bridge?.Send("tick", seconds);
+            app.Bridge.Send("tick", seconds);
         }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
 
         app.Run();

@@ -8,7 +8,7 @@ public sealed class HermesWebApp : IDisposable
     private readonly HermesWindow _window;
     private bool _disposed;
 
-    internal HermesWebApp(HermesWindow window, InteropBridge? bridge)
+    internal HermesWebApp(HermesWindow window, InteropBridge bridge)
     {
         _window = window;
         Bridge = bridge;
@@ -16,10 +16,14 @@ public sealed class HermesWebApp : IDisposable
 
     public HermesWindow MainWindow => _window;
 
-    public InteropBridge? Bridge { get; }
+    /// <summary>
+    /// The bridge to the page. Register handlers on it after <see cref="HermesWebAppBuilder.Build"/> and before <see cref="Run"/>.
+    /// </summary>
+    public InteropBridge Bridge { get; }
 
     public void Run()
     {
+        Bridge.Start();
         _window.WaitForClose();
     }
 
@@ -28,7 +32,7 @@ public sealed class HermesWebApp : IDisposable
         if (_disposed) return;
         _disposed = true;
 
-        Bridge?.Detach();
+        Bridge.Stop();
         _window.Dispose();
     }
 }
