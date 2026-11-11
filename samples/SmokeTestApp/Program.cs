@@ -1,6 +1,6 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using Hermes.Blazor;
-using Hermes.Blazor.Diagnostics;
+using Hermes.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace SmokeTestApp;

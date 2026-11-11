@@ -23,7 +23,7 @@ Windows requires the main thread to be STA for WebView2. This has regressed twic
 
 ## Teardown after the message loop exits
 
-Once `WaitForClose()` returns, the message pump is dead. Any await in a dispose path whose completion arrives on a non-UI thread posts its continuation into a queue nothing drains (macOS dead main queue; Windows UiInvokeQueue drops items after dispose). Teardown code must either complete synchronously on the UI thread or use blocking joins on thread-pool tasks. See `HermesBlazorApp.StopHost` for the pattern and rationale.
+Once `WaitForClose()` returns, the message pump is dead. Any await in a dispose path whose completion arrives on a non-UI thread posts its continuation into a queue nothing drains (macOS dead main queue; Windows UiInvokeQueue drops items after dispose). Teardown code must either complete synchronously on the UI thread or use blocking joins on thread-pool tasks. See `HermesHostRunner.Stop` in `Hermes.Hosting` for the pattern and rationale.
 
 App code is covered for it since 1.4.4, which fixed MudBlazor apps hanging in `DisposeAsync()` (a page service awaited thread-pool work). Two things hold it up, and both are load-bearing:
 

@@ -1,7 +1,7 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using Hermes.Diagnostics.Smoke;
 
-namespace Hermes.Blazor.Diagnostics;
+namespace Hermes.Diagnostics;
 
 internal sealed class NoOpHermesSmokeSession : IHermesSmokeSession
 {

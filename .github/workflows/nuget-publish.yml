@@ -309,6 +309,17 @@ jobs:
             ${{ steps.versioning.outputs.SUFFIX_FLAG }} \
             -o packages
 
+      - name: Build Hermes.Hosting
+        run: dotnet build src/Hermes.Hosting/Hermes.Hosting.csproj -c Release --no-restore
+
+      - name: Pack Hermes.Hosting
+        run: |
+          dotnet pack src/Hermes.Hosting/Hermes.Hosting.csproj \
+            -c Release \
+            --no-build \
+            ${{ steps.versioning.outputs.SUFFIX_FLAG }} \
+            -o packages
+
       - name: Build Hermes.Blazor
         run: dotnet build src/Hermes.Blazor/Hermes.Blazor.csproj -c Release --no-restore
 

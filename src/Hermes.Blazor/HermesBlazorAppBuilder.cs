@@ -5,7 +5,9 @@ using Hermes.Blazor.Diagnostics;
 using Hermes.Blazor.Threading;
 using Hermes.Contracts.Diagnostics;
 using Hermes.Contracts.Plugins;
+using Hermes.Diagnostics;
 using Hermes.Diagnostics.Smoke;
+using Hermes.Hosting;
 using Hermes.Plugins;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
@@ -46,26 +48,9 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         });
 
         if (addDefaultConfiguration)
-        {
-            _hostBuilder.Configuration
-                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                .AddJsonFile($"appsettings.{_hostBuilder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
-                .AddEnvironmentVariables()
-                .AddCommandLine(args ?? []);
-        }
+            HermesHostDefaults.AddDefaultConfiguration(_hostBuilder, args);
 
-        // The window loop owns process lifetime; the default ConsoleLifetime
-        // would install console signal handling that fights the native loop.
-        _hostBuilder.Services.AddSingleton<IHostLifetime, WindowHostLifetime>();
-
-        // Hosted services start after first paint, so one slow StartAsync must
-        // not serialize the rest, and window close should not hang on a long
-        // shutdown. Both stay user-overridable via Configure<HostOptions>.
-        _hostBuilder.Services.Configure<HostOptions>(options =>
-        {
-            options.ServicesStartConcurrently = true;
-            options.ShutdownTimeout = TimeSpan.FromSeconds(5);
-        });
+        HermesHostDefaults.AddWindowHost(_hostBuilder.Services);
 
         if (HermesSmokeTest.IsEnabled)
         {
@@ -78,7 +63,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         }
         else
         {
-            _hostBuilder.Services.TryAddSingleton<IHermesSmokeSession>(NoOpHermesSmokeSession.Instance);
+            HermesSmokeHosting.UseNoOpSession(_hostBuilder.Services);
         }
     }
 
@@ -265,12 +250,9 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
 
     private void EnableSmokeMode(SmokeSession session)
     {
-        session.Start();
+        HermesSmokeHosting.Enable(_hostBuilder, session);
         _smokeRuntime = new HermesSmokeRuntime(session);
-        _hostBuilder.Services.RemoveAll<IHermesSmokeSession>();
-        _hostBuilder.Services.AddSingleton<IHermesSmokeSession>(new ActiveHermesSmokeSession(session));
         _hostBuilder.Services.AddSingleton(_smokeRuntime);
-        _hostBuilder.Logging.AddProvider(new SmokeLoggerProvider(session));
     }
 
     /// <summary>
@@ -373,10 +355,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
         var composition = compositionTask.GetAwaiter().GetResult();
 
         if (_smokeRuntime is not null)
-        {
-            foreach (var gate in composition.ServiceProvider.GetServices<SmokeGateRegistration>())
-                _smokeRuntime.Session.RequireGate(gate.Name);
-        }
+            HermesSmokeHosting.RequireRegisteredGates(composition.ServiceProvider, _smokeRuntime.Session);
 
         var jsComponents = new JSComponentConfigurationStore();
 

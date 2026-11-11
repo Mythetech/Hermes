@@ -1,5 +1,5 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
-using Hermes.Blazor.Diagnostics;
+using Hermes.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 

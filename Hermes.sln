@@ -106,6 +106,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Hermes.Native.Linux", "Herm
 		src\Hermes.Native.Linux\HermesWindow.h = src\Hermes.Native.Linux\HermesWindow.h
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hermes.Hosting", "src\Hermes.Hosting\Hermes.Hosting.csproj", "{51DF6404-B9E9-4508-A688-B91BA033828B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -380,6 +382,18 @@ Global
 		{41B5FC84-F987-4BE1-AA20-E4B858FD47D3}.Release|x64.Build.0 = Release|Any CPU
 		{41B5FC84-F987-4BE1-AA20-E4B858FD47D3}.Release|x86.ActiveCfg = Release|Any CPU
 		{41B5FC84-F987-4BE1-AA20-E4B858FD47D3}.Release|x86.Build.0 = Release|Any CPU
+		{51DF6404-B9E9-4508-A688-B91BA033828B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{51DF6404-B9E9-4508-A688-B91BA033828B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{51DF6404-B9E9-4508-A688-B91BA033828B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{51DF6404-B9E9-4508-A688-B91BA033828B}.Debug|x64.Build.0 = Debug|Any CPU
+		{51DF6404-B9E9-4508-A688-B91BA033828B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{51DF6404-B9E9-4508-A688-B91BA033828B}.Debug|x86.Build.0 = Debug|Any CPU
+		{51DF6404-B9E9-4508-A688-B91BA033828B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{51DF6404-B9E9-4508-A688-B91BA033828B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{51DF6404-B9E9-4508-A688-B91BA033828B}.Release|x64.ActiveCfg = Release|Any CPU
+		{51DF6404-B9E9-4508-A688-B91BA033828B}.Release|x64.Build.0 = Release|Any CPU
+		{51DF6404-B9E9-4508-A688-B91BA033828B}.Release|x86.ActiveCfg = Release|Any CPU
+		{51DF6404-B9E9-4508-A688-B91BA033828B}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -410,5 +424,6 @@ Global
 		{41B5FC84-F987-4BE1-AA20-E4B858FD47D3} = {E8C8B8E1-1234-5678-9ABC-DEF012345678}
 		{F5CAE55A-2710-4E8C-8765-404C4C00A162} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{DD847200-0B70-4C3E-B1AE-A9809EC49508} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{51DF6404-B9E9-4508-A688-B91BA033828B} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

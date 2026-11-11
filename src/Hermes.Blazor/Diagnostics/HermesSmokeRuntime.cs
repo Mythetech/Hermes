@@ -1,6 +1,6 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
+using Hermes.Diagnostics;
 using Hermes.Diagnostics.Smoke;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Hermes.Blazor.Diagnostics;
 
@@ -38,7 +38,7 @@ internal sealed class HermesSmokeRuntime(SmokeSession session)
         IReadOnlyList<SmokeCheck> checks;
         try
         {
-            checks = ResolveChecks(_firstScope!);
+            checks = HermesSmokeHosting.ResolveChecks(_firstScope!);
         }
         catch (Exception ex)
         {
@@ -48,21 +48,4 @@ internal sealed class HermesSmokeRuntime(SmokeSession session)
 
         await Session.RunToVerdictAsync(checks);
     }
-
-    internal static IReadOnlyList<SmokeCheck> ResolveChecks(IServiceProvider scopedServices)
-    {
-        var checks = new List<SmokeCheck>();
-        foreach (var check in scopedServices.GetServices<IHermesSmokeCheck>())
-            checks.Add(ToSmokeCheck(check));
-
-        foreach (var source in scopedServices.GetServices<IHermesSmokeCheckSource>())
-        {
-            foreach (var check in source.GetChecks(scopedServices))
-                checks.Add(ToSmokeCheck(check));
-        }
-
-        return checks;
-    }
-
-    private static SmokeCheck ToSmokeCheck(IHermesSmokeCheck check) => new(check.Name, check.Timeout, check.RunAsync);
 }

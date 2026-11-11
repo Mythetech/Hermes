@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using Hermes.Blazor;
 using Hermes.Blazor.Threading;
+using Hermes.Hosting;
 using Hermes.Testing;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;

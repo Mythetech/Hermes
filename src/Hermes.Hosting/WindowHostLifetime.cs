@@ -1,7 +1,7 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using Microsoft.Extensions.Hosting;
 
-namespace Hermes.Blazor;
+namespace Hermes.Hosting;
 
 /// <summary>
 /// No-op host lifetime. The native window loop owns process lifetime, so the

@@ -1,6 +1,7 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using System.Text.Json;
 using Hermes.Blazor.Diagnostics;
+using Hermes.Diagnostics;
 using Xunit;
 
 namespace Hermes.Tests.Smoke;

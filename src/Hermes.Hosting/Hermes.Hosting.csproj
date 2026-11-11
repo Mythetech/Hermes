@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>$(HermesTargetFrameworks)</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <!-- NuGet Package Metadata -->
+  <PropertyGroup>
+    <VersionPrefix>1.5.0</VersionPrefix>
+    <PackageId>Mythetech.Hermes.Hosting</PackageId>
+    <Authors>Mythetech</Authors>
+    <Description>Generic host and smoke mode for Hermes desktop apps</Description>
+    <PackageTags>hermes;desktop;hosting;smoke-test</PackageTags>
+    <PackageProjectUrl>https://github.com/Mythetech/Hermes</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Mythetech/Hermes.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <!-- Include LICENSE and README in NuGet package -->
+  <ItemGroup>
+    <None Include="../../LICENSE" Pack="true" PackagePath="/" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Hermes.Blazor" />
+    <InternalsVisibleTo Include="Hermes.Web" />
+    <InternalsVisibleTo Include="Hermes.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Hermes\Hermes.csproj" />
+  </ItemGroup>
+
+  <!-- No higher than the WebView floor in Hermes.Blazor, so apps that pin a Microsoft.Extensions package to it still restore. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="11.0.0" />
+  </ItemGroup>
+
+</Project>
