@@ -3,6 +3,7 @@ using Xunit;
 
 namespace Hermes.Tests.Web.FrontendTargets;
 
+[Collection(nameof(FrontendTargetsCollection))]
 public sealed class FrontendTargetsCopyTests : IDisposable
 {
     private readonly FrontendFixture _fixture = new();
@@ -47,6 +48,16 @@ public sealed class FrontendTargetsCopyTests : IDisposable
         var publish = Path.Combine(_fixture.OutputDirectory("Release"), "publish");
         Assert.True(File.Exists(Path.Combine(publish, "wwwroot", "index.html")));
         Assert.True(File.Exists(Path.Combine(publish, "wwwroot", "assets", "app.js")));
+    }
+
+    [Fact]
+    public void SingleFilePublish_WithContentExtraction_BundlesWwwroot()
+    {
+        var result = _fixture.PublishForThisRuntime("OutputType=Exe", "PublishSingleFile=true", "IncludeAllContentForSelfExtract=true");
+
+        Assert.True(result.Succeeded, result.Output);
+        Assert.Equal(1, _fixture.BuildRuns);
+        Assert.False(Directory.Exists(Path.Combine(_fixture.PublishDirectoryForThisRuntime(), "wwwroot")));
     }
 
     [Fact]

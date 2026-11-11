@@ -1,5 +1,6 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Hermes.Tests.Web.FrontendTargets;
@@ -32,13 +33,23 @@ internal sealed class FrontendFixture : IDisposable
 
     public BuildResult Build(string configuration, params string[] properties) => Run("build", configuration, properties);
 
+    public BuildResult BuildWithOptions(string configuration, string[] properties, params string[] options) =>
+        Run("build", configuration, properties, options);
+
     public BuildResult Publish(params string[] properties) => Run("publish", "Release", properties);
 
     public BuildResult PublishWithoutBuilding() => Run("publish", "Release", [], "--no-build");
 
+    /// <summary>A framework-dependent publish for the machine running the tests.</summary>
+    public BuildResult PublishForThisRuntime(params string[] properties) =>
+        Run("publish", "Release", properties, "-r", RuntimeInformation.RuntimeIdentifier, "--self-contained", "false");
+
     /// <summary>The single target framework folder under bin/{configuration}.</summary>
     public string OutputDirectory(string configuration) =>
         Directory.GetDirectories(Path.Combine(Root, "bin", configuration)).Single();
+
+    public string PublishDirectoryForThisRuntime() =>
+        Path.Combine(OutputDirectory("Release"), RuntimeInformation.RuntimeIdentifier, "publish");
 
     public void WritePrebuiltDist(string dist = "dist")
     {

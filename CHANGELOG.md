@@ -9,7 +9,8 @@ All notable changes to this project will be documented in this file.
 - `Hermes.Web` (preview): the package ships MSBuild targets that put the frontend's build output in `wwwroot` next to the app, where `UseStaticFiles()` looks by default
   - Every build and publish copies `frontend/dist` to `wwwroot` in the output or publish directory, when it exists. `HermesFrontendRoot` and `HermesFrontendDist` change the folders
   - `dotnet publish` and Release builds run `npm ci` and `npm run build` in the frontend folder first, each only when its inputs changed. Debug builds never run them. `HermesFrontendInstallCommand` and `HermesFrontendBuildCommand` change the commands, and `HermesFrontendBuild` set to `false` or `true` skips or forces them
-  - A failing command fails the build with `HERMESWEB001`, which names the command and how to skip it
+  - A failing command fails the build with `HERMESWEB001`, which names the command and how to skip it and carries the command's output, since the terminal logger hides it
+  - The commands run once per project, not once per configuration, framework or runtime: a multi-targeted app runs them before its inner builds, and a publish for a runtime reuses the Release build's frontend
   - The web samples use the targets, so they run in Release from the built frontend instead of a `frontend/dist` folder next to the app that nothing copied there
 
 ## [1.4.6] - 2026-11-10

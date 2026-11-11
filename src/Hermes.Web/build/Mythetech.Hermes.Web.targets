@@ -12,9 +12,13 @@
   <Target Name="_HermesFrontendPrepare">
     <PropertyGroup>
       <_HermesFrontendRootDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(HermesFrontendRoot)'))</_HermesFrontendRootDir>
+      <_HermesFrontendRootPath>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(HermesFrontendRoot)'))</_HermesFrontendRootPath>
       <_HermesFrontendDistDir>$([MSBuild]::NormalizeDirectory('$(_HermesFrontendRootDir)', '$(HermesFrontendDist)'))</_HermesFrontendDistDir>
-      <_HermesFrontendInstallStamp>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'hermes-frontend-install.stamp'))</_HermesFrontendInstallStamp>
-      <_HermesFrontendBuildStamp>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'hermes-frontend-build.stamp'))</_HermesFrontendBuildStamp>
+      <_HermesFrontendOutputDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(BaseOutputPath)'))</_HermesFrontendOutputDir>
+      <_HermesFrontendIntermediateDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(BaseIntermediateOutputPath)'))</_HermesFrontendIntermediateDir>
+      <!-- One set of stamps per project: the frontend's output is the same for every configuration, framework and runtime. -->
+      <_HermesFrontendInstallStamp>$(_HermesFrontendIntermediateDir)hermes-frontend-install.stamp</_HermesFrontendInstallStamp>
+      <_HermesFrontendBuildStamp>$(_HermesFrontendIntermediateDir)hermes-frontend-build.stamp</_HermesFrontendBuildStamp>
       <_HermesFrontendRunCommands>false</_HermesFrontendRunCommands>
       <_HermesFrontendRunCommands Condition="'$(HermesFrontendBuild)' == 'true' OR ('$(HermesFrontendBuild)' == '' AND ('$(Configuration)' == 'Release' OR '$(_IsPublishing)' == 'true'))">true</_HermesFrontendRunCommands>
       <_HermesFrontendRunCommands Condition="'$(DesignTimeBuild)' == 'true' OR '$(NoBuild)' == 'true' OR !Exists('$(_HermesFrontendRootDir)package.json')">false</_HermesFrontendRunCommands>
@@ -24,56 +28,63 @@
     <ItemGroup Condition="'$(_HermesFrontendRunCommands)' == 'true'">
       <_HermesFrontendInstallInput Include="$(_HermesFrontendRootDir)package.json;$(_HermesFrontendRootDir)package-lock.json;$(_HermesFrontendRootDir)npm-shrinkwrap.json;$(_HermesFrontendRootDir)yarn.lock;$(_HermesFrontendRootDir)pnpm-lock.yaml;$(_HermesFrontendRootDir)bun.lock;$(_HermesFrontendRootDir)bun.lockb" />
       <_HermesFrontendInstallInput Remove="@(_HermesFrontendInstallInput)" Condition="!Exists('%(FullPath)')" />
-      <_HermesFrontendSource Include="$(_HermesFrontendRootDir)**" Exclude="$(_HermesFrontendRootDir)node_modules/**;$(_HermesFrontendDistDir)**" />
+      <_HermesFrontendSource Include="$(_HermesFrontendRootDir)**" Exclude="$(_HermesFrontendRootDir)node_modules/**;$(_HermesFrontendDistDir)**;$(_HermesFrontendOutputDir)**;$(_HermesFrontendIntermediateDir)**" />
     </ItemGroup>
 
     <Delete Files="$(_HermesFrontendInstallStamp)" Condition="'$(_HermesFrontendRunCommands)' == 'true' AND !Exists('$(_HermesFrontendRootDir)node_modules')" />
     <Delete Files="$(_HermesFrontendBuildStamp)" Condition="'$(_HermesFrontendRunCommands)' == 'true' AND !Exists('$(_HermesFrontendDistDir)')" />
   </Target>
 
+  <!-- The error carries the command's output, which the terminal logger does not show. -->
   <Target Name="HermesInstallFrontend"
           DependsOnTargets="_HermesFrontendPrepare"
           Inputs="@(_HermesFrontendInstallInput)"
           Outputs="$(_HermesFrontendInstallStamp)">
-    <Message Importance="high" Text="Hermes: running '$(HermesFrontendInstallCommand)' in $(_HermesFrontendRootDir)" />
-    <Exec Command="$(HermesFrontendInstallCommand)" WorkingDirectory="$(_HermesFrontendRootDir)" IgnoreExitCode="true" StandardOutputImportance="high">
+    <Message Importance="high" Text="Hermes: running '$(HermesFrontendInstallCommand)' in $(_HermesFrontendRootPath)" />
+    <Exec Command="$(HermesFrontendInstallCommand)" WorkingDirectory="$(_HermesFrontendRootDir)" IgnoreExitCode="true" StandardOutputImportance="high" ConsoleToMSBuild="true">
       <Output TaskParameter="ExitCode" PropertyName="_HermesFrontendInstallExitCode" />
+      <Output TaskParameter="ConsoleOutput" ItemName="_HermesFrontendInstallOutput" />
     </Exec>
+    <PropertyGroup>
+      <_HermesFrontendInstallHint Condition="'$(_HermesFrontendInstallExitCode)' == '127' OR '$(_HermesFrontendInstallExitCode)' == '9009'">%20The shell could not find the command: check that it is installed and on the PATH this build sees (npm comes with Node.js).</_HermesFrontendInstallHint>
+    </PropertyGroup>
     <Error Code="HERMESWEB001"
            Condition="'$(_HermesFrontendInstallExitCode)' != '0'"
-           Text="'$(HermesFrontendInstallCommand)' failed with exit code $(_HermesFrontendInstallExitCode) in $(_HermesFrontendRootDir). Fix the error in its output above, or set HermesFrontendBuild=false to skip the frontend build." />
+           Text="'$(HermesFrontendInstallCommand)' failed with exit code $(_HermesFrontendInstallExitCode) in $(_HermesFrontendRootPath).$(_HermesFrontendInstallHint) Fix the error in its output below, or set HermesFrontendBuild=false to skip the frontend build.%0A@(_HermesFrontendInstallOutput->'%(Identity)', '%0A')" />
     <Touch Files="$(_HermesFrontendInstallStamp)" AlwaysCreate="true" />
-    <ItemGroup>
-      <FileWrites Include="$(_HermesFrontendInstallStamp)" />
-    </ItemGroup>
   </Target>
 
   <Target Name="HermesBuildFrontend"
           DependsOnTargets="HermesInstallFrontend"
           Inputs="@(_HermesFrontendSource)"
           Outputs="$(_HermesFrontendBuildStamp)">
-    <Message Importance="high" Text="Hermes: running '$(HermesFrontendBuildCommand)' in $(_HermesFrontendRootDir)" />
-    <Exec Command="$(HermesFrontendBuildCommand)" WorkingDirectory="$(_HermesFrontendRootDir)" IgnoreExitCode="true" StandardOutputImportance="high">
+    <Message Importance="high" Text="Hermes: running '$(HermesFrontendBuildCommand)' in $(_HermesFrontendRootPath)" />
+    <Exec Command="$(HermesFrontendBuildCommand)" WorkingDirectory="$(_HermesFrontendRootDir)" IgnoreExitCode="true" StandardOutputImportance="high" ConsoleToMSBuild="true">
       <Output TaskParameter="ExitCode" PropertyName="_HermesFrontendBuildExitCode" />
+      <Output TaskParameter="ConsoleOutput" ItemName="_HermesFrontendBuildOutput" />
     </Exec>
+    <PropertyGroup>
+      <_HermesFrontendBuildHint Condition="'$(_HermesFrontendBuildExitCode)' == '127' OR '$(_HermesFrontendBuildExitCode)' == '9009'">%20The shell could not find the command: check that it is installed and on the PATH this build sees (npm comes with Node.js).</_HermesFrontendBuildHint>
+    </PropertyGroup>
     <Error Code="HERMESWEB001"
            Condition="'$(_HermesFrontendBuildExitCode)' != '0'"
-           Text="'$(HermesFrontendBuildCommand)' failed with exit code $(_HermesFrontendBuildExitCode) in $(_HermesFrontendRootDir). Fix the error in its output above, or set HermesFrontendBuild=false to skip the frontend build." />
+           Text="'$(HermesFrontendBuildCommand)' failed with exit code $(_HermesFrontendBuildExitCode) in $(_HermesFrontendRootPath).$(_HermesFrontendBuildHint) Fix the error in its output below, or set HermesFrontendBuild=false to skip the frontend build.%0A@(_HermesFrontendBuildOutput->'%(Identity)', '%0A')" />
     <Touch Files="$(_HermesFrontendBuildStamp)" AlwaysCreate="true" />
-    <ItemGroup>
-      <FileWrites Include="$(_HermesFrontendBuildStamp)" />
-    </ItemGroup>
   </Target>
 
-  <!-- Kept out of single-file bundles, since the static file host reads wwwroot from disk. -->
+  <!-- A multi-targeted project builds the frontend once, before its inner builds, which then find it up to date. -->
+  <Target Name="_HermesFrontendBeforeInnerBuilds"
+          BeforeTargets="DispatchToInnerBuilds"
+          DependsOnTargets="HermesBuildFrontend"
+          Condition="'$(IsCrossTargetingBuild)' == 'true'" />
+
   <Target Name="HermesCollectFrontend" BeforeTargets="AssignTargetPaths" DependsOnTargets="HermesBuildFrontend">
     <ItemGroup>
       <_HermesFrontendOutput Include="$(_HermesFrontendDistDir)**" />
       <None Include="@(_HermesFrontendOutput)"
             Link="wwwroot/%(_HermesFrontendOutput.RecursiveDir)%(_HermesFrontendOutput.Filename)%(_HermesFrontendOutput.Extension)"
             CopyToOutputDirectory="PreserveNewest"
-            CopyToPublishDirectory="PreserveNewest"
-            ExcludeFromSingleFile="true" />
+            CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
   </Target>
 

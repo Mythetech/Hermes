@@ -39,6 +39,7 @@
   <ItemGroup>
     <None Include="build/**" Pack="true" PackagePath="build/" />
     <None Include="buildTransitive/**" Pack="true" PackagePath="buildTransitive/" />
+    <None Include="buildMultiTargeting/**" Pack="true" PackagePath="buildMultiTargeting/" />
   </ItemGroup>
 
 

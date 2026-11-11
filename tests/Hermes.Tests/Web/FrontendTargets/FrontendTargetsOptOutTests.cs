@@ -3,6 +3,7 @@ using Xunit;
 
 namespace Hermes.Tests.Web.FrontendTargets;
 
+[Collection(nameof(FrontendTargetsCollection))]
 public sealed class FrontendTargetsOptOutTests : IDisposable
 {
     private readonly FrontendFixture _fixture = new();
@@ -69,5 +70,27 @@ public sealed class FrontendTargetsOptOutTests : IDisposable
         Assert.Contains("HERMESWEB001", result.Output);
         Assert.Contains("exit code 3", result.Output);
         Assert.Contains("HermesFrontendBuild=false", result.Output);
+    }
+
+    [Fact]
+    public void FailingCommand_ShowsItsOutput_UnderTheTerminalLogger()
+    {
+        File.WriteAllText(Path.Combine(_fixture.Frontend, "failure.txt"), "stub-failure-detail");
+        var print = OperatingSystem.IsWindows() ? "type" : "cat";
+
+        var result = _fixture.BuildWithOptions("Release", [$"HermesFrontendBuildCommand={print} failure.txt && exit 1"], "-tl:on");
+
+        Assert.False(result.Succeeded, result.Output);
+        Assert.Contains("HERMESWEB001", result.Output);
+        Assert.Contains("stub-failure-detail", result.Output);
+    }
+
+    [Fact]
+    public void MissingCommand_SaysTheShellCouldNotFindIt()
+    {
+        var result = _fixture.Build("Release", "HermesFrontendBuildCommand=hermes-command-that-does-not-exist");
+
+        Assert.False(result.Succeeded, result.Output);
+        Assert.Contains("could not find", result.Output);
     }
 }
