@@ -387,6 +387,183 @@ public sealed class InteropBridgeTests : IDisposable
         Assert.Equal("pong", reply.GetProperty("value").GetString());
     }
 
+    [Fact]
+    public void Stop_WhenACancellationCallbackThrows_StillReturns()
+    {
+        var started = new ManualResetEventSlim();
+        var (bridge, backend) = Start(b => b.HandleAsync("wait", async ct =>
+        {
+            ct.Register(() => throw new InvalidOperationException("callback"));
+            started.Set();
+            await Task.Delay(Timeout.Infinite, ct);
+        }));
+
+        backend.SimulateWebMessage(Invoke("1", "wait"));
+        Assert.True(started.Wait(Wait));
+
+        Assert.Null(Record.Exception(bridge.Stop));
+    }
+
+    [Fact]
+    public void Stop_ResumesCancelledHandlersOffTheUiThread()
+    {
+        var started = new ManualResetEventSlim();
+        var resumed = new ManualResetEventSlim();
+        var resumedOn = 0;
+        var (bridge, backend) = Start(b => b.HandleAsync("wait", async ct =>
+        {
+            var cancelled = new TaskCompletionSource();
+            using var registration = ct.Register(() => cancelled.TrySetCanceled());
+            started.Set();
+            try
+            {
+                await cancelled.Task;
+            }
+            finally
+            {
+                resumedOn = Environment.CurrentManagedThreadId;
+                resumed.Set();
+            }
+        }));
+
+        backend.SimulateWebMessage(Invoke("1", "wait"));
+        Assert.True(started.Wait(Wait));
+
+        // Main has no synchronization context once the loop has ended, unlike a test thread.
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(null);
+        try
+        {
+            bridge.Stop();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        Assert.True(resumed.Wait(Wait));
+        Assert.NotEqual(backend.UIThreadId, resumedOn);
+    }
+
+    [Fact]
+    public async Task Stop_DropsEventsThatAreStillQueued()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var entered = new ManualResetEventSlim();
+        var later = 0;
+        var backend = new RecordingWindowBackend();
+        var bridge = new InteropBridge(backend) { StopTimeout = TimeSpan.FromMilliseconds(200) };
+        _bridges.Add(bridge);
+        bridge.On("slow", async () =>
+        {
+            entered.Set();
+            await gate.Task;
+        });
+        bridge.On("later", () => Interlocked.Increment(ref later));
+        bridge.Start();
+
+        backend.SimulateWebMessage(Event("slow"));
+        for (var i = 0; i < 3; i++)
+            backend.SimulateWebMessage(Event("later"));
+        Assert.True(entered.Wait(Wait));
+        bridge.Stop();
+        gate.SetResult();
+        await Task.Delay(200);
+
+        Assert.Equal(0, Volatile.Read(ref later));
+    }
+
+    [Fact]
+    public async Task Invoke_IsNotHeldUpByASlowEventHandler()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (_, backend) = Start(b =>
+        {
+            b.On("slow", () => gate.Task);
+            b.Handle("fast", () => "fast");
+        });
+
+        backend.SimulateWebMessage(Event("slow"));
+        backend.SimulateWebMessage(Invoke("1", "fast"));
+
+        var reply = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("fast", reply.GetProperty("value").GetString());
+        gate.SetResult();
+    }
+
+    [Fact]
+    public async Task Handle_WithATrailingCancellationToken_TakesTheTokenFromTheBridge()
+    {
+        var (_, backend) = Start(b => b.Handle("echo", (string s, CancellationToken ct) => ct.CanBeCanceled ? s : "no token"));
+
+        backend.SimulateWebMessage(Invoke("1", "echo", """["hi"]"""));
+
+        var reply = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("hi", reply.GetProperty("value").GetString());
+    }
+
+    [Fact]
+    public async Task HandleAsync_WithATrailingCancellationToken_TakesTheTokenFromTheBridge()
+    {
+        var (_, backend) = Start(b => b.HandleAsync("echo", async (string s, CancellationToken ct) =>
+        {
+            await Task.Yield();
+            return ct.CanBeCanceled ? s : "no token";
+        }));
+
+        backend.SimulateWebMessage(Invoke("1", "echo", """["hi"]"""));
+
+        var reply = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("hi", reply.GetProperty("value").GetString());
+    }
+
+    [Fact]
+    public void Handle_WithAnAsyncLambda_Throws()
+    {
+        var (bridge, _) = Start();
+
+        var error = Assert.Throws<ArgumentException>(() => bridge.Handle("load", async () =>
+        {
+            await Task.Yield();
+            return 1;
+        }));
+
+        Assert.Contains("HandleAsync", error.Message);
+    }
+
+    [Fact]
+    public void Handle_WithACancellationTokenThatIsNotLast_Throws()
+    {
+        var (bridge, _) = Start();
+
+        Assert.Throws<ArgumentException>(() => bridge.Handle("x", (CancellationToken ct, string s) => s));
+    }
+
+    [Fact]
+    public async Task AMessageThatCannotBeRead_DoesNotStopTheBridge()
+    {
+        var (_, backend) = Start(b => b.Handle("ping", () => "pong"));
+
+        backend.SimulateWebMessage("{\"type\":\"event\",\"name\":\"\uD800\"}");
+        backend.SimulateWebMessage(Invoke("1", "ping"));
+
+        var reply = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("pong", reply.GetProperty("value").GetString());
+    }
+
+    [Fact]
+    public void Send_AfterStop_SendsNothing()
+    {
+        var (bridge, backend) = Start();
+        bridge.Stop();
+
+        bridge.Send("late");
+        bridge.Send("late", 1);
+        backend.ProcessPending();
+
+        Assert.Empty(backend.Recording.WebMessagesSent);
+    }
+
     private (InteropBridge Bridge, RecordingWindowBackend Backend) Start(
         Action<InteropBridge>? configure = null,
         bool useReflection = true)

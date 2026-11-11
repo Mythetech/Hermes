@@ -5,9 +5,13 @@ public sealed partial class InteropBridge
 {
     /// <summary>
     /// Handles calls to <paramref name="method"/> from the page. The handler runs on the thread pool, its
-    /// arguments are read from the call's JSON arguments in order, and its result is the call's result.
+    /// arguments are read from the call's JSON arguments in order, and its result is the call's result. A last
+    /// <see cref="CancellationToken"/> parameter comes from the bridge and is cancelled when the window closes.
     /// </summary>
-    /// <exception cref="ArgumentException">A handler for <paramref name="method"/> is already registered.</exception>
+    /// <exception cref="ArgumentException">
+    /// A handler for <paramref name="method"/> is already registered, the handler returns a task (use HandleAsync),
+    /// or it takes a <see cref="CancellationToken"/> anywhere but last.
+    /// </exception>
     public void Handle<TResult>(string method, Func<TResult> handler) =>
         AddMethod(method, handler, [], typeof(TResult), (_, _) => Task.FromResult<object?>(handler()));
 
@@ -29,6 +33,29 @@ public sealed partial class InteropBridge
     public void Handle<T1, T2, T3, T4, TResult>(string method, Func<T1, T2, T3, T4, TResult> handler) =>
         AddMethod(method, handler, [typeof(T1), typeof(T2), typeof(T3), typeof(T4)], typeof(TResult),
             (a, _) => Task.FromResult<object?>(handler((T1)a[0]!, (T2)a[1]!, (T3)a[2]!, (T4)a[3]!)));
+
+    /// <inheritdoc cref="Handle{TResult}(string, Func{TResult})"/>
+    public void Handle<TResult>(string method, Func<CancellationToken, TResult> handler) =>
+        AddMethod(method, handler, [], typeof(TResult), (_, ct) => Task.FromResult<object?>(handler(ct)));
+
+    /// <inheritdoc cref="Handle{TResult}(string, Func{TResult})"/>
+    public void Handle<T1, TResult>(string method, Func<T1, CancellationToken, TResult> handler) =>
+        AddMethod(method, handler, [typeof(T1)], typeof(TResult), (a, ct) => Task.FromResult<object?>(handler((T1)a[0]!, ct)));
+
+    /// <inheritdoc cref="Handle{TResult}(string, Func{TResult})"/>
+    public void Handle<T1, T2, TResult>(string method, Func<T1, T2, CancellationToken, TResult> handler) =>
+        AddMethod(method, handler, [typeof(T1), typeof(T2)], typeof(TResult),
+            (a, ct) => Task.FromResult<object?>(handler((T1)a[0]!, (T2)a[1]!, ct)));
+
+    /// <inheritdoc cref="Handle{TResult}(string, Func{TResult})"/>
+    public void Handle<T1, T2, T3, TResult>(string method, Func<T1, T2, T3, CancellationToken, TResult> handler) =>
+        AddMethod(method, handler, [typeof(T1), typeof(T2), typeof(T3)], typeof(TResult),
+            (a, ct) => Task.FromResult<object?>(handler((T1)a[0]!, (T2)a[1]!, (T3)a[2]!, ct)));
+
+    /// <inheritdoc cref="Handle{TResult}(string, Func{TResult})"/>
+    public void Handle<T1, T2, T3, T4, TResult>(string method, Func<T1, T2, T3, T4, CancellationToken, TResult> handler) =>
+        AddMethod(method, handler, [typeof(T1), typeof(T2), typeof(T3), typeof(T4)], typeof(TResult),
+            (a, ct) => Task.FromResult<object?>(handler((T1)a[0]!, (T2)a[1]!, (T3)a[2]!, (T4)a[3]!, ct)));
 
     /// <summary>
     /// Handles calls to <paramref name="method"/> from the page with an async handler. A handler that takes a
@@ -166,7 +193,7 @@ public sealed partial class InteropBridge
 
     /// <summary>
     /// Handles <paramref name="eventName"/> events from the page. Event handlers run one at a time, in the order
-    /// the events arrived. Dispose the result to stop handling them.
+    /// the events arrived; calls from the page never wait for them. Dispose the result to stop handling them.
     /// </summary>
     public IDisposable On(string eventName, Action handler) =>
         AddEvent(eventName, handler, null, _ =>
@@ -191,14 +218,14 @@ public sealed partial class InteropBridge
     public IDisposable On<T>(string eventName, Func<T, Task> handler) =>
         AddEvent(eventName, handler, typeof(T), data => handler((T)data!));
 
-    /// <summary>Sends <paramref name="eventName"/> to the page with no data.</summary>
+    /// <summary>Sends <paramref name="eventName"/> to the page with no data. Does nothing once the app has shut down.</summary>
     public void Send(string eventName)
     {
         ArgumentException.ThrowIfNullOrEmpty(eventName);
         Post(BridgeJson.Event(eventName, null, null));
     }
 
-    /// <summary>Sends <paramref name="eventName"/> to the page with <paramref name="data"/> as its payload.</summary>
+    /// <summary>Sends <paramref name="eventName"/> to the page with <paramref name="data"/> as its payload. Does nothing once the app has shut down.</summary>
     /// <exception cref="NotSupportedException"><typeparamref name="T"/> has no JSON metadata in <see cref="SerializerOptions"/>.</exception>
     public void Send<T>(string eventName, T data)
     {
@@ -226,12 +253,31 @@ public sealed partial class InteropBridge
         ArgumentException.ThrowIfNullOrEmpty(method);
         ArgumentNullException.ThrowIfNull(handler);
 
+        if (Array.IndexOf(parameterTypes, typeof(CancellationToken)) >= 0)
+        {
+            throw new ArgumentException(
+                $"The handler for '{method}' takes a CancellationToken that is not its last parameter; only a last one comes from the bridge.",
+                nameof(handler));
+        }
+
+        if (resultType is not null && IsAwaitable(resultType))
+        {
+            throw new ArgumentException(
+                $"The handler for '{method}' returns {resultType}, which the bridge cannot send. Register async handlers with HandleAsync.",
+                nameof(handler));
+        }
+
         lock (_gate)
         {
             if (!_methods.TryAdd(method, new MethodHandler(parameterTypes, resultType, invoke)))
                 throw new ArgumentException($"A handler for '{method}' is already registered.", nameof(method));
         }
     }
+
+    private static bool IsAwaitable(Type type) =>
+        typeof(Task).IsAssignableFrom(type)
+        || type == typeof(ValueTask)
+        || (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ValueTask<>));
 
     private IDisposable AddEvent(string eventName, Delegate handler, Type? dataType, Func<object?, Task> invoke)
     {

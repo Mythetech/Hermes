@@ -15,12 +15,15 @@ public sealed partial class InteropBridge
     private readonly IHermesWindowBackend _backend;
     private readonly bool _useReflection;
     private readonly Channel<string> _incoming = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true });
+    private readonly Channel<InteropEnvelope> _eventQueue =
+        Channel.CreateUnbounded<InteropEnvelope>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
     private readonly CancellationTokenSource _closing = new();
     private readonly object _gate = new();
     private readonly Dictionary<string, MethodHandler> _methods = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<EventSubscription>> _events = new(StringComparer.Ordinal);
     private readonly List<Task> _calls = [];
     private Task? _pump;
+    private Task? _eventLoop;
     private bool _stopped;
 
     internal InteropBridge(IHermesWindowBackend backend)
@@ -39,7 +42,7 @@ public sealed partial class InteropBridge
 
     /// <summary>
     /// Serializes payloads in both directions, with web defaults (camelCase). Trimmed and native AOT apps add a
-    /// JsonSerializerContext for their payload types to <see cref="JsonSerializerOptions.TypeInfoResolverChain"/> before the app runs.
+    /// JsonSerializerContext for their payload types to <see cref="JsonSerializerOptions.TypeInfoResolverChain"/> before the app runs and before the first Send.
     /// </summary>
     public JsonSerializerOptions SerializerOptions { get; }
 
@@ -54,8 +57,9 @@ public sealed partial class InteropBridge
 
             BridgeJson.Freeze(SerializerOptions, _useReflection);
 
-            // The pump owns the channel's reader and is joined in Stop, so it is not fire-and-forget.
+            // Both loops are joined in Stop, so neither is fire-and-forget.
             _pump = Task.Run(() => PumpAsync(_closing.Token));
+            _eventLoop = Task.Run(() => EventLoopAsync(_closing.Token));
         }
     }
 
@@ -70,11 +74,14 @@ public sealed partial class InteropBridge
             _stopped = true;
             _backend.WebMessageReceived -= OnWebMessageReceived;
             _backend.Closing -= OnClosing;
-            pending = _pump is null ? [.. _calls] : [_pump, .. _calls];
+            pending = _pump is null || _eventLoop is null ? [.. _calls] : [_pump, _eventLoop, .. _calls];
         }
 
         _incoming.Writer.TryComplete();
-        _closing.Cancel();
+        _eventQueue.Writer.TryComplete();
+
+        // Cancelling on the thread pool keeps handlers that resume on cancellation off the UI thread.
+        pending = [.. pending, Task.Run(CancelHandlers)];
 
         // Blocking join: Stop runs after the message loop has ended, where an await could not resume here.
         try
@@ -90,8 +97,19 @@ public sealed partial class InteropBridge
 
     private void OnWebMessageReceived(string message) => _incoming.Writer.TryWrite(message);
 
-    // Cancelling on the thread pool keeps handler continuations off the UI thread while the window closes.
-    private void OnClosing() => ThreadPool.QueueUserWorkItem(static closing => closing.Cancel(), _closing, preferLocal: false);
+    private void OnClosing() => ThreadPool.QueueUserWorkItem(static bridge => bridge.CancelHandlers(), this, preferLocal: false);
+
+    private void CancelHandlers()
+    {
+        try
+        {
+            _closing.Cancel();
+        }
+        catch (AggregateException ex)
+        {
+            HermesLogger.Error("A cancellation callback registered by a bridge handler failed", ex);
+        }
+    }
 
     private async Task PumpAsync(CancellationToken cancellationToken)
     {
@@ -99,6 +117,10 @@ public sealed partial class InteropBridge
         {
             await foreach (var message in _incoming.Reader.ReadAllAsync(cancellationToken))
             {
+                // The reader hands over buffered messages without checking the token.
+                if (cancellationToken.IsCancellationRequested)
+                    break;
+
                 if (!TryParse(message, out var envelope))
                     continue;
 
@@ -108,7 +130,7 @@ public sealed partial class InteropBridge
                         StartCall(envelope, cancellationToken);
                         break;
                     case "event":
-                        await DispatchEventAsync(envelope);
+                        _eventQueue.Writer.TryWrite(envelope);
                         break;
                 }
             }
@@ -119,6 +141,32 @@ public sealed partial class InteropBridge
         catch (Exception ex)
         {
             HermesLogger.Error("The bridge stopped reading messages from the page", ex);
+        }
+        finally
+        {
+            _eventQueue.Writer.TryComplete();
+        }
+    }
+
+    // Events wait for each other here, so calls from the page never wait behind an event handler.
+    private async Task EventLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await foreach (var envelope in _eventQueue.Reader.ReadAllAsync(cancellationToken))
+            {
+                if (cancellationToken.IsCancellationRequested)
+                    break;
+
+                await DispatchEventAsync(envelope, cancellationToken);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            HermesLogger.Error("The bridge stopped handling events from the page", ex);
         }
     }
 
@@ -133,8 +181,9 @@ public sealed partial class InteropBridge
             envelope = JsonSerializer.Deserialize(message, InteropJsonContext.Default.InteropEnvelope)!;
             return envelope is not null;
         }
-        catch (JsonException)
+        catch (Exception)
         {
+            // Anything the reader rejects, such as invalid UTF-16, is not a bridge message.
             return false;
         }
     }
@@ -198,7 +247,7 @@ public sealed partial class InteropBridge
         }
     }
 
-    private async Task DispatchEventAsync(InteropEnvelope envelope)
+    private async Task DispatchEventAsync(InteropEnvelope envelope, CancellationToken cancellationToken)
     {
         var name = envelope.Name ?? "";
         EventSubscription[] subscriptions;
@@ -211,6 +260,9 @@ public sealed partial class InteropBridge
 
         foreach (var subscription in subscriptions)
         {
+            if (cancellationToken.IsCancellationRequested)
+                return;
+
             try
             {
                 var data = subscription.DataType is null
@@ -227,6 +279,9 @@ public sealed partial class InteropBridge
 
     private void Post(string json)
     {
+        if (Volatile.Read(ref _stopped))
+            return;
+
         try
         {
             _backend.BeginInvoke(() => SendToPage(json));
