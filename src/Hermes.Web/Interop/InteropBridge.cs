@@ -1,151 +1,310 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using System.Threading.Channels;
 using Hermes.Abstractions;
+using Hermes.Diagnostics;
 
 namespace Hermes.Web.Interop;
 
-public sealed class InteropBridge
+/// <summary>
+/// Carries calls and events between C# and the page. Handlers run on the thread pool, never the UI thread;
+/// replies and events reach the page through the UI thread, so every member can be used from any thread.
+/// </summary>
+public sealed partial class InteropBridge
 {
     private readonly IHermesWindowBackend _backend;
-    private readonly Dictionary<string, Func<object?[], Task<object?>>> _invokeHandlers;
-    private readonly Dictionary<string, List<Action<object?>>> _eventHandlers;
+    private readonly bool _useReflection;
+    private readonly Channel<string> _incoming = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true });
+    private readonly Channel<InteropEnvelope> _eventQueue =
+        Channel.CreateUnbounded<InteropEnvelope>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+    private readonly CancellationTokenSource _closing = new();
+    private readonly object _gate = new();
+    private readonly Dictionary<string, MethodHandler> _methods = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<EventSubscription>> _events = new(StringComparer.Ordinal);
+    private readonly List<Task> _calls = [];
+    private Task? _pump;
+    private Task? _eventLoop;
+    private bool _stopped;
 
-    internal InteropBridge(
-        IHermesWindowBackend backend,
-        InteropBridgeOptions options)
+    internal InteropBridge(IHermesWindowBackend backend)
+        : this(backend, JsonSerializer.IsReflectionEnabledByDefault)
+    {
+    }
+
+    internal InteropBridge(IHermesWindowBackend backend, bool useReflection)
     {
         _backend = backend;
-        _invokeHandlers = new Dictionary<string, Func<object?[], Task<object?>>>(options.InvokeHandlers);
-        _eventHandlers = new Dictionary<string, List<Action<object?>>>(options.EventHandlers);
-
+        _useReflection = useReflection;
+        SerializerOptions = BridgeJson.CreateOptions();
         _backend.WebMessageReceived += OnWebMessageReceived;
+        _backend.Closing += OnClosing;
     }
 
-    public void Send(string eventName, object? data = null)
+    /// <summary>
+    /// Serializes payloads in both directions, with web defaults (camelCase). Trimmed and native AOT apps add a
+    /// JsonSerializerContext for their payload types to <see cref="JsonSerializerOptions.TypeInfoResolverChain"/> before the app runs and before the first Send.
+    /// </summary>
+    public JsonSerializerOptions SerializerOptions { get; }
+
+    internal TimeSpan StopTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
+    internal void Start()
     {
-        var json = JsonSerializer.Serialize(
-            new EventEnvelope { Name = eventName, Data = data },
-            InteropJsonContext.Default.EventEnvelope);
-        _backend.SendWebMessage(json);
+        lock (_gate)
+        {
+            if (_pump is not null || _stopped)
+                return;
+
+            BridgeJson.Freeze(SerializerOptions, _useReflection);
+
+            // Both loops are joined in Stop, so neither is fire-and-forget.
+            _pump = Task.Run(() => PumpAsync(_closing.Token));
+            _eventLoop = Task.Run(() => EventLoopAsync(_closing.Token));
+        }
     }
 
-    internal void Detach()
+    internal void Stop()
     {
-        _backend.WebMessageReceived -= OnWebMessageReceived;
+        Task[] pending;
+        lock (_gate)
+        {
+            if (_stopped)
+                return;
+
+            _stopped = true;
+            _backend.WebMessageReceived -= OnWebMessageReceived;
+            _backend.Closing -= OnClosing;
+            pending = _pump is null || _eventLoop is null ? [.. _calls] : [_pump, _eventLoop, .. _calls];
+        }
+
+        _incoming.Writer.TryComplete();
+        _eventQueue.Writer.TryComplete();
+
+        // Cancelling on the thread pool keeps handlers that resume on cancellation off the UI thread.
+        pending = [.. pending, Task.Run(CancelHandlers)];
+
+        // Blocking join: Stop runs after the message loop has ended, where an await could not resume here.
+        try
+        {
+            if (!Task.WaitAll(pending, StopTimeout))
+                HermesLogger.Error($"Bridge handlers did not finish within {StopTimeout.TotalSeconds:0.##}s; continuing teardown.");
+        }
+        catch (AggregateException ex)
+        {
+            HermesLogger.Error("A bridge handler failed while the bridge was stopping", ex);
+        }
     }
 
-    private async void OnWebMessageReceived(string message)
+    private void OnWebMessageReceived(string message) => _incoming.Writer.TryWrite(message);
+
+    private void OnClosing() => ThreadPool.QueueUserWorkItem(static bridge => bridge.CancelHandlers(), this, preferLocal: false);
+
+    private void CancelHandlers()
     {
         try
         {
-            var envelope = JsonSerializer.Deserialize(message, InteropJsonContext.Default.InteropEnvelope);
-            if (envelope is null) return;
+            _closing.Cancel();
+        }
+        catch (AggregateException ex)
+        {
+            HermesLogger.Error("A cancellation callback registered by a bridge handler failed", ex);
+        }
+    }
 
-            switch (envelope.Type)
+    private async Task PumpAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await foreach (var message in _incoming.Reader.ReadAllAsync(cancellationToken))
             {
-                case "invoke":
-                    await HandleInvokeAsync(envelope);
+                // The reader hands over buffered messages without checking the token.
+                if (cancellationToken.IsCancellationRequested)
                     break;
-                case "event":
-                    HandleEvent(envelope);
-                    break;
+
+                if (!TryParse(message, out var envelope))
+                    continue;
+
+                switch (envelope.Type)
+                {
+                    case "invoke":
+                        StartCall(envelope, cancellationToken);
+                        break;
+                    case "event":
+                        _eventQueue.Writer.TryWrite(envelope);
+                        break;
+                }
             }
         }
-        catch (JsonException ex)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            Console.Error.WriteLine($"[Hermes.Web] Ignoring non-bridge message: {ex.Message}");
-        }
-    }
-
-    private async Task HandleInvokeAsync(InteropEnvelope envelope)
-    {
-        var id = envelope.Id ?? "";
-        var method = envelope.Method ?? "";
-
-        if (!_invokeHandlers.TryGetValue(method, out var handler))
-        {
-            SendError(id, $"Method not found: {method}");
-            return;
-        }
-
-        try
-        {
-            var args = envelope.Args?.Select(e => (object?)e).ToArray() ?? [];
-            var result = await handler(args);
-            SendResult(id, result);
         }
         catch (Exception ex)
         {
-            SendError(id, ex.Message);
+            HermesLogger.Error("The bridge stopped reading messages from the page", ex);
+        }
+        finally
+        {
+            _eventQueue.Writer.TryComplete();
         }
     }
 
-    private void HandleEvent(InteropEnvelope envelope)
+    // Events wait for each other here, so calls from the page never wait behind an event handler.
+    private async Task EventLoopAsync(CancellationToken cancellationToken)
     {
-        var name = envelope.Name ?? "";
-        if (!_eventHandlers.TryGetValue(name, out var handlers))
+        try
+        {
+            await foreach (var envelope in _eventQueue.Reader.ReadAllAsync(cancellationToken))
+            {
+                if (IsStopping(cancellationToken))
+                    break;
+
+                await DispatchEventAsync(envelope, cancellationToken);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            HermesLogger.Error("The bridge stopped handling events from the page", ex);
+        }
+    }
+
+    private static bool TryParse(string message, out InteropEnvelope envelope)
+    {
+        envelope = null!;
+        if (message.Length == 0 || message[0] != '{')
+            return false;
+
+        try
+        {
+            envelope = JsonSerializer.Deserialize(message, InteropJsonContext.Default.InteropEnvelope)!;
+            return envelope is not null;
+        }
+        catch (Exception)
+        {
+            // Anything the reader rejects, such as invalid UTF-16, is not a bridge message.
+            return false;
+        }
+    }
+
+    private void StartCall(InteropEnvelope envelope, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            if (_stopped)
+                return;
+
+            _calls.RemoveAll(static call => call.IsCompleted);
+
+            // Each call observes its own failures and is joined in Stop, so none is fire-and-forget.
+            _calls.Add(Task.Run(() => RunCallAsync(envelope, cancellationToken)));
+        }
+    }
+
+    private async Task RunCallAsync(InteropEnvelope envelope, CancellationToken cancellationToken)
+    {
+        var id = envelope.Id;
+        if (string.IsNullOrEmpty(id))
             return;
 
-        object? data = envelope.Data?.ValueKind == JsonValueKind.Undefined ? null : envelope.Data;
-
-        foreach (var handler in handlers)
+        var method = envelope.Method ?? "";
+        try
         {
+            MethodHandler? handler;
+            lock (_gate)
+                _methods.TryGetValue(method, out handler);
+
+            if (handler is null)
+            {
+                Post(BridgeJson.Error(id, $"Method not found: {method}"));
+                return;
+            }
+
+            var args = envelope.Args ?? [];
+            if (args.Length != handler.ParameterTypes.Length)
+            {
+                Post(BridgeJson.Error(id, $"'{method}' takes {handler.ParameterTypes.Length} argument(s) but was called with {args.Length}"));
+                return;
+            }
+
+            var values = new object?[args.Length];
+            for (var i = 0; i < args.Length; i++)
+                values[i] = BridgeJson.Read(args[i], BridgeJson.GetTypeInfo(SerializerOptions, handler.ParameterTypes[i]));
+
+            var result = await handler.Invoke(values, cancellationToken);
+            var resultType = handler.ResultType is null ? null : BridgeJson.GetTypeInfo(SerializerOptions, handler.ResultType);
+            Post(BridgeJson.Result(id, result, resultType));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The window closed, so there is no page left to reply to.
+        }
+        catch (Exception ex)
+        {
+            HermesLogger.Error($"Bridge method '{method}' failed", ex);
+            Post(BridgeJson.Error(id, ex.Message));
+        }
+    }
+
+    private async Task DispatchEventAsync(InteropEnvelope envelope, CancellationToken cancellationToken)
+    {
+        var name = envelope.Name ?? "";
+        EventSubscription[] subscriptions;
+        lock (_gate)
+        {
+            if (!_events.TryGetValue(name, out var list))
+                return;
+            subscriptions = [.. list];
+        }
+
+        foreach (var subscription in subscriptions)
+        {
+            if (IsStopping(cancellationToken))
+                return;
+
             try
             {
-                handler(data);
+                var data = subscription.DataType is null
+                    ? null
+                    : BridgeJson.Read(envelope.Data, BridgeJson.GetTypeInfo(SerializerOptions, subscription.DataType));
+                await subscription.Invoke(data);
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"[Hermes.Web] Event handler error for '{name}': {ex.Message}");
+                HermesLogger.Error($"Bridge event handler for '{name}' failed", ex);
             }
         }
     }
 
-    private void SendResult(string id, object? value)
+    // Stop sets the flag before it returns; the cancellation it queues on the thread pool can come later.
+    private bool IsStopping(CancellationToken cancellationToken) =>
+        cancellationToken.IsCancellationRequested || Volatile.Read(ref _stopped);
+
+    private void Post(string json)
     {
-        var json = JsonSerializer.Serialize(
-            new ResultEnvelope { Id = id, Value = value },
-            InteropJsonContext.Default.ResultEnvelope);
-        _backend.SendWebMessage(json);
+        if (Volatile.Read(ref _stopped))
+            return;
+
+        try
+        {
+            _backend.BeginInvoke(() => SendToPage(json));
+        }
+        catch (Exception ex)
+        {
+            HermesLogger.Error("The bridge could not reach the UI thread", ex);
+        }
     }
 
-    private void SendError(string id, string message)
+    private void SendToPage(string json)
     {
-        var json = JsonSerializer.Serialize(
-            new ErrorEnvelope { Id = id, Message = message },
-            InteropJsonContext.Default.ErrorEnvelope);
-        _backend.SendWebMessage(json);
-    }
-
-    [RequiresUnreferencedCode("Handler argument types must be preserved by the consuming application")]
-    [RequiresDynamicCode("Handler argument deserialization may require runtime code generation")]
-    internal static TArg DeserializeArg<TArg>(object?[] args, int index)
-    {
-        if (index >= args.Length)
-            throw new ArgumentException($"Expected argument at index {index} but only {args.Length} args provided");
-
-        var raw = args[index];
-
-        if (raw is JsonElement element)
-            return element.Deserialize<TArg>()!;
-
-        if (raw is TArg typed)
-            return typed;
-
-        return (TArg)Convert.ChangeType(raw!, typeof(TArg))!;
-    }
-
-    [RequiresUnreferencedCode("Event data types must be preserved by the consuming application")]
-    [RequiresDynamicCode("Event data deserialization may require runtime code generation")]
-    internal static T DeserializeData<T>(object? data)
-    {
-        if (data is JsonElement element)
-            return element.Deserialize<T>()!;
-
-        if (data is T typed)
-            return typed;
-
-        return (T)Convert.ChangeType(data!, typeof(T))!;
+        try
+        {
+            _backend.SendWebMessage(json);
+        }
+        catch (Exception ex)
+        {
+            HermesLogger.Error("The bridge could not send a message to the page", ex);
+        }
     }
 }

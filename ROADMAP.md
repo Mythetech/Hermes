@@ -73,7 +73,7 @@ Enable React, Vue, Angular, Svelte and other JS/TS frameworks as an alternative 
 
 - [ ] CI builds the npm packages and boots the web samples on every platform
 - [ ] Publish the npm packages (scope name to be confirmed) from a workflow
-- [ ] Bridge: complex result and payload types, more than one argument, logging through the Hermes logger
+- [x] Bridge: complex result and payload types, more than one argument, logging through the Hermes logger
 - [ ] Auto-detect mode (dev server if running, else static files), replacing `#if DEBUG` in the samples
 - [ ] Host parity with `Hermes.Blazor`: dependency injection, hosted services, smoke mode
 

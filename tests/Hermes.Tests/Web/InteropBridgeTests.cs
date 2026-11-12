@@ -1,181 +1,617 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
-using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Hermes.Testing;
 using Hermes.Web.Interop;
 using Xunit;
 
 namespace Hermes.Tests.Web;
 
-[SuppressMessage("Trimming", "IL2026")]
-[SuppressMessage("AOT", "IL3050")]
-public sealed class InteropBridgeTests
+public sealed class InteropBridgeTests : IDisposable
 {
-    private static (InteropBridge Bridge, RecordingWindowBackend Backend) CreateBridge(
-        Action<InteropBridgeOptions>? configure = null)
+    private static readonly TimeSpan Wait = TimeSpan.FromSeconds(5);
+    private readonly List<InteropBridge> _bridges = [];
+
+    public void Dispose()
     {
-        var backend = new RecordingWindowBackend();
-        var options = new InteropBridgeOptions();
-        configure?.Invoke(options);
-        var bridge = new InteropBridge(backend, options);
-        return (bridge, backend);
+        foreach (var bridge in _bridges)
+            bridge.Stop();
     }
 
     [Fact]
-    public void Send_SendsEventEnvelopeToBackend()
+    public async Task Invoke_ReturnsARecordAsCamelCaseJson()
     {
-        var (bridge, backend) = CreateBridge();
+        var (_, backend) = Start(b => b.Handle("person", () => new Person("Ada", 36)));
 
-        bridge.Send("greeting", "hello");
+        backend.SimulateWebMessage(Invoke("1", "person"));
 
-        Assert.Single(backend.Recording.WebMessagesSent);
-        var json = backend.Recording.WebMessagesSent[0];
-        using var doc = JsonDocument.Parse(json);
-        Assert.Equal("event", doc.RootElement.GetProperty("type").GetString());
-        Assert.Equal("greeting", doc.RootElement.GetProperty("name").GetString());
+        var reply = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("result", reply.GetProperty("type").GetString());
+        Assert.Equal("1", reply.GetProperty("id").GetString());
+        Assert.Equal("""{"name":"Ada","age":36}""", reply.GetProperty("value").GetRawText());
     }
 
     [Fact]
-    public void Send_WithNullData_SendsEnvelopeWithNullData()
+    public async Task Invoke_ReturnsArraysAndDictionaries()
     {
-        var (bridge, backend) = CreateBridge();
+        var (_, backend) = Start(b =>
+        {
+            b.Handle("list", () => new[] { 1, 2 });
+            b.Handle("map", () => new Dictionary<string, int> { ["a"] = 1 });
+        });
+
+        backend.SimulateWebMessage(Invoke("1", "list"));
+        await SentAsync(backend, 1);
+        backend.SimulateWebMessage(Invoke("2", "map"));
+        var replies = await SentAsync(backend, 2);
+
+        Assert.Equal("[1,2]", replies[0].GetProperty("value").GetRawText());
+        Assert.Equal("""{"a":1}""", replies[1].GetProperty("value").GetRawText());
+    }
+
+    [Fact]
+    public async Task Invoke_PassesFourArgumentsInOrder()
+    {
+        var (_, backend) = Start(b => b.Handle(
+            "four",
+            (int a, string text, bool flag, double d) => $"{a}|{text}|{flag}|{d.ToString(CultureInfo.InvariantCulture)}"));
+
+        backend.SimulateWebMessage(Invoke("1", "four", """[1,"x",true,2.5]"""));
+
+        var reply = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("1|x|True|2.5", reply.GetProperty("value").GetString());
+    }
+
+    [Fact]
+    public async Task Invoke_DeserializesARecordArgument()
+    {
+        var (_, backend) = Start(b => b.Handle("describe", (Person p) => $"{p.Name} is {p.Age}"));
+
+        backend.SimulateWebMessage(Invoke("1", "describe", """[{"name":"Ada","age":36}]"""));
+
+        var reply = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("Ada is 36", reply.GetProperty("value").GetString());
+    }
+
+    [Fact]
+    public async Task Invoke_WithTheWrongArgumentCount_RepliesWithAnError()
+    {
+        var (_, backend) = Start(b => b.Handle("echo", (string s) => s));
+
+        backend.SimulateWebMessage(Invoke("1", "echo"));
+
+        var reply = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("error", reply.GetProperty("type").GetString());
+        Assert.Equal("'echo' takes 1 argument(s) but was called with 0", reply.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task Invoke_UnknownMethod_RepliesWithAnError()
+    {
+        var (_, backend) = Start();
+
+        backend.SimulateWebMessage(Invoke("7", "missing"));
+
+        var reply = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("error", reply.GetProperty("type").GetString());
+        Assert.Equal("7", reply.GetProperty("id").GetString());
+        Assert.Equal("Method not found: missing", reply.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task Invoke_HandlerThrows_RepliesWithItsMessage()
+    {
+        var (_, backend) = Start(b => b.Handle<string>("fail", () => throw new InvalidOperationException("boom")));
+
+        backend.SimulateWebMessage(Invoke("1", "fail"));
+
+        var reply = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("error", reply.GetProperty("type").GetString());
+        Assert.Equal("boom", reply.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task Invoke_RunsTheHandlerOffTheUiThread()
+    {
+        var handlerThread = 0;
+        var (_, backend) = Start(b => b.Handle("where", () => handlerThread = Environment.CurrentManagedThreadId));
+
+        backend.SimulateWebMessage(Invoke("1", "where"));
+        await SentAsync(backend, 1);
+
+        Assert.NotEqual(0, handlerThread);
+        Assert.NotEqual(backend.UIThreadId, handlerThread);
+    }
+
+    [Fact]
+    public async Task Invoke_ASlowHandlerDoesNotBlockTheNextInvoke()
+    {
+        var release = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (_, backend) = Start(b =>
+        {
+            b.HandleAsync("slow", () => release.Task);
+            b.Handle("fast", () => "fast");
+        });
+
+        backend.SimulateWebMessage(Invoke("1", "slow"));
+        backend.SimulateWebMessage(Invoke("2", "fast"));
+
+        var first = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("2", first.GetProperty("id").GetString());
+
+        release.SetResult("slow");
+        var replies = await SentAsync(backend, 2);
+        Assert.Equal("1", replies[1].GetProperty("id").GetString());
+    }
+
+    [Fact]
+    public async Task Invoke_RepliesThroughTheUiThreadQueue()
+    {
+        var handled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (_, backend) = Start(b => b.Handle("ping", () =>
+        {
+            handled.SetResult();
+            return "pong";
+        }));
+
+        backend.SimulateWebMessage(Invoke("1", "ping"));
+        await handled.Task.WaitAsync(Wait);
+        await Task.Delay(100);
+
+        Assert.Empty(backend.Recording.WebMessagesSent);
+        Assert.Single(await SentAsync(backend, 1));
+    }
+
+    [Fact]
+    public async Task HandleAsync_TokenIsCancelledWhenTheWindowCloses()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (_, backend) = Start(b => b.HandleAsync("wait", async ct =>
+        {
+            started.SetResult();
+            try
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                cancelled.SetResult();
+                throw;
+            }
+        }));
+
+        backend.SimulateWebMessage(Invoke("1", "wait"));
+        await started.Task.WaitAsync(Wait);
+        backend.Close();
+
+        await cancelled.Task.WaitAsync(Wait);
+    }
+
+    [Fact]
+    public async Task Events_AreDeliveredInArrivalOrder()
+    {
+        var received = new List<int>();
+        var (_, backend) = Start(b => b.On<int>("n", n =>
+        {
+            lock (received)
+                received.Add(n);
+        }));
+
+        for (var i = 1; i <= 20; i++)
+            backend.SimulateWebMessage(Event("n", i.ToString(CultureInfo.InvariantCulture)));
+
+        await WaitUntilAsync(() => { lock (received) return received.Count == 20; });
+        Assert.Equal(Enumerable.Range(1, 20), received);
+    }
+
+    [Fact]
+    public async Task On_AsyncHandler_FinishesBeforeTheNextEventStarts()
+    {
+        var log = new List<string>();
+        var (_, backend) = Start(b => b.On<int>("n", async n =>
+        {
+            lock (log)
+                log.Add($"start {n}");
+            await Task.Delay(30);
+            lock (log)
+                log.Add($"end {n}");
+        }));
+
+        backend.SimulateWebMessage(Event("n", "1"));
+        backend.SimulateWebMessage(Event("n", "2"));
+
+        await WaitUntilAsync(() => { lock (log) return log.Count == 4; });
+        Assert.Equal(["start 1", "end 1", "start 2", "end 2"], log);
+    }
+
+    [Fact]
+    public async Task On_DisposingTheSubscription_StopsDelivery()
+    {
+        var pings = 0;
+        var markers = 0;
+        var (bridge, backend) = Start();
+        var subscription = bridge.On("ping", () => Interlocked.Increment(ref pings));
+        bridge.On("marker", () => Interlocked.Increment(ref markers));
+
+        backend.SimulateWebMessage(Event("ping"));
+        await WaitUntilAsync(() => Volatile.Read(ref pings) == 1);
+        subscription.Dispose();
+        backend.SimulateWebMessage(Event("ping"));
+        backend.SimulateWebMessage(Event("marker"));
+        await WaitUntilAsync(() => Volatile.Read(ref markers) == 1);
+
+        Assert.Equal(1, Volatile.Read(ref pings));
+    }
+
+    [Fact]
+    public async Task Event_WithoutDataForAValueTypeHandler_IsSkippedAndLaterMessagesStillFlow()
+    {
+        var received = new List<int>();
+        var (_, backend) = Start(b => b.On<int>("n", n =>
+        {
+            lock (received)
+                received.Add(n);
+        }));
+
+        backend.SimulateWebMessage("""{"type":"event","name":"n"}""");
+        backend.SimulateWebMessage(Event("n", "5"));
+
+        await WaitUntilAsync(() => { lock (received) return received.Count == 1; });
+        Assert.Equal([5], received);
+    }
+
+    [Fact]
+    public async Task Send_SerializesAnObjectPayloadAsCamelCase()
+    {
+        var (bridge, backend) = Start();
+
+        bridge.Send("person", new Person("Ada", 36));
+
+        var message = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("event", message.GetProperty("type").GetString());
+        Assert.Equal("person", message.GetProperty("name").GetString());
+        Assert.Equal("""{"name":"Ada","age":36}""", message.GetProperty("data").GetRawText());
+    }
+
+    [Fact]
+    public async Task Send_WithoutData_SendsNull()
+    {
+        var (bridge, backend) = Start();
 
         bridge.Send("ping");
 
-        var json = backend.Recording.WebMessagesSent[0];
-        using var doc = JsonDocument.Parse(json);
-        Assert.Equal("ping", doc.RootElement.GetProperty("name").GetString());
+        var message = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal(JsonValueKind.Null, message.GetProperty("data").ValueKind);
     }
 
     [Fact]
-    public async Task Invoke_RegisteredMethod_SendsResultEnvelope()
+    public async Task Send_FromABackgroundThread_IsSentThroughTheUiThreadQueue()
     {
-        var (bridge, backend) = CreateBridge(opts =>
+        var (bridge, backend) = Start();
+
+        await Task.Run(() => bridge.Send("tick", 1));
+
+        Assert.Empty(backend.Recording.WebMessagesSent);
+        Assert.Single(await SentAsync(backend, 1));
+    }
+
+    [Fact]
+    public void WithoutReflection_MissingMetadata_ErrorNamesTheTypeAndTheFix()
+    {
+        var (bridge, _) = Start(useReflection: false);
+
+        var error = Assert.Throws<NotSupportedException>(() => bridge.Send("person", new Person("Ada", 36)));
+
+        Assert.Contains(typeof(Person).FullName!, error.Message);
+        Assert.Contains("JsonSerializerContext", error.Message);
+    }
+
+    [Fact]
+    public async Task WithoutReflection_AnAddedContext_SuppliesTheMetadata()
+    {
+        var (_, backend) = Start(
+            b =>
+            {
+                b.SerializerOptions.TypeInfoResolverChain.Add(BridgeTestJsonContext.Default);
+                b.Handle("person", () => new Person("Ada", 36));
+            },
+            useReflection: false);
+
+        backend.SimulateWebMessage(Invoke("1", "person"));
+
+        var reply = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("""{"name":"Ada","age":36}""", reply.GetProperty("value").GetRawText());
+    }
+
+    [Fact]
+    public void Handle_SameMethodTwice_Throws()
+    {
+        var (bridge, _) = Start(b => b.Handle("one", () => 1));
+
+        Assert.Throws<ArgumentException>(() => bridge.Handle("one", () => 2));
+    }
+
+    [Fact]
+    public void Stop_ReturnsAfterTheTimeout_WhenAHandlerNeverFinishes()
+    {
+        var never = new TaskCompletionSource<int>();
+        var started = new ManualResetEventSlim();
+        var backend = new RecordingWindowBackend();
+        var bridge = new InteropBridge(backend) { StopTimeout = TimeSpan.FromMilliseconds(200) };
+        bridge.HandleAsync("hang", () =>
         {
-            opts.Register<string>("greet", () => "hello");
+            started.Set();
+            return never.Task;
         });
+        bridge.Start();
 
-        backend.SimulateWebMessage("""{"type":"invoke","id":"1","method":"greet","args":[]}""");
+        backend.SimulateWebMessage(Invoke("1", "hang"));
+        Assert.True(started.Wait(Wait));
+        var stopwatch = Stopwatch.StartNew();
+        bridge.Stop();
 
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(2), $"Stop took {stopwatch.Elapsed}");
+    }
+
+    [Fact]
+    public async Task NonBridgeMessages_AreIgnored()
+    {
+        var (_, backend) = Start(b => b.Handle("ping", () => "pong"));
+
+        backend.SimulateWebMessage("not json");
+        backend.SimulateWebMessage("""{"type":"hermes-drag","action":"drag"}""");
+        backend.SimulateWebMessage(Invoke("1", "ping"));
+
+        var reply = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("pong", reply.GetProperty("value").GetString());
         await Task.Delay(50);
-
-        var resultMessages = backend.Recording.WebMessagesSent;
-        Assert.Single(resultMessages);
-
-        using var doc = JsonDocument.Parse(resultMessages[0]);
-        Assert.Equal("result", doc.RootElement.GetProperty("type").GetString());
-        Assert.Equal("1", doc.RootElement.GetProperty("id").GetString());
-        Assert.Equal("hello", doc.RootElement.GetProperty("value").GetString());
+        backend.ProcessPending();
+        Assert.Single(backend.Recording.WebMessagesSent);
     }
 
     [Fact]
-    public async Task Invoke_UnknownMethod_SendsErrorEnvelope()
+    public async Task MessagesBeforeStart_AreHandledOnceStarted()
     {
-        var (bridge, backend) = CreateBridge();
+        var backend = new RecordingWindowBackend();
+        var bridge = new InteropBridge(backend);
+        _bridges.Add(bridge);
+        bridge.Handle("ping", () => "pong");
 
-        backend.SimulateWebMessage("""{"type":"invoke","id":"2","method":"unknown","args":[]}""");
+        backend.SimulateWebMessage(Invoke("1", "ping"));
+        bridge.Start();
 
-        await Task.Delay(50);
-
-        var resultMessages = backend.Recording.WebMessagesSent;
-        Assert.Single(resultMessages);
-
-        using var doc = JsonDocument.Parse(resultMessages[0]);
-        Assert.Equal("error", doc.RootElement.GetProperty("type").GetString());
-        Assert.Contains("Method not found", doc.RootElement.GetProperty("message").GetString());
+        var reply = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("pong", reply.GetProperty("value").GetString());
     }
 
     [Fact]
-    public async Task Invoke_HandlerThrows_SendsErrorEnvelope()
+    public void Stop_WhenACancellationCallbackThrows_StillReturns()
     {
-        var (bridge, backend) = CreateBridge(opts =>
+        var started = new ManualResetEventSlim();
+        var (bridge, backend) = Start(b => b.HandleAsync("wait", async ct =>
         {
-            opts.Register<string>("fail", () => throw new InvalidOperationException("boom"));
+            ct.Register(() => throw new InvalidOperationException("callback"));
+            started.Set();
+            await Task.Delay(Timeout.Infinite, ct);
+        }));
+
+        backend.SimulateWebMessage(Invoke("1", "wait"));
+        Assert.True(started.Wait(Wait));
+
+        Assert.Null(Record.Exception(bridge.Stop));
+    }
+
+    [Fact]
+    public void Stop_ResumesCancelledHandlersOffTheUiThread()
+    {
+        var started = new ManualResetEventSlim();
+        var resumed = new ManualResetEventSlim();
+        var resumedOn = 0;
+        var (bridge, backend) = Start(b => b.HandleAsync("wait", async ct =>
+        {
+            var cancelled = new TaskCompletionSource();
+            using var registration = ct.Register(() => cancelled.TrySetCanceled());
+            started.Set();
+            try
+            {
+                await cancelled.Task;
+            }
+            finally
+            {
+                resumedOn = Environment.CurrentManagedThreadId;
+                resumed.Set();
+            }
+        }));
+
+        backend.SimulateWebMessage(Invoke("1", "wait"));
+        Assert.True(started.Wait(Wait));
+
+        // Main has no synchronization context once the loop has ended, unlike a test thread.
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(null);
+        try
+        {
+            bridge.Stop();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        Assert.True(resumed.Wait(Wait));
+        Assert.NotEqual(backend.UIThreadId, resumedOn);
+    }
+
+    [Fact]
+    public async Task Stop_DropsEventsThatAreStillQueued()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var entered = new ManualResetEventSlim();
+        var later = 0;
+        var backend = new RecordingWindowBackend();
+        var bridge = new InteropBridge(backend) { StopTimeout = TimeSpan.FromMilliseconds(200) };
+        _bridges.Add(bridge);
+        bridge.On("slow", async () =>
+        {
+            entered.Set();
+            await gate.Task;
+        });
+        bridge.On("later", () => Interlocked.Increment(ref later));
+        bridge.Start();
+
+        backend.SimulateWebMessage(Event("slow"));
+        for (var i = 0; i < 3; i++)
+            backend.SimulateWebMessage(Event("later"));
+        Assert.True(entered.Wait(Wait));
+        bridge.Stop();
+        gate.SetResult();
+        await Task.Delay(200);
+
+        Assert.Equal(0, Volatile.Read(ref later));
+    }
+
+    [Fact]
+    public async Task Invoke_IsNotHeldUpByASlowEventHandler()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (_, backend) = Start(b =>
+        {
+            b.On("slow", () => gate.Task);
+            b.Handle("fast", () => "fast");
         });
 
-        backend.SimulateWebMessage("""{"type":"invoke","id":"3","method":"fail","args":[]}""");
+        backend.SimulateWebMessage(Event("slow"));
+        backend.SimulateWebMessage(Invoke("1", "fast"));
 
-        await Task.Delay(50);
-
-        var resultMessages = backend.Recording.WebMessagesSent;
-        Assert.Single(resultMessages);
-
-        using var doc = JsonDocument.Parse(resultMessages[0]);
-        Assert.Equal("error", doc.RootElement.GetProperty("type").GetString());
-        Assert.Contains("boom", doc.RootElement.GetProperty("message").GetString());
+        var reply = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("fast", reply.GetProperty("value").GetString());
+        gate.SetResult();
     }
 
     [Fact]
-    public async Task Invoke_AsyncHandler_SendsResultEnvelope()
+    public async Task Handle_WithATrailingCancellationToken_TakesTheTokenFromTheBridge()
     {
-        var (bridge, backend) = CreateBridge(opts =>
+        var (_, backend) = Start(b => b.Handle("echo", (string s, CancellationToken ct) => ct.CanBeCanceled ? s : "no token"));
+
+        backend.SimulateWebMessage(Invoke("1", "echo", """["hi"]"""));
+
+        var reply = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("hi", reply.GetProperty("value").GetString());
+    }
+
+    [Fact]
+    public async Task HandleAsync_WithATrailingCancellationToken_TakesTheTokenFromTheBridge()
+    {
+        var (_, backend) = Start(b => b.HandleAsync("echo", async (string s, CancellationToken ct) =>
         {
-            opts.RegisterAsync<string>("asyncGreet", () => Task.FromResult("async hello"));
-        });
+            await Task.Yield();
+            return ct.CanBeCanceled ? s : "no token";
+        }));
 
-        backend.SimulateWebMessage("""{"type":"invoke","id":"4","method":"asyncGreet","args":[]}""");
+        backend.SimulateWebMessage(Invoke("1", "echo", """["hi"]"""));
 
-        await Task.Delay(50);
-
-        var resultMessages = backend.Recording.WebMessagesSent;
-        Assert.Single(resultMessages);
-
-        using var doc = JsonDocument.Parse(resultMessages[0]);
-        Assert.Equal("result", doc.RootElement.GetProperty("type").GetString());
-        Assert.Equal("async hello", doc.RootElement.GetProperty("value").GetString());
+        var reply = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("hi", reply.GetProperty("value").GetString());
     }
 
     [Fact]
-    public void Event_RegisteredHandler_InvokesHandler()
+    public void Handle_WithAnAsyncLambda_Throws()
     {
-        var received = false;
-        var (bridge, backend) = CreateBridge(opts =>
+        var (bridge, _) = Start();
+
+        var error = Assert.Throws<ArgumentException>(() => bridge.Handle("load", async () =>
         {
-            opts.On("click", () => received = true);
-        });
+            await Task.Yield();
+            return 1;
+        }));
 
-        backend.SimulateWebMessage("""{"type":"event","name":"click"}""");
-
-        Assert.True(received);
+        Assert.Contains("HandleAsync", error.Message);
     }
 
     [Fact]
-    public void Event_UnregisteredName_DoesNotThrow()
+    public void Handle_WithACancellationTokenThatIsNotLast_Throws()
     {
-        var (bridge, backend) = CreateBridge();
+        var (bridge, _) = Start();
 
-        var ex = Record.Exception(() =>
-            backend.SimulateWebMessage("""{"type":"event","name":"unknown"}"""));
-
-        Assert.Null(ex);
+        Assert.Throws<ArgumentException>(() => bridge.Handle("x", (CancellationToken ct, string s) => s));
     }
 
     [Fact]
-    public void NonJsonMessage_DoesNotThrow()
+    public async Task AMessageThatCannotBeRead_DoesNotStopTheBridge()
     {
-        var (bridge, backend) = CreateBridge();
+        var (_, backend) = Start(b => b.Handle("ping", () => "pong"));
 
-        var ex = Record.Exception(() =>
-            backend.SimulateWebMessage("this is not json"));
+        backend.SimulateWebMessage("{\"type\":\"event\",\"name\":\"\uD800\"}");
+        backend.SimulateWebMessage(Invoke("1", "ping"));
 
-        Assert.Null(ex);
+        var reply = Assert.Single(await SentAsync(backend, 1));
+        Assert.Equal("pong", reply.GetProperty("value").GetString());
     }
 
     [Fact]
-    public void Detach_StopsProcessingMessages()
+    public void Send_AfterStop_SendsNothing()
     {
-        var callCount = 0;
-        var (bridge, backend) = CreateBridge(opts =>
+        var (bridge, backend) = Start();
+        bridge.Stop();
+
+        bridge.Send("late");
+        bridge.Send("late", 1);
+        backend.ProcessPending();
+
+        Assert.Empty(backend.Recording.WebMessagesSent);
+    }
+
+    private (InteropBridge Bridge, RecordingWindowBackend Backend) Start(
+        Action<InteropBridge>? configure = null,
+        bool useReflection = true)
+    {
+        var backend = new RecordingWindowBackend();
+        var bridge = new InteropBridge(backend, useReflection);
+        _bridges.Add(bridge);
+        configure?.Invoke(bridge);
+        bridge.Start();
+        return (bridge, backend);
+    }
+
+    private static string Invoke(string id, string method, string args = "[]") =>
+        $$"""{"type":"invoke","id":"{{id}}","method":"{{method}}","args":{{args}}}""";
+
+    private static string Event(string name, string data = "null") =>
+        $$"""{"type":"event","name":"{{name}}","data":{{data}}}""";
+
+    /// <summary>Drains the UI-thread queue until <paramref name="count"/> messages have been sent.</summary>
+    private static async Task<IReadOnlyList<JsonElement>> SentAsync(RecordingWindowBackend backend, int count)
+    {
+        var deadline = DateTime.UtcNow + Wait;
+        while (DateTime.UtcNow < deadline)
         {
-            opts.On("ping", () => callCount++);
-        });
+            backend.ProcessPending();
+            if (backend.Recording.WebMessagesSent.Count >= count)
+                break;
+            await Task.Delay(5);
+        }
 
-        backend.SimulateWebMessage("""{"type":"event","name":"ping"}""");
-        Assert.Equal(1, callCount);
+        var sent = backend.Recording.WebMessagesSent;
+        Assert.True(sent.Count >= count, $"Expected {count} sent message(s), got {sent.Count}.");
+        return sent.Select(m => JsonDocument.Parse(m).RootElement.Clone()).ToList();
+    }
 
-        bridge.Detach();
-
-        backend.SimulateWebMessage("""{"type":"event","name":"ping"}""");
-        Assert.Equal(1, callCount);
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow + Wait;
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < deadline, "Timed out waiting for the bridge.");
+            await Task.Delay(5);
+        }
     }
 }
+
+public sealed record Person(string Name, int Age);
+
+[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
+[JsonSerializable(typeof(Person))]
+internal sealed partial class BridgeTestJsonContext : JsonSerializerContext;

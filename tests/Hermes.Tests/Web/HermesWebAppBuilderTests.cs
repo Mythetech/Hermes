@@ -32,8 +32,7 @@ public sealed class HermesWebAppBuilderTests
             .ConfigureWindow(opts => opts.Title = "Test")
             .UseStaticFiles()
             .UseSpaFallback()
-            .UseDevServer("http://localhost:5173")
-            .UseInteropBridge(opts => { });
+            .UseDevServer("http://localhost:5173");
 
         Assert.Same(builder, result);
     }

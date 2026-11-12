@@ -10,7 +10,6 @@ public sealed class HermesWebAppBuilder
     private string? _staticFilesPath;
     private bool _spaFallback;
     private string? _devServerUrl;
-    private Action<InteropBridgeOptions>? _bridgeConfiguration;
 
     private HermesWebAppBuilder()
     {
@@ -42,12 +41,6 @@ public sealed class HermesWebAppBuilder
     public HermesWebAppBuilder UseDevServer(string url)
     {
         _devServerUrl = url;
-        return this;
-    }
-
-    public HermesWebAppBuilder UseInteropBridge(Action<InteropBridgeOptions> configure)
-    {
-        _bridgeConfiguration = configure;
         return this;
     }
 
@@ -108,16 +101,7 @@ public sealed class HermesWebAppBuilder
             window.Load(baseUri);
         }
 
-        // Configure interop bridge
-        InteropBridge? bridge = null;
-        if (_bridgeConfiguration is not null)
-        {
-            var bridgeOptions = new InteropBridgeOptions();
-            _bridgeConfiguration(bridgeOptions);
-            bridge = new InteropBridge(window.Backend, bridgeOptions);
-        }
-
-        return new HermesWebApp(window, bridge);
+        return new HermesWebApp(window, new InteropBridge(window.Backend));
     }
 
     private static void ApplyOptions(HermesWindow window, HermesWindowOptions options) =>
