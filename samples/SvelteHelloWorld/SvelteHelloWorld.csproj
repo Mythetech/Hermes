@@ -34,4 +34,7 @@
     <Message Importance="high" Text="Copied native macOS library to $(PublishDir)" />
   </Target>
 
+  <!-- Package consumers get these targets from NuGet; a project reference needs the import. -->
+  <Import Project="..\..\src\Hermes.Web\build\Mythetech.Hermes.Web.targets" />
+
 </Project>

@@ -62,8 +62,9 @@ jobs:
       - name: Restore
         run: dotnet restore
 
+      # The web sample frontends link to the npm packages under packages/, which this workflow does not build.
       - name: Build
-        run: dotnet build -c Release --no-restore
+        run: dotnet build -c Release --no-restore -p:HermesFrontendBuild=false
 
       - name: Test
         run: dotnet test -c Release --no-build --verbosity normal

@@ -76,6 +76,7 @@ Enable React, Vue, Angular, Svelte and other JS/TS frameworks as an alternative 
 - [x] Bridge: complex result and payload types, more than one argument, logging through the Hermes logger
 - [ ] Auto-detect mode (dev server if running, else static files), replacing `#if DEBUG` in the samples
 - [ ] Host parity with `Hermes.Blazor`: dependency injection, hosted services, smoke mode
+- [x] MSBuild targets in the package build the frontend and copy it into `wwwroot` on publish and Release builds
 
 **Enterprise value:**
 
