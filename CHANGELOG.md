@@ -2,15 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
-
-### Fixed
-
-- Saved window state is no longer lost or corrupted when two copies of an app save it at the same moment. Every save now writes its own temp file before the atomic rename; they used to share one
+## [1.4.7] - 2026-11-12
 
 ### Changed
 
-- The unit tests write window state to a temp file per test process instead of the user's own data directory, so the `net10.0` and `net11.0` runs no longer share one file
+- The packages carry the new Hermes icon on NuGet
+
+### Fixed
+
+- macOS: a drag region (`data-hermes-drag` or the `hermes-title-bar` class) drags the window wherever it sits, as on Windows and Linux. Only the top 38 points of the window used to drag
+- Saved window state is no longer lost or corrupted when two copies of an app save it at the same moment. Every save now writes its own temp file before the atomic rename; they used to share one
+- Windows: saving window state retries for a moment while another process holds the file, instead of logging the save as failed
 
 ## [1.4.6] - 2026-11-10
 
