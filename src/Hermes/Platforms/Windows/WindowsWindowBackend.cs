@@ -638,9 +638,11 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
     private LRESULT HandleUserInvoke()
     {
-        _invokeQueue.Drain();
+        _invokeQueue.Drain(RequestInvokeWakeup);
         return new LRESULT(0);
     }
+
+    private void RequestInvokeWakeup() => PInvoke.PostMessage(_hwnd, WM_USER_INVOKE, 0, 0);
 
     private void HandleDpiChanged(WPARAM wParam, LPARAM lParam)
     {

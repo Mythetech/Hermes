@@ -340,12 +340,26 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
     public void BeginInvoke(Action action)
     {
+        if (CheckAccess())
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                HermesApplication.RaiseDispatcherUnhandledException(ex);
+            }
+
+            return;
+        }
+
         // Rejection means the window is tearing down; fire-and-forget work is droppable then.
         if (_invokeQueue.TryEnqueue(action, completion: null, out var wakeupNeeded) && wakeupNeeded)
             PostDrain();
     }
 
-    // The native post only adds a GLib idle source and never reads the window, so it needs no lock against Dispose.
+    // The native post only adds a GLib idle source, never inline and never reading the window, so it needs no lock against Dispose.
     private void PostDrain()
     {
         GCHandle handle = default;
@@ -353,7 +367,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         {
             try
             {
-                _invokeQueue.Drain();
+                _invokeQueue.Drain(PostDrain);
             }
             finally
             {

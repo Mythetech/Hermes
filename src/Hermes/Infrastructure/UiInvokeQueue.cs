@@ -50,14 +50,20 @@ internal sealed class UiInvokeQueue : IDisposable
     }
 
     /// <summary>
-    /// Runs all queued items on the calling thread. Call from the UI loop's wakeup handler.
+    /// Runs the items queued when it starts, on the calling thread. Call from the UI loop's wakeup handler;
+    /// work queued meanwhile waits for the next wakeup, so the native loop runs between batches.
     /// </summary>
-    public void Drain()
+    public void Drain(Action requestWakeup)
     {
         Interlocked.Exchange(ref _wakeupPending, 0);
 
-        while (_items.TryDequeue(out var item))
+        var count = _items.Count;
+        for (var i = 0; i < count && _items.TryDequeue(out var item); i++)
         {
+            // Work behind this item gets its own wakeup, so a nested loop inside the item still runs it.
+            if (!_items.IsEmpty && Interlocked.Exchange(ref _wakeupPending, 1) == 0)
+                requestWakeup();
+
             try
             {
                 item.Action();

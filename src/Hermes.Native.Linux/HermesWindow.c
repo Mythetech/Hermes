@@ -1096,12 +1096,7 @@ static gboolean begin_invoke_callback(gpointer user_data) {
 void Hermes_Window_BeginInvoke(void* window, InvokeCallback callback) {
     if (!callback) return;
 
-    // Check if we're already on the main thread
-    if (pthread_equal(pthread_self(), g_uiThreadId)) {
-        callback();
-        return;
-    }
-
+    // Always deferred, even on the main thread: the managed invoke queue posts from inside its own drain.
     g_idle_add(begin_invoke_callback, (gpointer)callback);
 }
 
