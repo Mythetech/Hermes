@@ -12,7 +12,7 @@ internal abstract record FrontendSource
 
     public sealed record StaticFiles(string Root) : FrontendSource;
 
-    public sealed record Missing(string Html) : FrontendSource;
+    public sealed record Missing(string Html, string Advice) : FrontendSource;
 }
 
 /// <summary>
@@ -33,12 +33,11 @@ internal static class FrontendResolver
         if (File.Exists(Path.Combine(staticRoot, "index.html")))
             return new FrontendSource.StaticFiles(staticRoot);
 
-        var root = WebUtility.HtmlEncode(staticRoot);
         var advice = isDevelopment && devServer is not null
-            ? $"Start the dev server at <code>{WebUtility.HtmlEncode(devServer.ToString())}</code>, then restart the app. Or build the frontend and rebuild the app, which copies it into <code>{root}</code>."
-            : $"No frontend was found in <code>{root}</code>. Build the app in Release or run <code>dotnet publish</code> so the frontend is built and copied there.";
+            ? $"Start the dev server at {devServer}, then restart the app. Or build the frontend and rebuild the app, which copies it into {staticRoot}."
+            : $"No frontend was found in {staticRoot}. Build the app in Release or run dotnet publish so the frontend is built and copied there.";
 
-        return new FrontendSource.Missing(MissingPage(advice));
+        return new FrontendSource.Missing(MissingPage(WebUtility.HtmlEncode(advice)), advice);
     }
 
     private static string MissingPage(string advice) => $$"""
@@ -49,7 +48,6 @@ internal static class FrontendResolver
         <title>No frontend</title>
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; color: #333; }
-          code { background: #f2f2f2; padding: 0.1rem 0.3rem; border-radius: 3px; }
         </style>
         </head>
         <body>

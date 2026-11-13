@@ -207,6 +207,9 @@ public sealed class HermesWebAppBuilder : IHostApplicationBuilder
             case FrontendSource.Missing missing:
                 window.LoadHtml(missing.Html);
                 HermesLogger.Warning("No frontend to load: the dev server did not answer and there is no built frontend");
+
+                // The page shown instead never sends ready, so name the cause now rather than at the timeout.
+                _smoke?.Session.RecordError("hermes", "FrontendMissing", missing.Advice, null);
                 break;
         }
     }

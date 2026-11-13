@@ -14,11 +14,30 @@ using Xunit;
 
 namespace Hermes.Tests.Smoke;
 
-public sealed class WebSmokeModeTests
+public sealed class WebSmokeModeTests : IDisposable
 {
     private const string Ready = """{"type":"ready"}""";
     private static readonly TimeSpan Wait = TimeSpan.FromSeconds(5);
     private readonly SmokeHarness _harness = new();
+    private readonly string _frontend = Path.Combine(Path.GetTempPath(), $"hermes-web-smoke-{Guid.NewGuid():N}");
+
+    public WebSmokeModeTests()
+    {
+        Directory.CreateDirectory(_frontend);
+        File.WriteAllText(Path.Combine(_frontend, "index.html"), "<p>app</p>");
+    }
+
+    public void Dispose() => Directory.Delete(_frontend, recursive: true);
+
+    [Fact]
+    public async Task MissingFrontend_IsReportedAtOnce()
+    {
+        var empty = Directory.CreateDirectory(Path.Combine(_frontend, "empty")).FullName;
+        var (app, _) = Build(b => b.UseFrontend(configure: o => o.StaticFilesPath = empty));
+
+        Assert.Contains(_harness.Lines, l => l.StartsWith("HERMES_SMOKE_ERROR: hermes: FrontendMissing:", StringComparison.Ordinal));
+        await app.DisposeAsync();
+    }
 
     [Fact]
     public async Task PageReady_MarksFirstRender_RunsChecks_AndPasses()
@@ -140,6 +159,7 @@ public sealed class WebSmokeModeTests
     {
         var builder = HermesWebAppBuilder.CreateSlimBuilder(["--environment", "Production"]);
         builder.UseSmokeSessionForTest(_harness.CreateSession(resultPath: "result.json", exitWhenDone: exitWhenDone));
+        builder.UseFrontend(configure: o => o.StaticFilesPath = _frontend);
         configure?.Invoke(builder);
         var backend = new RecordingWindowBackend();
         return (HermesWebAppBuilder.BuildForTest(builder, backend), backend);
