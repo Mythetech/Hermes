@@ -42,11 +42,14 @@ jobs:
         working-directory: packages/hermes-svelte
         run: npm ci
 
-      - name: Build Sample Frontends
+      # A Release build runs each sample's npm install and build through the Hermes.Web MSBuild targets and
+      # copies the output into wwwroot, which is what an app consuming the package gets.
+      - name: Build Sample Apps
         run: |
           for sample in WebHelloWorld ReactHelloWorld SvelteHelloWorld; do
             echo "::group::$sample"
-            (cd "samples/$sample/frontend" && npm ci && npm run build)
+            dotnet build "samples/$sample" -c Release
+            test -f "samples/$sample/bin/Release/net11.0/wwwroot/index.html" || { echo "FAIL: $sample has no wwwroot/index.html"; exit 1; }
             echo "::endgroup::"
           done
 
@@ -63,9 +66,3 @@ jobs:
             echo "FAIL: building the packages and samples changed the working tree"
             exit 1
           fi
-
-      - name: Build Sample Apps
-        run: |
-          for sample in WebHelloWorld ReactHelloWorld SvelteHelloWorld; do
-            dotnet build "samples/$sample" -c Release
-          done
