@@ -45,9 +45,10 @@ test('result resolves the matching call', async () => {
   assert.equal(await second, 'two');
 });
 
-test('forwards an uncaught error', () => {
+test('forwards an uncaught error', async () => {
   const error = new TypeError('boom');
   page.dispatch('error', { error, message: 'Uncaught TypeError: boom' });
+  await tick();
 
   const forwarded = page.ofType('page-error').at(-1);
   assert.equal(forwarded.source, 'error');
@@ -56,8 +57,9 @@ test('forwards an uncaught error', () => {
   assert.equal(forwarded.stack, error.stack);
 });
 
-test('forwards an unhandled rejection of a non-Error', () => {
+test('forwards an unhandled rejection of a non-Error', async () => {
   page.dispatch('unhandledrejection', { reason: 'nope' });
+  await tick();
 
   const forwarded = page.ofType('page-error').at(-1);
   assert.equal(forwarded.source, 'unhandledrejection');
@@ -87,5 +89,25 @@ test('sends ready once the document has loaded and a frame has passed', async ()
   await tick(20);
 
   assert.equal(page.ofType('ready').length, 1);
+});
+
+test('ignores a ResizeObserver loop notification', async () => {
+  const before = page.ofType('page-error').length;
+  page.dispatch('error', { error: null, message: 'ResizeObserver loop completed with undelivered notifications.' });
+  await tick();
+
+  assert.equal(page.ofType('page-error').length, before);
+});
+
+test('honors preventDefault from a listener the app added later', async () => {
+  window.addEventListener('error', (event) => { if (event.message === 'handled') event.defaultPrevented = true; });
+  window.addEventListener('unhandledrejection', (event) => { if (event.reason === 'handled') event.defaultPrevented = true; });
+  const before = page.ofType('page-error').length;
+
+  page.dispatch('error', { error: new Error('handled'), message: 'handled', defaultPrevented: false });
+  page.dispatch('unhandledrejection', { reason: 'handled', defaultPrevented: false });
+  await tick();
+
+  assert.equal(page.ofType('page-error').length, before);
 });
 

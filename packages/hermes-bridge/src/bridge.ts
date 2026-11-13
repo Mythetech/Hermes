@@ -140,8 +140,19 @@ class HermesBridge {
     this.ensureInitialized();
     if (!this.ext) return;
 
-    window.addEventListener('error', (event) => this.reportError('error', event.error, event.message));
-    window.addEventListener('unhandledrejection', (event) => this.reportError('unhandledrejection', event.reason));
+    // Reported after every listener has run, so an app that calls preventDefault has handled it.
+    window.addEventListener('error', (event) => {
+      // Chromium reports ResizeObserver's loop notice as a window error with no Error object; it is benign.
+      if (event.error == null && /^ResizeObserver loop/.test(event.message ?? '')) return;
+      queueMicrotask(() => {
+        if (!event.defaultPrevented) this.reportError('error', event.error, event.message);
+      });
+    });
+    window.addEventListener('unhandledrejection', (event) => {
+      queueMicrotask(() => {
+        if (!event.defaultPrevented) this.reportError('unhandledrejection', event.reason);
+      });
+    });
 
     if (document.readyState === 'complete') {
       this.scheduleReady();
