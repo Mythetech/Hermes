@@ -18,12 +18,32 @@ public sealed class WindowStateStore
     /// </summary>
     public static WindowStateStore Instance => s_instance.Value;
 
+    private const int MaxReplaceAttempts = 10;
+    private const int ReplaceRetryDelayMilliseconds = 5;
+
     private readonly object _lock = new();
     private Dictionary<string, WindowState>? _cache;
     private string? _filePath;
 
     private WindowStateStore()
     {
+    }
+
+    internal WindowStateStore(string filePath)
+    {
+        _filePath = filePath;
+    }
+
+    /// <summary>Points the store at another file before it has loaded one, so a test run never writes the user's data.</summary>
+    internal void UseFileForTest(string filePath)
+    {
+        lock (_lock)
+        {
+            if (_cache is not null)
+                throw new InvalidOperationException("The window state store has already loaded its file.");
+
+            _filePath = filePath;
+        }
     }
 
     /// <summary>
@@ -69,7 +89,7 @@ public sealed class WindowStateStore
         if (_cache is not null)
             return;
 
-        _filePath = GetFilePath();
+        _filePath ??= GetFilePath();
         _cache = LoadFromDisk();
     }
 
@@ -105,6 +125,8 @@ public sealed class WindowStateStore
         if (_filePath is null || _cache is null)
             return;
 
+        // A temp file per write keeps the rename atomic when two copies of the app save at once.
+        var tempPath = $"{_filePath}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
         try
         {
             var directory = Path.GetDirectoryName(_filePath);
@@ -115,17 +137,47 @@ public sealed class WindowStateStore
 
             var json = JsonSerializer.Serialize(_cache, WindowStateJsonContext.Default.DictionaryStringWindowState);
 
-            // Write atomically using temp file + rename
-            var tempPath = _filePath + ".tmp";
             File.WriteAllText(tempPath, json);
-            File.Move(tempPath, _filePath, overwrite: true);
+            ReplaceWithRetry(tempPath, _filePath);
 
             HermesLogger.Info($"Saved window state to {_filePath}");
         }
         catch (Exception ex)
         {
             HermesLogger.Error($"Failed to save window state to {_filePath}: {ex.Message}");
+            DeleteQuietly(tempPath);
             // Don't rethrow - window closing should not fail due to state persistence
+        }
+    }
+
+    // Windows denies replacing a file while another process has it open or is replacing it too.
+    private static void ReplaceWithRetry(string sourcePath, string destinationPath)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(sourcePath, destinationPath, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (attempt < MaxReplaceAttempts && ex is IOException or UnauthorizedAccessException)
+            {
+                Thread.Sleep(attempt * ReplaceRetryDelayMilliseconds);
+            }
+        }
+    }
+
+    private static void DeleteQuietly(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
         }
     }
 }
