@@ -74,15 +74,20 @@ packages/
 
 ```
 src/Hermes.Web/             # Mythetech.Hermes.Web
-├── Hermes.Web.csproj       # Depends on Mythetech.Hermes (core)
-├── HermesWebApp.cs          # App facade (Run, Bridge access)
-├── HermesWebAppBuilder.cs   # Fluent builder API
+├── Hermes.Web.csproj       # Depends on Mythetech.Hermes and Mythetech.Hermes.Hosting
+├── HermesWebApp.cs          # App facade (Run, DisposeAsync, Services, Bridge)
+├── HermesWebAppBuilder.cs   # Generic host builder (IHostApplicationBuilder)
+├── HermesFrontendOptions.cs # Static files path, SPA fallback, dev server probe timeout
+├── build/                   # MSBuild targets: build the frontend and copy it into wwwroot
 ├── Hosting/
+│   ├── DevServerProbe.cs    # Is the dev server accepting connections?
+│   ├── FrontendResolver.cs  # Dev server, built frontend, or a "nothing to show" page
 │   ├── StaticFileHost.cs    # SPA-aware file server
 │   └── MimeTypes.cs         # Extension → MIME mapping
 └── Interop/
     ├── InteropBridge.cs     # Bidirectional message processor
-    ├── InteropBridgeOptions.cs  # Fluent handler registration
+    ├── InteropBridge.Handlers.cs  # Handle, HandleAsync, On, Send
+    ├── BridgeJson.cs        # Payload serialization
     └── InteropMessage.cs    # JSON envelope types + source gen context
 ```
 
@@ -93,55 +98,49 @@ src/Hermes.Web/             # Mythetech.Hermes.Web
 ```
 Program.cs
   ├─ HermesWindow.Prewarm()              # Optional platform pre-warming
-  ├─ HermesWebAppBuilder.Create(args)
-  ├─ builder.ConfigureWindow(opts => {})  # Title, size, DevTools, etc.
-  ├─ builder.UseStaticFiles("wwwroot")    # OR builder.UseDevServer(url)
-  ├─ builder.UseSpaFallback()             # Route extensionless paths → index.html
-  ├─ builder.UseInteropBridge(bridge => {})
+  ├─ HermesWebAppBuilder.CreateDefault(args)  # appsettings.json, environment variables, command line
+  ├─ builder.ConfigureWindow(opts => {})       # Title, size, DevTools, etc.
+  ├─ builder.Services.Add...()                 # The app's services and hosted services
+  ├─ builder.UseFrontend(devServer: url)       # Dev server in Development, else wwwroot
   ├─ builder.Build()
-  │   ├─ Creates HermesWindow
-  │   ├─ Registers custom scheme handler (StaticFileHost)
-  │   ├─ Sets navigation URL (platform-specific scheme)
-  │   ├─ Creates InteropBridge (if configured)
+  │   ├─ Creates HermesWindow and InteropBridge
+  │   ├─ Builds the generic host
+  │   ├─ Picks the frontend (dev server, built frontend, or a "nothing to show" page)
+  │   ├─ Registers the custom scheme handler (StaticFileHost) and sets the navigation URL
   │   └─ Returns HermesWebApp
-  └─ app.Run()                            # Blocks until window closes
+  ├─ app.Bridge.Handle(...)                    # Register .NET handlers
+  ├─ app.Run()                                 # Shows the window, starts hosted services, blocks until it closes
+  └─ app.DisposeAsync()                        # Stops the bridge and hosted services, destroys the window
 ```
 
 ### Typical Program.cs
 
 ```csharp
-HermesWindow.Prewarm();
-var builder = HermesWebAppBuilder.Create(args);
-
-builder.ConfigureWindow(opts =>
+[STAThread]
+static void Main(string[] args)
 {
-    opts.Title = "My SPA App";
-    opts.Width = 800;
-    opts.Height = 600;
-    opts.DevToolsEnabled = true;
-});
+    HermesWindow.Prewarm();
+    var builder = HermesWebAppBuilder.CreateDefault(args);
 
-var isDev = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") == "Development";
+    builder.ConfigureWindow(opts =>
+    {
+        opts.Title = "My SPA App";
+        opts.Width = 800;
+        opts.Height = 600;
+        opts.DevToolsEnabled = true;
+    });
 
-if (isDev)
-{
-    builder.UseDevServer("http://localhost:5173");
+    builder.Services.AddHostedService<TickService>();
+    builder.UseFrontend(devServer: "http://localhost:5173");
+
+    var app = builder.Build();
+
+    app.Bridge.Handle("greet", (string name) => $"Hello, {name}!");
+    app.Bridge.Handle("getRuntime", () => $".NET {Environment.Version}");
+
+    app.Run();
+    app.DisposeAsync().AsTask().GetAwaiter().GetResult();
 }
-else
-{
-    builder.UseStaticFiles("frontend/dist");
-    builder.UseSpaFallback();
-}
-
-builder.UseInteropBridge(bridge =>
-{
-    bridge.Register<string, string>("greet", name => $"Hello, {name}!");
-    bridge.Register("getRuntime", () => $".NET {Environment.Version}");
-    bridge.Register("getPlatform", () => Environment.OSVersion.Platform.ToString());
-});
-
-var app = builder.Build();
-app.Run();
 ```
 
 ---
@@ -158,6 +157,8 @@ All communication uses JSON envelopes with a `type` discriminator:
 | C# → JS | `result` | `id`, `value` | Return value from invoke |
 | C# → JS | `error` | `id`, `message` | Error from invoke |
 | Either | `event` | `name`, `data` | Fire-and-forget notification |
+| JS → C# | `ready` | | The page has rendered, once per page load |
+| JS → C# | `page-error` | `source`, `name`, `message`, `stack` | An error the page did not handle |
 
 ```json
 // Invoke (JS → C#)
@@ -188,21 +189,17 @@ internal partial class InteropJsonContext : JsonSerializerContext { }
 ### C# Registration API
 
 ```csharp
-// Sync handlers
-bridge.Register(string method, Func<object?> handler)
-bridge.Register<TResult>(string method, Func<TResult> handler)
-bridge.Register<TArg, TResult>(string method, Func<TArg, TResult> handler)
-
-// Async handlers
-bridge.RegisterAsync<TResult>(string method, Func<Task<TResult>> handler)
-bridge.RegisterAsync<TArg, TResult>(string method, Func<TArg, Task<TResult>> handler)
+// Handlers take zero to four arguments, optionally followed by a CancellationToken
+// that is cancelled when the window closes. They run on the thread pool.
+bridge.Handle("greet", (string name) => $"Hello, {name}!");
+bridge.HandleAsync("save", async (Todo todo, CancellationToken ct) => await store.SaveAsync(todo, ct));
 
 // Events: subscribe to JS events
-bridge.On(string eventName, Action handler)
-bridge.On<T>(string eventName, Action<T> handler)
+bridge.On("ready", () => { });
+bridge.On<Settings>("settingsChanged", settings => { });
 
-// Events: push to JS
-bridge.Send(string eventName, object? data = null)
+// Events: push to JS, from any thread
+bridge.Send("tick", 42);
 ```
 
 ### Invoke Flow (JS → C#)
@@ -237,9 +234,22 @@ C#: bridge.Send("tick", 42)
 | Scenario | Behavior |
 |----------|----------|
 | Unknown method | C# sends error envelope, JS Promise rejects |
-| Handler throws | Exception caught, error envelope sent, JS Promise rejects |
+| Handler throws | Exception caught and logged as a warning, error envelope sent, JS Promise rejects |
+| Event handler throws (either side) | Logged as an error; on the JS side also reported as a `page-error` |
+| Uncaught error or unhandled rejection in the page | Reported as a `page-error`: logged as an error, and fails a smoke run |
 | Non-JSON message | Silently ignored with console warning |
 | No Hermes runtime | `bridge.isHermes` returns false, invokes fail gracefully |
+
+### Smoke Mode
+
+Web apps run the same smoke contract as Blazor apps: `HERMES_SMOKE_TEST=1` (with `HERMES_SMOKE_TEST_TIMEOUT`, `HERMES_SMOKE_TEST_RESULT` and `HERMES_SMOKE_TEST_EXIT`), `HERMES_SMOKE_RESULT: PASSED|FAILED`, exit code 0 or 1, and native dialogs fail the run instead of blocking it. Checks and gates are registered with `AddHermesSmokeCheck` and `AddHermesSmokeGate` and resolved from `app.Services`.
+
+- `window-shown` is marked when the window shows, `first-render` when the page's `ready` envelope arrives.
+- `@mythetech/hermes-bridge` sends `ready` once the document has loaded and a frame has passed, or 250 ms after load when frames are throttled, so the bridge must be imported from the app's entry module.
+- Checks run in a service scope off the bridge's reader, so a check can send the page an event and await its reply.
+- Every `page-error` fails the run as `HERMES_SMOKE_ERROR: page: <name>: <message>`. A handler exception alone does not: the page receives it as a rejected promise, and an unhandled rejection is reported on its own.
+
+CI boots the three samples this way on Windows, macOS and Linux (`web.yml`, `.github/scripts/Test-WebSmoke.ps1`); WebHelloWorld's `web-hello/bridge-echo` check covers both bridge directions with an object payload.
 
 ---
 
@@ -256,8 +266,8 @@ if (bridge.isHermes) { /* running in Hermes window */ }
 // Invoke .NET method
 const greeting = await bridge.invoke<string>('greet', 'World');
 
-// Invoke with options
-const result = await bridge.invoke<string>('slowOp', { timeout: 5000 }, arg1);
+// Invoke with options, which are never sent as arguments
+const result = await bridge.invokeWithOptions<string>('slowOp', { timeout: 5000 }, arg1);
 
 // Subscribe to .NET events (returns unsubscribe function)
 const unsub = bridge.on<number>('tick', (seconds) => {
@@ -373,31 +383,20 @@ macOS/Linux must pre-register the `app` scheme even when using a dev server, bec
 
 ### Dev Server vs Production
 
-Using an environment variable (recommended):
+`UseFrontend` decides at startup from the host environment (`DOTNET_ENVIRONMENT` or `--environment`):
 
 ```csharp
-var isDev = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") == "Development";
-
-if (isDev)
-{
-    builder.UseDevServer("http://localhost:5173");
-}
-else
-{
-    builder.UseStaticFiles("frontend/dist");
-    builder.UseSpaFallback();
-}
+builder.UseFrontend(devServer: "http://localhost:5173");
 ```
 
-Alternatively, using compiler directives:
+- In Development, the window opens the dev server when it accepts a connection within `DevServerProbeTimeout` (500 ms).
+- Otherwise, and always outside Development, it serves `wwwroot` next to the app. Every build copies `frontend/dist` there when it exists, and Release builds and publish run the frontend build first.
+- With neither, the window shows a page saying which one to start.
+
+A launch profile that sets `DOTNET_ENVIRONMENT=Development` makes `dotnet run` and the IDE use the dev server. `HermesFrontendOptions` changes the static files folder, turns off SPA fallback, or changes the probe timeout:
 
 ```csharp
-#if DEBUG
-builder.UseDevServer("http://localhost:5173");
-#else
-builder.UseStaticFiles("frontend/dist");
-builder.UseSpaFallback();
-#endif
+builder.UseFrontend(devServer: "http://localhost:5173", options => options.StaticFilesPath = "web");
 ```
 
 ---
@@ -407,24 +406,22 @@ builder.UseSpaFallback();
 `HermesWebAppBuilder` provides a fluent configuration API:
 
 ```csharp
-var builder = HermesWebAppBuilder.Create(args);
+var builder = HermesWebAppBuilder.CreateDefault(args);   // or CreateSlimBuilder(args)
 
-builder
-    .ConfigureWindow(opts => { /* HermesWindowOptions */ })
-    .UseStaticFiles("frontend/dist")    // Set static file root
-    .UseSpaFallback()                    // Enable SPA routing
-    .UseInteropBridge(bridge =>          // Register .NET handlers
-    {
-        bridge.Register("method", () => result);
-        bridge.RegisterAsync("async", () => Task.FromResult(result));
-        bridge.On("event", () => { });
-    });
+builder.ConfigureWindow(opts => { /* HermesWindowOptions */ });
+builder.Services.AddSingleton<ITodoStore, TodoStore>();
+builder.UseFrontend(devServer: "http://localhost:5173");
 
 var app = builder.Build();
+
+var todos = app.Services.GetRequiredService<ITodoStore>();
+app.Bridge.Handle("todos.list", () => todos.All());
+
 app.Run();
+app.DisposeAsync().AsTask().GetAwaiter().GetResult();
 ```
 
-All configuration is deferred until `Build()`, which creates the window, registers schemes, and wires up the bridge in a single pass.
+`HermesWebAppBuilder` implements `IHostApplicationBuilder` (`Services`, `Configuration`, `Logging`, `Metrics`, `Environment`), like `HermesBlazorAppBuilder`. The window, the bridge, `IClipboard`, `IDragDrop`, `IGlobalHotkeys` and `INativeNotifications` resolve from `app.Services`, so hosted services can take the bridge and send events. Hosted services start on the thread pool once the window shows and stop when the app is disposed.
 
 ---
 

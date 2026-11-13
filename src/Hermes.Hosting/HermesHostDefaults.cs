@@ -10,6 +10,26 @@ namespace Hermes.Hosting;
 /// </summary>
 internal static class HermesHostDefaults
 {
+    /// <summary>Creates an empty host builder whose environment comes from --environment or DOTNET_ENVIRONMENT.</summary>
+    public static HostApplicationBuilder CreateBuilder(string[]? args) =>
+        Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            Args = args,
+            DisableDefaults = true,
+            EnvironmentName = ResolveEnvironmentName(args, Environment.GetEnvironmentVariable)
+        });
+
+    /// <summary>The command line's environment, else DOTNET_ENVIRONMENT; null leaves the host's Production default.</summary>
+    public static string? ResolveEnvironmentName(string[]? args, Func<string, string?> getEnvironmentVariable)
+    {
+        var commandLine = new ConfigurationBuilder().AddCommandLine(args ?? []).Build();
+        var name = commandLine[HostDefaults.EnvironmentKey];
+        if (string.IsNullOrEmpty(name))
+            name = getEnvironmentVariable("DOTNET_ENVIRONMENT");
+
+        return string.IsNullOrEmpty(name) ? null : name;
+    }
+
     /// <summary>Adds appsettings.json, the environment's appsettings file, environment variables and the command line.</summary>
     public static void AddDefaultConfiguration(HostApplicationBuilder builder, string[]? args)
     {

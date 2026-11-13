@@ -33,19 +33,6 @@ internal sealed class HermesSmokeRuntime(SmokeSession session)
         if (Interlocked.Exchange(ref _verdictStarted, 1) == 1)
             return;
 
-        Session.MarkMilestone(SmokeSession.FirstRenderMilestone);
-
-        IReadOnlyList<SmokeCheck> checks;
-        try
-        {
-            checks = HermesSmokeHosting.ResolveChecks(_firstScope!);
-        }
-        catch (Exception ex)
-        {
-            Session.RecordError("hermes", ex);
-            checks = [];
-        }
-
-        await Session.RunToVerdictAsync(checks);
+        await HermesSmokeHosting.RunChecksAsync(Session, _firstScope!);
     }
 }

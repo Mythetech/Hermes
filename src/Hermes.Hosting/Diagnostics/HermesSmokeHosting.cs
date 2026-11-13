@@ -32,6 +32,25 @@ internal static class HermesSmokeHosting
             session.RequireGate(gate.Name);
     }
 
+    /// <summary>Marks the first render, then waits for the gates, runs the checks and produces the verdict. Never throws.</summary>
+    public static async Task RunChecksAsync(SmokeSession session, IServiceProvider scopedServices)
+    {
+        session.MarkMilestone(SmokeSession.FirstRenderMilestone);
+
+        IReadOnlyList<SmokeCheck> checks;
+        try
+        {
+            checks = ResolveChecks(scopedServices);
+        }
+        catch (Exception ex)
+        {
+            session.RecordError("hermes", ex);
+            checks = [];
+        }
+
+        await session.RunToVerdictAsync(checks);
+    }
+
     /// <summary>Resolves the registered checks, then the checks each registered source supplies.</summary>
     public static IReadOnlyList<SmokeCheck> ResolveChecks(IServiceProvider scopedServices)
     {

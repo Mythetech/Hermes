@@ -13,7 +13,7 @@ internal static class Program
     {
         HermesWindow.Prewarm();
 
-        var builder = HermesWebAppBuilder.Create();
+        var builder = HermesWebAppBuilder.CreateDefault(args);
 
         builder.ConfigureWindow(opts =>
         {
@@ -23,12 +23,7 @@ internal static class Program
             opts.DevToolsEnabled = true;
         });
 
-#if DEBUG
-        builder.UseDevServer("http://localhost:5176");
-#else
-        builder.UseStaticFiles();
-        builder.UseSpaFallback();
-#endif
+        builder.UseFrontend(devServer: "http://localhost:5176");
 
         var app = builder.Build();
 
@@ -36,5 +31,6 @@ internal static class Program
         app.Bridge.Handle("getRuntime", () => $".NET {Environment.Version}");
         app.Bridge.Handle("getPlatform", () => Environment.OSVersion.Platform.ToString());
         app.Run();
+        app.DisposeAsync().AsTask().GetAwaiter().GetResult();
     }
 }

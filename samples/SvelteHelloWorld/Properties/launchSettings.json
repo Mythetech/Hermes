@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "SvelteHelloWorld": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

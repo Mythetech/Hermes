@@ -18,7 +18,8 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.cjs.json",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "node --test \"test/*.test.mjs\""
   },
   "devDependencies": {
     "typescript": "^5.7.0"

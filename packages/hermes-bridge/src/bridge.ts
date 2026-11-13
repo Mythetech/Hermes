@@ -1,4 +1,4 @@
-import type { Envelope, HermesExternal, InvokeOptions } from './types.js';
+import type { Envelope, HermesExternal, InvokeOptions, PageErrorEnvelope, ReadyEnvelope } from './types.js';
 
 interface PendingInvocation {
   resolve: (value: unknown) => void;
@@ -7,6 +7,8 @@ interface PendingInvocation {
 }
 
 type EventCallback = (data: unknown) => void;
+
+const READY_FALLBACK_MS = 250;
 
 let idCounter = 0;
 
@@ -32,6 +34,10 @@ class HermesBridge {
   private initialized = false;
   private ext: HermesExternal | null = null;
 
+  constructor() {
+    this.attach();
+  }
+
   get isHermes(): boolean {
     return getHermesExternal() !== null;
   }
@@ -53,25 +59,25 @@ class HermesBridge {
     });
   }
 
+  /** Calls a .NET handler with every argument given, and resolves with its result. */
   invoke<T = unknown>(method: string, ...args: unknown[]): Promise<T> {
+    return this.call<T>(method, {}, args);
+  }
+
+  /** Calls a .NET handler like invoke, with options such as a timeout that are never sent as arguments. */
+  invokeWithOptions<T = unknown>(method: string, options: InvokeOptions, ...args: unknown[]): Promise<T> {
+    return this.call<T>(method, options, args);
+  }
+
+  private call<T>(method: string, options: InvokeOptions, args: unknown[]): Promise<T> {
     this.ensureInitialized();
 
     if (!this.ext) {
       return Promise.reject(new Error('Not running in Hermes'));
     }
 
-    let options: InvokeOptions = {};
-    let invokeArgs: unknown[];
-
-    if (args.length > 0 && typeof args[0] === 'object' && args[0] !== null && 'timeout' in (args[0] as object)) {
-      options = args[0] as InvokeOptions;
-      invokeArgs = args.slice(1);
-    } else {
-      invokeArgs = args;
-    }
-
     const id = generateId();
-    const envelope = JSON.stringify({ type: 'invoke', id, method, args: invokeArgs });
+    const envelope = JSON.stringify({ type: 'invoke', id, method, args });
     const ext = this.ext;
 
     return new Promise<T>((resolve, reject) => {
@@ -125,6 +131,62 @@ class HermesBridge {
     };
   }
 
+  /** Inside Hermes, reports page errors and tells Hermes once the page has rendered. */
+  private attach(): void {
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function' || typeof document === 'undefined') {
+      return;
+    }
+
+    this.ensureInitialized();
+    if (!this.ext) return;
+
+    // Reported after every listener has run, so an app that calls preventDefault has handled it.
+    window.addEventListener('error', (event) => {
+      // Chromium reports ResizeObserver's loop notice as a window error with no Error object; it is benign.
+      if (event.error == null && /^ResizeObserver loop/.test(event.message ?? '')) return;
+      queueMicrotask(() => {
+        if (!event.defaultPrevented) this.reportError('error', event.error, event.message);
+      });
+    });
+    window.addEventListener('unhandledrejection', (event) => {
+      queueMicrotask(() => {
+        if (!event.defaultPrevented) this.reportError('unhandledrejection', event.reason);
+      });
+    });
+
+    if (document.readyState === 'complete') {
+      this.scheduleReady();
+    } else {
+      window.addEventListener('load', () => this.scheduleReady(), { once: true });
+    }
+  }
+
+  private scheduleReady(): void {
+    let sent = false;
+    const send = () => {
+      if (sent) return;
+      sent = true;
+      const envelope: ReadyEnvelope = { type: 'ready' };
+      this.ext?.sendMessage(JSON.stringify(envelope));
+    };
+
+    // A frame means the first render has painted; the timer covers windows whose frames are throttled.
+    requestAnimationFrame(() => setTimeout(send, 0));
+    setTimeout(send, READY_FALLBACK_MS);
+  }
+
+  private reportError(source: PageErrorEnvelope['source'], error: unknown, fallbackMessage?: string): void {
+    const err = error instanceof Error ? error : undefined;
+    const envelope: PageErrorEnvelope = {
+      type: 'page-error',
+      source,
+      name: err?.name ?? 'Error',
+      message: err?.message ?? (error != null ? String(error) : fallbackMessage ?? ''),
+      stack: err?.stack ?? null,
+    };
+    this.ext?.sendMessage(JSON.stringify(envelope));
+  }
+
   private handleMessage(envelope: Envelope): void {
     switch (envelope.type) {
       case 'result': {
@@ -153,6 +215,7 @@ class HermesBridge {
               cb(envelope.data);
             } catch (e) {
               console.error(`[hermes/bridge] Event handler error for '${envelope.name}':`, e);
+              this.reportError('event-handler', e);
             }
           }
         }

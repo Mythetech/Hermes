@@ -48,3 +48,12 @@ async function loadSystemInfo() {
 }
 
 loadSystemInfo();
+
+// Smoke runs use these to check both bridge directions, and that an error in the page fails the run.
+bridge.on('smoke.echo', (data) => bridge.send('smoke.echo.reply', data));
+bridge.on('smoke.fault', () => {
+  setTimeout(() => {
+    throw new Error('web sample fault');
+  });
+  setTimeout(() => bridge.send('smoke.fault.thrown'));
+});

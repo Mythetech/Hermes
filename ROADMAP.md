@@ -63,19 +63,20 @@ Enable React, Vue, Angular, Svelte and other JS/TS frameworks as an alternative 
 
 **New package:** `Hermes.Web` (currently `0.2.0-preview.1`) providing:
 
-- [x] Static file serving with SPA fallback (`UseStaticFiles()`, `UseSpaFallback()`)
-- [x] Dev server support for Vite/Webpack HMR (`UseDevServer()`)
+- [x] Static file serving with SPA fallback (`UseFrontend()`, `HermesFrontendOptions`)
+- [x] Dev server support for Vite/Webpack HMR (`UseFrontend(devServer:)`)
 - [x] C# ↔ JS interop bridge (`InteropBridge`): invoke with a result, events in both directions
 - [x] TypeScript packages in `packages/`: `@mythetech/hermes-bridge`, `@mythetech/hermes-react`, `@mythetech/hermes-svelte`
 - [x] Sample apps: vanilla TypeScript, React, Svelte
 
 **Remaining for 1.5:**
 
-- [ ] CI builds the npm packages and boots the web samples on every platform
+- [x] CI builds the npm packages and boots the web samples on every platform
 - [ ] Publish the npm packages (scope name to be confirmed) from a workflow
 - [x] Bridge: complex result and payload types, more than one argument, logging through the Hermes logger
-- [ ] Auto-detect mode (dev server if running, else static files), replacing `#if DEBUG` in the samples
-- [ ] Host parity with `Hermes.Blazor`: dependency injection, hosted services, smoke mode
+- [x] Auto-detect mode (dev server if running, else static files), replacing `#if DEBUG` in the samples
+- [x] Host parity with `Hermes.Blazor`: dependency injection, configuration, hosted services
+- [x] Smoke mode for web apps
 - [x] MSBuild targets in the package build the frontend and copy it into `wwwroot` on publish and Release builds
 
 **Enterprise value:**

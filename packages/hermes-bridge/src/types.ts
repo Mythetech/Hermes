@@ -25,6 +25,20 @@ export interface EventEnvelope {
 
 export type Envelope = InvokeEnvelope | ResultEnvelope | ErrorEnvelope | EventEnvelope;
 
+/** Tells Hermes the page has rendered; smoke mode marks its first render on it. */
+export interface ReadyEnvelope {
+  type: 'ready';
+}
+
+/** An error the page did not handle; smoke mode fails the run on it. */
+export interface PageErrorEnvelope {
+  type: 'page-error';
+  source: 'error' | 'unhandledrejection' | 'event-handler';
+  name: string;
+  message: string;
+  stack: string | null;
+}
+
 export interface InvokeOptions {
   timeout?: number;
 }
