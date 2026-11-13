@@ -1,4 +1,4 @@
-import type { Envelope, HermesExternal, InvokeOptions } from './types.js';
+import type { Envelope, HermesExternal, InvokeOptions, PageErrorEnvelope, ReadyEnvelope } from './types.js';
 
 interface PendingInvocation {
   resolve: (value: unknown) => void;
@@ -7,6 +7,8 @@ interface PendingInvocation {
 }
 
 type EventCallback = (data: unknown) => void;
+
+const READY_FALLBACK_MS = 250;
 
 let idCounter = 0;
 
@@ -31,6 +33,10 @@ class HermesBridge {
   private listeners = new Map<string, Set<EventCallback>>();
   private initialized = false;
   private ext: HermesExternal | null = null;
+
+  constructor() {
+    this.attach();
+  }
 
   get isHermes(): boolean {
     return getHermesExternal() !== null;
@@ -125,6 +131,51 @@ class HermesBridge {
     };
   }
 
+  /** Inside Hermes, reports page errors and tells Hermes once the page has rendered. */
+  private attach(): void {
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function' || typeof document === 'undefined') {
+      return;
+    }
+
+    this.ensureInitialized();
+    if (!this.ext) return;
+
+    window.addEventListener('error', (event) => this.reportError('error', event.error, event.message));
+    window.addEventListener('unhandledrejection', (event) => this.reportError('unhandledrejection', event.reason));
+
+    if (document.readyState === 'complete') {
+      this.scheduleReady();
+    } else {
+      window.addEventListener('load', () => this.scheduleReady(), { once: true });
+    }
+  }
+
+  private scheduleReady(): void {
+    let sent = false;
+    const send = () => {
+      if (sent) return;
+      sent = true;
+      const envelope: ReadyEnvelope = { type: 'ready' };
+      this.ext?.sendMessage(JSON.stringify(envelope));
+    };
+
+    // A frame means the first render has painted; the timer covers windows whose frames are throttled.
+    requestAnimationFrame(() => setTimeout(send, 0));
+    setTimeout(send, READY_FALLBACK_MS);
+  }
+
+  private reportError(source: PageErrorEnvelope['source'], error: unknown, fallbackMessage?: string): void {
+    const err = error instanceof Error ? error : undefined;
+    const envelope: PageErrorEnvelope = {
+      type: 'page-error',
+      source,
+      name: err?.name ?? 'Error',
+      message: err?.message ?? (error != null ? String(error) : fallbackMessage ?? ''),
+      stack: err?.stack ?? null,
+    };
+    this.ext?.sendMessage(JSON.stringify(envelope));
+  }
+
   private handleMessage(envelope: Envelope): void {
     switch (envelope.type) {
       case 'result': {
@@ -153,6 +204,7 @@ class HermesBridge {
               cb(envelope.data);
             } catch (e) {
               console.error(`[hermes/bridge] Event handler error for '${envelope.name}':`, e);
+              this.reportError('event-handler', e);
             }
           }
         }
