@@ -53,4 +53,19 @@ public sealed class AppOriginPolicyTests
     {
         Assert.Equal(expected, AppOriginPolicy.IsSameOrigin(sender, topLevel));
     }
+
+    [Fact]
+    public void IsSameOrigin_IdenticalUrlsTooLongForUri()
+    {
+        var page = "data:text/html," + new string('a', 70_000);
+
+        Assert.True(AppOriginPolicy.IsSameOrigin(page, page));
+        Assert.False(AppOriginPolicy.IsSameOrigin(page, "http://localhost/"));
+    }
+
+    [Fact]
+    public void IsSameOrigin_BothNull_IsFalse()
+    {
+        Assert.False(AppOriginPolicy.IsSameOrigin(null, null));
+    }
 }
