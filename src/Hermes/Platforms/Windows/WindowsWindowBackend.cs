@@ -378,10 +378,15 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
         _customSchemeHandlers[scheme] = handler;
 
         if (_webView is not null)
-        {
-            _webView.AddWebResourceRequestedFilter($"{scheme}://*", CoreWebView2WebResourceContext.All);
-        }
+            AddRequestFilter(scheme);
     }
+
+    // Document covers the top frame, iframes and dedicated workers; the two-argument overload is unreliable for iframes.
+    private void AddRequestFilter(string scheme) =>
+        _webView!.AddWebResourceRequestedFilter(
+            AppOriginPolicy.RequestFilter(scheme),
+            CoreWebView2WebResourceContext.All,
+            CoreWebView2WebResourceRequestSourceKinds.Document);
 
     public int UIThreadId => _uiThreadId;
 
@@ -696,14 +701,17 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
             if (_theme != HermesWindowTheme.System)
                 _webView.Profile.PreferredColorScheme = ToPreferredColorScheme(_theme);
 
+            // WebView2 runs these scripts in every frame; only the top frame gets the bridge.
             await _webView.AddScriptToExecuteOnDocumentCreatedAsync(
                 """
-                window.external = {
-                    sendMessage: function(message) { window.chrome.webview.postMessage(message); },
-                    receiveMessage: function(callback) {
-                        window.chrome.webview.addEventListener('message', function(e) { callback(e.data); });
-                    }
-                };
+                if (window === window.top) {
+                    window.external = {
+                        sendMessage: function(message) { window.chrome.webview.postMessage(message); },
+                        receiveMessage: function(callback) {
+                            window.chrome.webview.addEventListener('message', function(e) { callback(e.data); });
+                        }
+                    };
+                }
                 """);
 
             if (_options.CustomTitleBar)
@@ -720,6 +728,10 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
 
             _webView.WebMessageReceived += (sender, args) =>
             {
+                // WebView2 raises this for the top-level document only; drop anything from another origin regardless.
+                if (!AppOriginPolicy.IsSameOrigin(args.Source, _webView?.Source))
+                    return;
+
                 var message = args.TryGetWebMessageAsString();
 
                 if (_customTitlebar is not null && message?.StartsWith("{\"type\":\"hermes-drag\"") == true)
@@ -742,9 +754,8 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
             _webView.ProcessFailed += HandleWebViewProcessFailed;
             foreach (var scheme in _customSchemeHandlers.Keys)
             {
-                var filter = $"{scheme}://*";
-                if (isSmokeTest) Console.WriteLine($"WEBVIEW_INIT:adding_filter:{filter}");
-                _webView.AddWebResourceRequestedFilter(filter, CoreWebView2WebResourceContext.All);
+                if (isSmokeTest) Console.WriteLine($"WEBVIEW_INIT:adding_filter:{AppOriginPolicy.RequestFilter(scheme)}");
+                AddRequestFilter(scheme);
             }
 
             RefitContent();
@@ -784,8 +795,16 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
             var uri = new Uri(e.Request.Uri);
             var scheme = uri.Scheme;
 
+            // Another origin, such as an iframe's loopback server, goes to the network untouched.
+            if (!AppOriginPolicy.IsAppRequest(uri))
+            {
+                if (isSmokeTest) Console.WriteLine("RESOURCE_RESPONSE:not_app_origin");
+                return;
+            }
+
             if (_customSchemeHandlers.TryGetValue(scheme, out var handler))
             {
+                var allowOrigin = $"Access-Control-Allow-Origin: {AppOriginPolicy.CorsOrigin(uri)}";
                 var (stream, handlerContentType) = handler(e.Request.Uri);
                 if (stream is not null)
                 {
@@ -793,7 +812,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
                     var contentType = handlerContentType ?? GetContentType(uri.AbsolutePath);
                     if (isSmokeTest) Console.WriteLine($"RESOURCE_RESPONSE:200,{contentType},{stream.Length}bytes");
                     var headers = $"Content-Type: {contentType}\r\n" +
-                                  "Access-Control-Allow-Origin: *\r\n" +
+                                  $"{allowOrigin}\r\n" +
                                   "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n" +
                                   "Access-Control-Allow-Headers: *";
                     var response = _webViewEnvironment!.CreateWebResourceResponse(
@@ -806,12 +825,11 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
                 else
                 {
                     if (isSmokeTest) Console.WriteLine($"RESOURCE_RESPONSE:404,handler_returned_null");
-                    var headers = "Access-Control-Allow-Origin: *";
                     var response = _webViewEnvironment!.CreateWebResourceResponse(
                         null,
                         404,
                         "Not Found",
-                        headers);
+                        allowOrigin);
                     e.Response = response;
                 }
             }
@@ -1004,6 +1022,7 @@ internal sealed class WindowsWindowBackend : IHermesWindowBackend
     /// </summary>
     private static string GetDragDetectionScript() => """
         (function() {
+            if (window !== window.top) return;
             var interactiveTags = {BUTTON:1, A:1, INPUT:1, SELECT:1, TEXTAREA:1, LABEL:1};
 
             // Check if element or any ancestor has app-region: drag (and isn't blocked by no-drag)
