@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 namespace Hermes.SingleInstance;
 
 /// <summary>
-/// Names the scope the single-instance lock covers: the user on macOS and Linux, the login session on Windows.
+/// Names the scope the single-instance lock covers: the user on Unix, the login session on Windows.
 /// </summary>
 internal static partial class UserScope
 {

@@ -232,14 +232,20 @@ public sealed class SingleInstanceGuardTests
         var id = $"t{Guid.NewGuid().ToString("N")[..8]}";
         using var guard = new SingleInstanceGuard(id);
 
-        var scope = OperatingSystem.IsWindows() ? Process.GetCurrentProcess().SessionId.ToString() : geteuid().ToString();
-        Assert.Equal($"Hermes_SI_{id}_{scope}", guard.PipeName);
+        // macOS keeps pipes in the per-user $TMPDIR, and a suffix would push long ids past the 104-byte socket path limit.
+        var expected = OperatingSystem.IsMacOS() ? $"Hermes_SI_{id}"
+            : OperatingSystem.IsWindows() ? $"Hermes_SI_{id}_{Process.GetCurrentProcess().SessionId}"
+            : $"Hermes_SI_{id}_{geteuid()}";
+        Assert.Equal(expected, guard.PipeName);
     }
 
-    /// <summary>Another user's app with the same id holds the unscoped name; this user's instances must not meet it.</summary>
+    /// <summary>Another user's app with the same id holds the unscoped name in the shared /tmp or pipe namespace.</summary>
     [Fact]
     public void NotifyFirstInstance_IgnoresAPipeWithTheUnscopedName()
     {
+        if (OperatingSystem.IsMacOS())
+            return;
+
         var id = $"t{Guid.NewGuid().ToString("N")[..8]}";
         using var decoy = new NamedPipeServerStream($"Hermes_SI_{id}", PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
         var decoyConnected = decoy.WaitForConnectionAsync();
@@ -257,4 +263,18 @@ public sealed class SingleInstanceGuardTests
 
     [DllImport("libc")]
     private static extern uint geteuid();
+
+    [Fact]
+    public void LongApplicationId_StillForwardsArgs()
+    {
+        var id = $"com.mythetech.horizon-{Guid.NewGuid().ToString("N")[..8]}";
+        using var first = new SingleInstanceGuard(id);
+        var received = new ManualResetEventSlim(false);
+        first.SecondInstanceLaunched += _ => received.Set();
+
+        using var second = new SingleInstanceGuard(id);
+
+        Assert.True(second.NotifyFirstInstance(["--file", "test.txt"]));
+        Assert.True(received.Wait(TimeSpan.FromSeconds(5)), "The first instance never received the args");
+    }
 }

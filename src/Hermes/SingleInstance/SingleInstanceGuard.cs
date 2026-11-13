@@ -45,8 +45,8 @@ public sealed class SingleInstanceGuard : IDisposable
         ValidateApplicationId(applicationId);
 
         var mutexName = $"Hermes_SI_{applicationId}";
-        // Scoped like the mutex, so two users' copies never share a socket in /tmp or a Windows pipe name.
-        _pipeName = $"Hermes_SI_{applicationId}_{UserScope.Current}";
+        // Scoped like the mutex on Linux and Windows; macOS already keeps pipes in the per-user $TMPDIR.
+        _pipeName = OperatingSystem.IsMacOS() ? $"Hermes_SI_{applicationId}" : $"Hermes_SI_{applicationId}_{UserScope.Current}";
 
         // A Unix session is one terminal tab or launchd, so Unix scopes the lock to the user; Windows keeps its per-login scope.
         var unix = !OperatingSystem.IsWindows();
