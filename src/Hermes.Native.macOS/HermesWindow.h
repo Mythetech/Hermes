@@ -56,6 +56,7 @@
 @property (nonatomic, strong) id mouseDragMonitor;
 @property (nonatomic, assign) BOOL isDragging;
 @property (nonatomic, assign) BOOL potentialDrag;
+@property (nonatomic, assign) BOOL mouseIsDown;
 @property (nonatomic, assign) NSPoint dragStartWindowOrigin;
 @property (nonatomic, assign) NSPoint dragStartMouseLocation;
 @property (nonatomic, assign) NSTimeInterval lastClickTime;

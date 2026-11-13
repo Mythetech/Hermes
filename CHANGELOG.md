@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- macOS: a drag region (`data-hermes-drag` or the `hermes-title-bar` class) drags the window wherever it sits, as on Windows and Linux. Only the top 38 points of the window used to drag
 - `Hermes.Web`: static files whose names need URL escaping, such as a space or a non-ASCII character, are served. They used to answer 404
 - `Hermes.Web`: a request can no longer reach a sibling directory whose name starts with the static root's name, such as `dist-private` next to `dist`
 
