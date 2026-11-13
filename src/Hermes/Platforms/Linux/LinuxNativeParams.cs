@@ -86,4 +86,7 @@ internal struct HermesWindowParams
     // Fixed-size array of 16 pointers to UTF-8 strings
     [MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)]
     public IntPtr[] CustomSchemeNames;
+
+    // UTF-8 secret the top frame's bridge prefixes to every message (see BridgeToken)
+    public IntPtr BridgeToken;
 }
