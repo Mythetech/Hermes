@@ -622,23 +622,18 @@ static NSArray<NSString*>* SplitLines(const char* joined) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (!strongSelf || event.window != strongSelf.window) return event;
 
-        // Check if click is in title bar area (top of window)
         NSPoint windowPoint = event.locationInWindow;
         CGFloat windowHeight = strongSelf.window.frame.size.height;
         CGFloat distanceFromTop = windowHeight - windowPoint.y;
 
-        if (distanceFromTop > titleBarHeight) {
-            strongSelf.clickIsInNoDragRegion = NO;
-            return event;  // Not in title bar
-        }
-
         // Reset flag - JS will set it if click is on no-drag region
         strongSelf.clickIsInNoDragRegion = NO;
-
-        // Set up potential drag (JS will cancel if needed)
-        strongSelf.potentialDrag = YES;
+        strongSelf.mouseIsDown = YES;
         strongSelf.dragStartWindowOrigin = strongSelf.window.frame.origin;
         strongSelf.dragStartMouseLocation = [NSEvent mouseLocation];
+
+        // The title bar arms at once and JS cancels it; below it, JS's "drag" message arms it.
+        strongSelf.potentialDrag = distanceFromTop <= titleBarHeight;
 
         return event;  // Let event through
     }];
@@ -650,6 +645,7 @@ static NSArray<NSString*>* SplitLines(const char* joined) {
         if (!strongSelf) return event;
 
         if (event.type == NSEventTypeLeftMouseUp) {
+            strongSelf.mouseIsDown = NO;
             strongSelf.potentialDrag = NO;
             strongSelf.isDragging = NO;
             strongSelf.clickIsInNoDragRegion = NO;
@@ -725,6 +721,7 @@ static NSArray<NSString*>* SplitLines(const char* joined) {
     }
     _isDragging = NO;
     _potentialDrag = NO;
+    _mouseIsDown = NO;
     _clickIsInNoDragRegion = NO;
 }
 

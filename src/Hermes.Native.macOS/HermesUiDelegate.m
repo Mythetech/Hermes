@@ -36,6 +36,9 @@
         } else if ([body isEqualToString:@"drag"]) {
             // Single click on draggable region - allow drag
             _hermesWindow.clickIsInNoDragRegion = NO;
+            if (_hermesWindow.mouseIsDown && !_hermesWindow.isDragging) {
+                _hermesWindow.potentialDrag = YES;
+            }
         }
     }
 }
