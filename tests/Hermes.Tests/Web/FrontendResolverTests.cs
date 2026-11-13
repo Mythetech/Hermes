@@ -49,6 +49,8 @@ public sealed class FrontendResolverTests : IDisposable
         var missing = Assert.IsType<FrontendSource.Missing>(source);
         Assert.Contains("http://localhost:5173", missing.Html);
         Assert.Contains("www &amp; root", missing.Html);
+        Assert.Contains("rebuild the app", missing.Html);
+        Assert.DoesNotContain("build the frontend into", missing.Html);
     }
 
     [Fact]

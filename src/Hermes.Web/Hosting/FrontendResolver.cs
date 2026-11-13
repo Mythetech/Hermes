@@ -35,7 +35,7 @@ internal static class FrontendResolver
 
         var root = WebUtility.HtmlEncode(staticRoot);
         var advice = isDevelopment && devServer is not null
-            ? $"Start the dev server at <code>{WebUtility.HtmlEncode(devServer.ToString())}</code>, then restart the app, or build the frontend into <code>{root}</code>."
+            ? $"Start the dev server at <code>{WebUtility.HtmlEncode(devServer.ToString())}</code>, then restart the app. Or build the frontend and rebuild the app, which copies it into <code>{root}</code>."
             : $"No frontend was found in <code>{root}</code>. Build the app in Release or run <code>dotnet publish</code> so the frontend is built and copied there.";
 
         return new FrontendSource.Missing(MissingPage(advice));

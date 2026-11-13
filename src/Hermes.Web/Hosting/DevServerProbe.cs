@@ -11,9 +11,8 @@ namespace Hermes.Web.Hosting;
 internal static class DevServerProbe
 {
     /// <summary>
-    /// Connects to every address the host resolves to at once, because a dev server may listen on only one of
-    /// 127.0.0.1 and ::1, and a refused connect on Windows retries for seconds. Runs entirely on the calling
-    /// thread, so a busy thread pool cannot hold up startup.
+    /// Connects to every resolved address at once, since a dev server may listen on only 127.0.0.1 or ::1, and
+    /// runs on the calling thread, so a busy thread pool cannot hold up startup.
     /// </summary>
     public static bool IsListening(Uri url, TimeSpan timeout)
     {

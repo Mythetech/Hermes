@@ -375,7 +375,7 @@ builder.UseFrontend(devServer: "http://localhost:5173");
 ```
 
 - In Development, the window opens the dev server when it accepts a connection within `DevServerProbeTimeout` (500 ms).
-- Otherwise, and always outside Development, it serves `wwwroot` next to the app, which the Hermes.Web MSBuild targets fill from `frontend/dist` on Release builds and publish.
+- Otherwise, and always outside Development, it serves `wwwroot` next to the app. Every build copies `frontend/dist` there when it exists, and Release builds and publish run the frontend build first.
 - With neither, the window shows a page saying which one to start.
 
 A launch profile that sets `DOTNET_ENVIRONMENT=Development` makes `dotnet run` and the IDE use the dev server. `HermesFrontendOptions` changes the static files folder, turns off SPA fallback, or changes the probe timeout:
