@@ -157,6 +157,8 @@ All communication uses JSON envelopes with a `type` discriminator:
 | C# → JS | `result` | `id`, `value` | Return value from invoke |
 | C# → JS | `error` | `id`, `message` | Error from invoke |
 | Either | `event` | `name`, `data` | Fire-and-forget notification |
+| JS → C# | `ready` | | The page has rendered, once per page load |
+| JS → C# | `page-error` | `source`, `name`, `message`, `stack` | An error the page did not handle |
 
 ```json
 // Invoke (JS → C#)
@@ -232,9 +234,22 @@ C#: bridge.Send("tick", 42)
 | Scenario | Behavior |
 |----------|----------|
 | Unknown method | C# sends error envelope, JS Promise rejects |
-| Handler throws | Exception caught, error envelope sent, JS Promise rejects |
+| Handler throws | Exception caught and logged as a warning, error envelope sent, JS Promise rejects |
+| Event handler throws (either side) | Logged as an error; on the JS side also reported as a `page-error` |
+| Uncaught error or unhandled rejection in the page | Reported as a `page-error`: logged as an error, and fails a smoke run |
 | Non-JSON message | Silently ignored with console warning |
 | No Hermes runtime | `bridge.isHermes` returns false, invokes fail gracefully |
+
+### Smoke Mode
+
+Web apps run the same smoke contract as Blazor apps: `HERMES_SMOKE_TEST=1` (with `HERMES_SMOKE_TEST_TIMEOUT`, `HERMES_SMOKE_TEST_RESULT` and `HERMES_SMOKE_TEST_EXIT`), `HERMES_SMOKE_RESULT: PASSED|FAILED`, exit code 0 or 1, and native dialogs fail the run instead of blocking it. Checks and gates are registered with `AddHermesSmokeCheck` and `AddHermesSmokeGate` and resolved from `app.Services`.
+
+- `window-shown` is marked when the window shows, `first-render` when the page's `ready` envelope arrives.
+- `@mythetech/hermes-bridge` sends `ready` once the document has loaded and a frame has passed, or 250 ms after load when frames are throttled, so the bridge must be imported from the app's entry module.
+- Checks run in a service scope off the bridge's reader, so a check can send the page an event and await its reply.
+- Every `page-error` fails the run as `HERMES_SMOKE_ERROR: page: <name>: <message>`. A handler exception alone does not: the page receives it as a rejected promise, and an unhandled rejection is reported on its own.
+
+CI boots the three samples this way on Windows, macOS and Linux (`web.yml`, `.github/scripts/Test-WebSmoke.ps1`); WebHelloWorld's `web-hello/bridge-echo` check covers both bridge directions with an object payload.
 
 ---
 

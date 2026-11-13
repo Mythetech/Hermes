@@ -71,12 +71,12 @@ Enable React, Vue, Angular, Svelte and other JS/TS frameworks as an alternative 
 
 **Remaining for 1.5:**
 
-- [ ] CI builds the npm packages and boots the web samples on every platform
+- [x] CI builds the npm packages and boots the web samples on every platform
 - [ ] Publish the npm packages (scope name to be confirmed) from a workflow
 - [x] Bridge: complex result and payload types, more than one argument, logging through the Hermes logger
 - [x] Auto-detect mode (dev server if running, else static files), replacing `#if DEBUG` in the samples
 - [x] Host parity with `Hermes.Blazor`: dependency injection, configuration, hosted services
-- [ ] Smoke mode for web apps
+- [x] Smoke mode for web apps
 - [x] MSBuild targets in the package build the frontend and copy it into `wwwroot` on publish and Release builds
 
 **Enterprise value:**
