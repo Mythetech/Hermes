@@ -251,8 +251,8 @@ if (bridge.isHermes) { /* running in Hermes window */ }
 // Invoke .NET method
 const greeting = await bridge.invoke<string>('greet', 'World');
 
-// Invoke with options
-const result = await bridge.invoke<string>('slowOp', { timeout: 5000 }, arg1);
+// Invoke with options, which are never sent as arguments
+const result = await bridge.invokeWithOptions<string>('slowOp', { timeout: 5000 }, arg1);
 
 // Subscribe to .NET events (returns unsubscribe function)
 const unsub = bridge.on<number>('tick', (seconds) => {

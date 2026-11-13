@@ -53,25 +53,25 @@ class HermesBridge {
     });
   }
 
+  /** Calls a .NET handler with every argument given, and resolves with its result. */
   invoke<T = unknown>(method: string, ...args: unknown[]): Promise<T> {
+    return this.call<T>(method, {}, args);
+  }
+
+  /** Calls a .NET handler like invoke, with options such as a timeout that are never sent as arguments. */
+  invokeWithOptions<T = unknown>(method: string, options: InvokeOptions, ...args: unknown[]): Promise<T> {
+    return this.call<T>(method, options, args);
+  }
+
+  private call<T>(method: string, options: InvokeOptions, args: unknown[]): Promise<T> {
     this.ensureInitialized();
 
     if (!this.ext) {
       return Promise.reject(new Error('Not running in Hermes'));
     }
 
-    let options: InvokeOptions = {};
-    let invokeArgs: unknown[];
-
-    if (args.length > 0 && typeof args[0] === 'object' && args[0] !== null && 'timeout' in (args[0] as object)) {
-      options = args[0] as InvokeOptions;
-      invokeArgs = args.slice(1);
-    } else {
-      invokeArgs = args;
-    }
-
     const id = generateId();
-    const envelope = JSON.stringify({ type: 'invoke', id, method, args: invokeArgs });
+    const envelope = JSON.stringify({ type: 'invoke', id, method, args });
     const ext = this.ext;
 
     return new Promise<T>((resolve, reject) => {

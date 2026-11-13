@@ -24,11 +24,12 @@ jobs:
 
       # The other packages and every sample resolve @mythetech/hermes-bridge through a file: link to its
       # built output, so the packages are built first and in dependency order.
-      - name: Build @mythetech/hermes-bridge
+      - name: Build and Test @mythetech/hermes-bridge
         working-directory: packages/hermes-bridge
         run: |
           npm ci
           npm run build
+          npm test
 
       - name: Build @mythetech/hermes-react
         working-directory: packages/hermes-react
