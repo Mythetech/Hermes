@@ -1,6 +1,8 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using Hermes;
 using Hermes.Abstractions;
 using Hermes.Blazor;
@@ -105,6 +107,9 @@ public sealed class ScenarioRunner : IDisposable
 
         // The page loads an image from a mapped path, so it also needs the WebView up
         await RunRequestHandlerTestAsync();
+
+        // A cross-origin iframe tries every route to the host; last, so its page stays out of the other scenarios
+        await RunSubframeIsolationTestAsync();
 
         // Print summary
         TestReporter.PrintSummary();
@@ -374,6 +379,81 @@ public sealed class ScenarioRunner : IDisposable
         catch (Exception ex)
         {
             TestReporter.Fail("request-handler", ex.Message);
+        }
+    }
+
+    private async Task RunSubframeIsolationTestAsync()
+    {
+        const string testName = "subframe-isolation";
+        TestReporter.Start(testName);
+        try
+        {
+            await using var server = SubframeProbeServer.Start();
+            var window = _app.MainWindow;
+            var sizeBefore = window.Size;
+            var leaks = new ConcurrentQueue<string>();
+            var report = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            window.OnWebMessage(message =>
+            {
+                if (message.Contains("subframe-leak", StringComparison.Ordinal))
+                    leaks.Enqueue(message);
+                else if (message.Contains("\"subframe-report\"", StringComparison.Ordinal))
+                    report.TrySetResult(message);
+            });
+
+            var probe = JsonSerializer.Serialize(new { type = "subframe-probe", url = server.PageUrl.ToString() });
+            window.Invoke(() => window.SendMessage(probe));
+
+            string? reported = null;
+            try
+            {
+                reported = await report.Task.WaitAsync(TimeSpan.FromSeconds(20));
+            }
+            catch (TimeoutException)
+            {
+            }
+
+            // Leaked messages were posted before the report, but frames may deliver them out of order.
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            var sizeAfter = window.Size;
+            Console.WriteLine($"SUBFRAME_REPORT: {reported ?? "(none)"}");
+
+            var failures = new List<string>();
+            if (reported is null)
+            {
+                failures.Add($"the iframe at {server.PageUrl} never reported, so it did not load or its script did not run");
+            }
+            else
+            {
+                using var document = JsonDocument.Parse(reported);
+                var root = document.RootElement;
+                string? Read(JsonElement element, string name) =>
+                    element.TryGetProperty(name, out var value) ? value.ToString() : null;
+                var routes = root.TryGetProperty("routes", out var routesElement) ? routesElement : default;
+                string? Route(string name) => routes.ValueKind == JsonValueKind.Object ? Read(routes, name) : null;
+
+                if (Read(root, "fetch") != "ok")
+                    failures.Add($"fetch from the iframe's own origin gave '{Read(root, "fetch")}'");
+                if (Read(root, "socket") != "ok")
+                    failures.Add($"a WebSocket to the iframe's own origin gave '{Read(root, "socket")}'");
+
+                // Without these the iframe never reached a native handler, and the scenario would prove nothing.
+                if (OperatingSystem.IsMacOS() && (Route("hermesinterop") != "posted" || Route("hermesDragRegion") != "posted"))
+                    failures.Add("the iframe could not post to the WebKit message handlers");
+                if (OperatingSystem.IsLinux() && Route("hermesHost") != "posted")
+                    failures.Add("the iframe could not post to the hermesHost message handler");
+            }
+
+            if (!leaks.IsEmpty)
+                failures.Add($"the host received {string.Join(", ", leaks)}");
+            if (sizeAfter != sizeBefore)
+                failures.Add($"the window went from {sizeBefore} to {sizeAfter}, so a drag message got through");
+
+            TestReporter.Assert(testName, failures.Count == 0, string.Join("; ", failures));
+        }
+        catch (Exception ex)
+        {
+            TestReporter.Fail(testName, ex.Message);
         }
     }
 
