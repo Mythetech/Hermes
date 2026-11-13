@@ -18,6 +18,9 @@ public sealed class WindowStateStore
     /// </summary>
     public static WindowStateStore Instance => s_instance.Value;
 
+    private const int MaxReplaceAttempts = 10;
+    private const int ReplaceRetryDelayMilliseconds = 5;
+
     private readonly object _lock = new();
     private Dictionary<string, WindowState>? _cache;
     private string? _filePath;
@@ -135,7 +138,7 @@ public sealed class WindowStateStore
             var json = JsonSerializer.Serialize(_cache, WindowStateJsonContext.Default.DictionaryStringWindowState);
 
             File.WriteAllText(tempPath, json);
-            File.Move(tempPath, _filePath, overwrite: true);
+            ReplaceWithRetry(tempPath, _filePath);
 
             HermesLogger.Info($"Saved window state to {_filePath}");
         }
@@ -144,6 +147,23 @@ public sealed class WindowStateStore
             HermesLogger.Error($"Failed to save window state to {_filePath}: {ex.Message}");
             DeleteQuietly(tempPath);
             // Don't rethrow - window closing should not fail due to state persistence
+        }
+    }
+
+    // Windows denies replacing a file while another process has it open or is replacing it too.
+    private static void ReplaceWithRetry(string sourcePath, string destinationPath)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(sourcePath, destinationPath, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (attempt < MaxReplaceAttempts && ex is IOException or UnauthorizedAccessException)
+            {
+                Thread.Sleep(attempt * ReplaceRetryDelayMilliseconds);
+            }
         }
     }
 

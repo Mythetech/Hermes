@@ -1,4 +1,5 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Hermes.Diagnostics;
 using Hermes.Storage;
@@ -20,11 +21,11 @@ public sealed class WindowStateStoreTests : IDisposable
     {
         var path = Path.Combine(_directory.FullName, "App.json");
         var stores = new[] { new WindowStateStore(path), new WindowStateStore(path) };
-        var failures = 0;
+        var failures = new ConcurrentQueue<string>();
         void OnError(string message, Exception? exception)
         {
             if (message.Contains(_directory.FullName, StringComparison.Ordinal))
-                Interlocked.Increment(ref failures);
+                failures.Enqueue(message);
         }
 
         HermesLogger.ErrorObserved += OnError;
@@ -41,7 +42,7 @@ public sealed class WindowStateStoreTests : IDisposable
             HermesLogger.ErrorObserved -= OnError;
         }
 
-        Assert.Equal(0, failures);
+        Assert.Empty(failures);
         Assert.NotNull(JsonSerializer.Deserialize<Dictionary<string, WindowState>>(File.ReadAllText(path)));
         Assert.Empty(_directory.GetFiles("*.tmp"));
     }
