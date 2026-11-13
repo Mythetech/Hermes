@@ -40,7 +40,7 @@ The framework does not implement custom JavaScript engines, parsers, or network 
 
 **Key boundaries:**
 
-- JavaScript ↔ .NET: Messages passed as strings via `window.external.sendMessage()` / `WebMessageReceived`
+- JavaScript ↔ .NET: Messages passed as strings via `window.external.sendMessage()` / `WebMessageReceived`, from the top frame only (see [Frames](#frames))
 - Custom Schemes: HTTP-like requests intercepted by .NET handler, responses returned as streams
 - Native P/Invoke: Platform backends communicate with native libraries for window management
 
@@ -103,13 +103,21 @@ window.RegisterCustomScheme("myscheme", (url) => {
 
 ## Known Considerations
 
-### CORS Headers on Custom Schemes
+### Frames
 
-Custom scheme responses include permissive CORS headers (`Access-Control-Allow-Origin: *`). This is **by design** - restrictive CORS policies block legitimate requests for third-party Blazor component assets. Razor Class Libraries from NuGet packages (served via `_content/{PackageName}/`) require cross-origin access to load correctly.
+Only the top frame of a Hermes window can reach the host, on every platform. A cross-origin iframe can't send web messages, start a window drag, or report a drop:
 
-Since custom schemes serve local application content only (your app's wwwroot and RCL assets), cross-origin access from external sites is not a concern in typical usage.
+- **macOS:** the WebKit message handlers ignore messages from every frame but the main frame.
+- **Linux:** the bridge is injected into the top frame only, and it prefixes every message with a random token created for each window. The host drops any message without that token, so only script holding it can reach the host.
+- **Windows:** WebView2 delivers web messages from the top-level document only, and Hermes also drops any message whose sender doesn't have the top-level document's origin. The bridge script runs in the top frame only.
 
-**Guidance:** Do not load untrusted external content via iframes or fetch from external origins in your WebView. If you must load external content, implement application-level validation.
+A same-origin iframe can script its parent, including the parent's bridge, so treat one as part of your app.
+
+On Windows, Hermes intercepts requests for the app's origin, `http://localhost/`, and nothing else. A request for any other origin, such as an iframe at `http://127.0.0.1:5123/`, goes to the network as it would in a browser, with its own scripts, fetches and WebSockets. App responses carry `Access-Control-Allow-Origin: http://localhost`, so pages from other origins can't read them. On macOS app responses carry no CORS header, and on Linux they allow `app://localhost` only.
+
+That makes a cross-origin iframe a safe place for untrusted content, such as a preview of a project's own pages. The top frame is different: whatever page holds it holds the bridge.
+
+**Guidance:** keep the top frame on your app's origin. Hermes doesn't yet stop the top frame navigating to another site, for example when someone clicks an external link, so open external links with `Opener.OpenUrl` instead of navigating the window.
 
 ### WebMessage Size
 
