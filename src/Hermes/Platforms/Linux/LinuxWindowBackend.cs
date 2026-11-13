@@ -89,6 +89,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         parameters.StartUrl = MarshalString(options.StartUrl);
         parameters.StartHtml = MarshalString(options.StartHtml);
         parameters.IconPath = MarshalString(options.IconPath);
+        parameters.BridgeToken = MarshalString(Infrastructure.BridgeToken.Create());
 
         // Initialize custom scheme names array (must be done before WindowCreate)
         parameters.CustomSchemeNames = new IntPtr[16];
@@ -127,6 +128,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
             FreeString(parameters.StartUrl);
             FreeString(parameters.StartHtml);
             FreeString(parameters.IconPath);
+            FreeString(parameters.BridgeToken);
 
             // Free scheme name strings
             foreach (var ptr in parameters.CustomSchemeNames)

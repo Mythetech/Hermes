@@ -42,6 +42,9 @@ struct _HermesWindow {
     // Custom schemes (up to 16)
     char* customSchemes[16];
     int customSchemeCount;
+
+    // NULL when the window was created without a valid token, which drops every web message
+    char* bridgeToken;
 };
 
 // Internal functions

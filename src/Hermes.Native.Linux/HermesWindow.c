@@ -337,6 +337,14 @@ static void handle_drag_message(HermesWindow* hw, const char* message) {
     // "no-drag" action is intentionally ignored
 }
 
+static gboolean is_bridge_token(const char* token) {
+    if (!token || strlen(token) != HERMES_BRIDGE_TOKEN_LENGTH) return FALSE;
+    for (const char* p = token; *p; p++) {
+        if (!g_ascii_isxdigit(*p)) return FALSE;
+    }
+    return TRUE;
+}
+
 static void on_script_message_received(WebKitUserContentManager* manager,
                                         WebKitJavascriptResult* jsResult,
                                         gpointer user_data) {
@@ -346,11 +354,15 @@ static void on_script_message_received(WebKitUserContentManager* manager,
     if (jsc_value_is_string(value)) {
         char* message = jsc_value_to_string(value);
         if (message) {
-            // Intercept drag messages for custom titlebar
-            if (hw->customTitleBar && strstr(message, "\"hermes-drag\"")) {
-                handle_drag_message(hw, message);
-            } else if (hw->onWebMessage) {
-                hw->onWebMessage(message);
+            // hermesHost is reachable from every frame; only the top frame's bridge holds the token.
+            if (hw->bridgeToken && strncmp(message, hw->bridgeToken, HERMES_BRIDGE_TOKEN_LENGTH) == 0) {
+                const char* body = message + HERMES_BRIDGE_TOKEN_LENGTH;
+                // Intercept drag messages for custom titlebar
+                if (hw->customTitleBar && strstr(body, "\"hermes-drag\"")) {
+                    handle_drag_message(hw, body);
+                } else if (hw->onWebMessage) {
+                    hw->onWebMessage(body);
+                }
             }
             g_free(message);
         }
@@ -511,6 +523,12 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
         hw->customSchemeCount++;
     }
 
+    if (is_bridge_token(params->BridgeToken)) {
+        hw->bridgeToken = g_strdup(params->BridgeToken);
+    } else {
+        fprintf(stderr, "[Hermes] Missing bridge token; web messages are disabled\n");
+    }
+
     // Create main window
     hw->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 
@@ -667,32 +685,38 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
         g_signal_connect(hw->webView, "context-menu", G_CALLBACK(on_context_menu), hw);
     }
 
-    // Inject JavaScript bridge
-    const char* bridgeScript =
-        "console.log('[Hermes JS] Bridge script injecting...');\n"
-        "window.__hermesReceiveCallbacks = [];\n"
-        "window.__hermesDispatchMessage = function(message) {\n"
-        "    window.__hermesReceiveCallbacks.forEach(function(cb) { cb(message); });\n"
-        "};\n"
-        "window.external = {\n"
-        "    sendMessage: function(message) {\n"
-        "        console.log('[Hermes JS] sendMessage called:', message.substring(0, 100));\n"
-        "        window.webkit.messageHandlers.hermesHost.postMessage(message);\n"
-        "    },\n"
-        "    receiveMessage: function(callback) {\n"
-        "        console.log('[Hermes JS] receiveMessage callback registered');\n"
-        "        window.__hermesReceiveCallbacks.push(callback);\n"
-        "    }\n"
-        "};\n"
-        "console.log('[Hermes JS] Bridge ready');\n";
+    // Inject JavaScript bridge; the token and handler stay in the closure, off every global.
+    char* bridgeScript = g_strdup_printf(
+        "(function() {\n"
+        "    console.log('[Hermes JS] Bridge script injecting...');\n"
+        "    var token = '%s';\n"
+        "    var host = window.webkit.messageHandlers.hermesHost;\n"
+        "    var callbacks = [];\n"
+        "    window.__hermesDispatchMessage = function(message) {\n"
+        "        callbacks.forEach(function(cb) { cb(message); });\n"
+        "    };\n"
+        "    window.external = {\n"
+        "        sendMessage: function(message) {\n"
+        "            console.log('[Hermes JS] sendMessage called:', message.substring(0, 100));\n"
+        "            host.postMessage(token + message);\n"
+        "        },\n"
+        "        receiveMessage: function(callback) {\n"
+        "            console.log('[Hermes JS] receiveMessage callback registered');\n"
+        "            callbacks.push(callback);\n"
+        "        }\n"
+        "    };\n"
+        "    console.log('[Hermes JS] Bridge ready');\n"
+        "})();\n",
+        hw->bridgeToken ? hw->bridgeToken : "");
 
     WebKitUserScript* userScript = webkit_user_script_new(
         bridgeScript,
-        WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+        WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
         WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
         NULL, NULL);
     webkit_user_content_manager_add_script(hw->userContentManager, userScript);
     webkit_user_script_unref(userScript);
+    g_free(bridgeScript);
 
     // Inject drag detection script for custom titlebar
     if (hw->customTitleBar) {
@@ -736,7 +760,7 @@ HermesWindow* hermes_window_new(const HermesWindowParams* params) {
 
         WebKitUserScript* dragUserScript = webkit_user_script_new(
             dragScript,
-            WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+            WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
             WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END,
             NULL, NULL);
         webkit_user_content_manager_add_script(hw->userContentManager, dragUserScript);
@@ -782,6 +806,7 @@ void hermes_window_destroy(HermesWindow* hw) {
     for (int i = 0; i < hw->customSchemeCount; i++) {
         g_free(hw->customSchemes[i]);
     }
+    g_free(hw->bridgeToken);
 
     // Destroy GTK widgets (this will also destroy children)
     if (hw->window) {
