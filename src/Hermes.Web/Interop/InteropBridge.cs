@@ -48,6 +48,12 @@ public sealed partial class InteropBridge
 
     internal TimeSpan StopTimeout { get; set; } = TimeSpan.FromSeconds(5);
 
+    /// <summary>Raised on the bridge's reader when the page has rendered, once per page load.</summary>
+    internal event Action? PageReady;
+
+    /// <summary>Raised on the bridge's reader for an error the page did not handle.</summary>
+    internal event Action<PageError>? PageErrorReported;
+
     internal void Start()
     {
         lock (_gate)
@@ -132,6 +138,13 @@ public sealed partial class InteropBridge
                     case "event":
                         _eventQueue.Writer.TryWrite(envelope);
                         break;
+                    case "ready":
+                        Raise(PageReady, "the page's ready signal");
+                        break;
+                    case "page-error":
+                        var error = new PageError(envelope.Source ?? "error", envelope.Name ?? "Error", envelope.Message ?? "", envelope.Stack);
+                        Raise(() => PageErrorReported?.Invoke(error), "an error from the page");
+                        break;
                 }
             }
         }
@@ -145,6 +158,18 @@ public sealed partial class InteropBridge
         finally
         {
             _eventQueue.Writer.TryComplete();
+        }
+    }
+
+    private static void Raise(Action? handler, string what)
+    {
+        try
+        {
+            handler?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            HermesLogger.Error($"Handling {what} failed", ex);
         }
     }
 
@@ -242,7 +267,8 @@ public sealed partial class InteropBridge
         }
         catch (Exception ex)
         {
-            HermesLogger.Error($"Bridge method '{method}' failed", ex);
+            // The page gets the error as a rejected promise and decides whether it is a failure.
+            HermesLogger.Warning($"Bridge method '{method}' failed: {ex}");
             Post(BridgeJson.Error(id, ex.Message));
         }
     }
