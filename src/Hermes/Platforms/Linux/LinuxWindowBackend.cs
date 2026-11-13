@@ -5,6 +5,7 @@ using System.Text;
 using Hermes.Abstractions;
 using Hermes.Contracts.DataTransfer;
 using Hermes.DataTransfer;
+using Hermes.Infrastructure;
 
 namespace Hermes.Platforms.Linux;
 
@@ -24,6 +25,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
 
     // Keep strong references to delegates to prevent GC during window lifetime
     private readonly List<Delegate> _pinnedDelegates = new();
+    private readonly UiInvokeQueue _invokeQueue = new(HermesApplication.RaiseDispatcherUnhandledException);
 
     // Custom scheme handlers registered before Initialize()
     private readonly Dictionary<string, Func<string, (Stream? Content, string? ContentType)>> _customSchemeHandlers = new();
@@ -326,55 +328,32 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
             return;
         }
 
-        Exception? capturedException = null;
-        using var waitHandle = new ManualResetEventSlim(false);
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_invokeQueue.TryEnqueue(action, completion, out var wakeupNeeded))
+            throw new ObjectDisposedException(nameof(LinuxWindowBackend));
 
-        var invokeDelegate = new LinuxNativeDelegates.InvokeCallback(() =>
-        {
-            try
-            {
-                action();
-            }
-            catch (Exception ex)
-            {
-                capturedException = ex;
-            }
-            finally
-            {
-                waitHandle.Set();
-            }
-        });
+        if (wakeupNeeded)
+            PostDrain();
 
-        // Pin delegate during native call
-        var handle = GCHandle.Alloc(invokeDelegate);
-        try
-        {
-            LinuxNative.WindowInvoke(_windowHandle, Marshal.GetFunctionPointerForDelegate(invokeDelegate));
-            waitHandle.Wait();
-        }
-        finally
-        {
-            handle.Free();
-        }
-
-        if (capturedException is not null)
-        {
-            throw capturedException;
-        }
+        completion.Task.GetAwaiter().GetResult();
     }
 
     public void BeginInvoke(Action action)
     {
+        // Rejection means the window is tearing down; fire-and-forget work is droppable then.
+        if (_invokeQueue.TryEnqueue(action, completion: null, out var wakeupNeeded) && wakeupNeeded)
+            PostDrain();
+    }
+
+    // The native post only adds a GLib idle source and never reads the window, so it needs no lock against Dispose.
+    private void PostDrain()
+    {
         GCHandle handle = default;
-        var invokeDelegate = new LinuxNativeDelegates.InvokeCallback(() =>
+        var drain = new LinuxNativeDelegates.InvokeCallback(() =>
         {
             try
             {
-                action();
-            }
-            catch (Exception ex)
-            {
-                HermesApplication.RaiseDispatcherUnhandledException(ex);
+                _invokeQueue.Drain();
             }
             finally
             {
@@ -383,8 +362,8 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
             }
         });
 
-        handle = GCHandle.Alloc(invokeDelegate);
-        LinuxNative.WindowBeginInvoke(_windowHandle, Marshal.GetFunctionPointerForDelegate(invokeDelegate));
+        handle = GCHandle.Alloc(drain);
+        LinuxNative.WindowBeginInvoke(_windowHandle, Marshal.GetFunctionPointerForDelegate(drain));
     }
 
     #endregion
@@ -816,6 +795,7 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
         }
         OnNativeDragEnded(dropped: false);
         _pendingDropClaims.Clear();
+        _invokeQueue.Dispose();
 
         if (_windowHandle != IntPtr.Zero)
         {

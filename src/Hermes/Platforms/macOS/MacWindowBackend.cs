@@ -5,6 +5,7 @@ using System.Text;
 using Hermes.Abstractions;
 using Hermes.Contracts.DataTransfer;
 using Hermes.DataTransfer;
+using Hermes.Infrastructure;
 
 namespace Hermes.Platforms.macOS;
 
@@ -15,6 +16,8 @@ namespace Hermes.Platforms.macOS;
 internal sealed class MacWindowBackend : IHermesWindowBackend
 {
     private IntPtr _windowHandle;
+    private readonly object _handleLock = new();
+    private readonly UiInvokeQueue _invokeQueue = new(HermesApplication.RaiseDispatcherUnhandledException);
     private int _uiThreadId;
     private bool _initialized;
     private bool _disposed;
@@ -118,14 +121,20 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
             SetupCallbacks(ref parameters);
 
             // Create the window (schemes are registered from CustomSchemeNames during creation)
-            _windowHandle = MacNative.WindowCreate(ref parameters);
-            if (_windowHandle == IntPtr.Zero)
+            var windowHandle = MacNative.WindowCreate(ref parameters);
+            if (windowHandle == IntPtr.Zero)
                 throw new InvalidOperationException("Failed to create native window.");
+
+            lock (_handleLock)
+                _windowHandle = windowHandle;
 
             if (options.Theme != HermesWindowTheme.System)
                 MacNative.WindowSetTheme(_windowHandle, (int)options.Theme);
 
             _initialized = true;
+
+            // Runs work queued before the window existed, whose wakeup had nowhere to go.
+            PostDrain();
         }
         finally
         {
@@ -370,55 +379,32 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
             return;
         }
 
-        Exception? capturedException = null;
-        using var waitHandle = new ManualResetEventSlim(false);
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_invokeQueue.TryEnqueue(action, completion, out var wakeupNeeded))
+            throw new ObjectDisposedException(nameof(MacWindowBackend));
 
-        var invokeDelegate = new MacNativeDelegates.InvokeCallback(() =>
-        {
-            try
-            {
-                action();
-            }
-            catch (Exception ex)
-            {
-                capturedException = ex;
-            }
-            finally
-            {
-                waitHandle.Set();
-            }
-        });
+        if (wakeupNeeded)
+            PostDrain();
 
-        // Pin delegate during native call
-        var handle = GCHandle.Alloc(invokeDelegate);
-        try
-        {
-            MacNative.WindowInvoke(_windowHandle, Marshal.GetFunctionPointerForDelegate(invokeDelegate));
-            waitHandle.Wait();
-        }
-        finally
-        {
-            handle.Free();
-        }
-
-        if (capturedException is not null)
-        {
-            throw capturedException;
-        }
+        completion.Task.GetAwaiter().GetResult();
     }
 
     public void BeginInvoke(Action action)
     {
+        // Rejection means the window is tearing down; fire-and-forget work is droppable then.
+        if (_invokeQueue.TryEnqueue(action, completion: null, out var wakeupNeeded) && wakeupNeeded)
+            PostDrain();
+    }
+
+    // The native post messages the window object, so it holds the lock Dispose destroys the window under.
+    private void PostDrain()
+    {
         GCHandle handle = default;
-        var invokeDelegate = new MacNativeDelegates.InvokeCallback(() =>
+        var drain = new MacNativeDelegates.InvokeCallback(() =>
         {
             try
             {
-                action();
-            }
-            catch (Exception ex)
-            {
-                HermesApplication.RaiseDispatcherUnhandledException(ex);
+                _invokeQueue.Drain();
             }
             finally
             {
@@ -427,8 +413,14 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
             }
         });
 
-        handle = GCHandle.Alloc(invokeDelegate);
-        MacNative.WindowBeginInvoke(_windowHandle, Marshal.GetFunctionPointerForDelegate(invokeDelegate));
+        lock (_handleLock)
+        {
+            if (_windowHandle == IntPtr.Zero)
+                return;
+
+            handle = GCHandle.Alloc(drain);
+            MacNative.WindowBeginInvoke(_windowHandle, Marshal.GetFunctionPointerForDelegate(drain));
+        }
     }
 
     #endregion
@@ -723,11 +715,15 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
         _disposed = true;
 
         Interlocked.Exchange(ref _drag, null)?.TrySetResult(HermesDragResult.Canceled);
+        _invokeQueue.Dispose();
 
-        if (_windowHandle != IntPtr.Zero)
+        lock (_handleLock)
         {
-            MacNative.WindowDestroy(_windowHandle);
-            _windowHandle = IntPtr.Zero;
+            if (_windowHandle != IntPtr.Zero)
+            {
+                MacNative.WindowDestroy(_windowHandle);
+                _windowHandle = IntPtr.Zero;
+            }
         }
 
         _pinnedDelegates.Clear();
