@@ -41,11 +41,7 @@ public sealed class HermesBlazorAppBuilder : IHostApplicationBuilder
 
     private HermesBlazorAppBuilder(string[]? args, bool addDefaultConfiguration)
     {
-        _hostBuilder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings
-        {
-            Args = args,
-            DisableDefaults = true
-        });
+        _hostBuilder = HermesHostDefaults.CreateBuilder(args);
 
         if (addDefaultConfiguration)
             HermesHostDefaults.AddDefaultConfiguration(_hostBuilder, args);
