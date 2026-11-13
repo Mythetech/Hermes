@@ -1,6 +1,7 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using Hermes;
 using Hermes.Web;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace SvelteHelloWorld;
 
@@ -13,7 +14,7 @@ internal static class Program
     {
         HermesWindow.Prewarm();
 
-        var builder = HermesWebAppBuilder.Create();
+        var builder = HermesWebAppBuilder.CreateDefault(args);
 
         builder.ConfigureWindow(opts =>
         {
@@ -23,12 +24,8 @@ internal static class Program
             opts.DevToolsEnabled = true;
         });
 
-#if DEBUG
-        builder.UseDevServer("http://localhost:5174");
-#else
-        builder.UseStaticFiles();
-        builder.UseSpaFallback();
-#endif
+        builder.UseFrontend(devServer: "http://localhost:5174");
+        builder.Services.AddHostedService<TickService>();
 
         var app = builder.Build();
 
@@ -36,13 +33,7 @@ internal static class Program
         app.Bridge.Handle("getRuntime", () => $".NET {Environment.Version}");
         app.Bridge.Handle("getPlatform", () => Environment.OSVersion.Platform.ToString());
 
-        var seconds = 0;
-        using var ticker = new System.Threading.Timer(_ =>
-        {
-            seconds++;
-            app.Bridge.Send("tick", seconds);
-        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
-
         app.Run();
+        app.DisposeAsync().AsTask().GetAwaiter().GetResult();
     }
 }
