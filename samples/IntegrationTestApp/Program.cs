@@ -108,6 +108,9 @@ public static class Program
 
         app.Run();
 
+        if (isIntegrationTest)
+            InvokeAfterLoopProbe.Start(app.MainWindow);
+
         app.DisposeAsync().AsTask().GetAwaiter().GetResult();
 
         if (isIntegrationTest)
