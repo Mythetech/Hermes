@@ -1,5 +1,6 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using Hermes.Infrastructure;
+using Hermes.Tests.Smoke;
 using Xunit;
 
 namespace Hermes.Tests;
@@ -229,6 +230,8 @@ public class UiInvokeQueueTests
     }
 }
 
+/// <summary>Raises the process-wide dispatcher event, which sink tests in other classes listen to, so it runs alone.</summary>
+[Collection(nameof(ProcessWideEventsCollection))]
 public class DispatcherUnhandledExceptionTests
 {
     [Fact]
