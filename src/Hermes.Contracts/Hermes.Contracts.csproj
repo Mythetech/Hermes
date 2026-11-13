@@ -31,6 +31,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Hermes" />
     <InternalsVisibleTo Include="Hermes.Blazor" />
+    <InternalsVisibleTo Include="Hermes.Web" />
     <InternalsVisibleTo Include="Hermes.Tests" />
   </ItemGroup>
 

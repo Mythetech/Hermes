@@ -1,11 +1,14 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using Hermes.Abstractions;
+using Hermes.Contracts.Diagnostics;
 using Hermes.Contracts.Hotkeys;
 using Hermes.Contracts.Notifications;
 using Hermes.Contracts.Plugins;
 using Hermes.Diagnostics;
+using Hermes.Diagnostics.Smoke;
 using Hermes.Hosting;
 using Hermes.Plugins;
+using Hermes.Web.Diagnostics;
 using Hermes.Web.Hosting;
 using Hermes.Web.Interop;
 using Microsoft.Extensions.Configuration;
@@ -25,6 +28,7 @@ public sealed class HermesWebAppBuilder : IHostApplicationBuilder
     private readonly HermesFrontendOptions _frontendOptions = new();
     private Action<HermesWindowOptions>? _windowConfiguration;
     private Uri? _devServer;
+    private WebSmokeRuntime? _smoke;
 
     private HermesWebAppBuilder(string[]? args, bool addDefaultConfiguration)
     {
@@ -34,7 +38,17 @@ public sealed class HermesWebAppBuilder : IHostApplicationBuilder
             HermesHostDefaults.AddDefaultConfiguration(_hostBuilder, args);
 
         HermesHostDefaults.AddWindowHost(_hostBuilder.Services);
-        HermesSmokeHosting.UseNoOpSession(_hostBuilder.Services);
+
+        if (HermesSmokeTest.IsEnabled)
+        {
+            var session = new SmokeSession(HermesSmokeTest.Settings, SmokeSessionContext.ForCurrentProcess());
+            EnableSmokeMode(session);
+            SmokeErrorCapture.Attach(session);
+        }
+        else
+        {
+            HermesSmokeHosting.UseNoOpSession(_hostBuilder.Services);
+        }
     }
 
     /// <summary>
@@ -108,6 +122,19 @@ public sealed class HermesWebAppBuilder : IHostApplicationBuilder
         return this;
     }
 
+    /// <summary>Runs this builder in smoke mode with a caller-supplied session, so tests can drive a smoke run.</summary>
+    internal HermesWebAppBuilder UseSmokeSessionForTest(SmokeSession session)
+    {
+        EnableSmokeMode(session);
+        return this;
+    }
+
+    private void EnableSmokeMode(SmokeSession session)
+    {
+        HermesSmokeHosting.Enable(_hostBuilder, session);
+        _smoke = new WebSmokeRuntime(session);
+    }
+
     /// <summary>
     /// Builds the app. Register bridge handlers on <see cref="HermesWebApp.Bridge"/> before calling <see cref="HermesWebApp.Run"/>.
     /// </summary>
@@ -126,6 +153,13 @@ public sealed class HermesWebAppBuilder : IHostApplicationBuilder
             HermesWindowOptions.ApplyTo(window, options);
         }
 
+        if (_smoke is { } smoke)
+        {
+            window.AttachSmokeSession(smoke.Session);
+            window.Shown += () => smoke.Session.MarkMilestone(SmokeSession.WindowShownMilestone);
+            smoke.Session.AttachCloseHandler(() => window.Backend.BeginInvoke(window.Close));
+        }
+
         var bridge = new InteropBridge(window.Backend);
 
         Services.AddSingleton(window);
@@ -137,13 +171,15 @@ public sealed class HermesWebAppBuilder : IHostApplicationBuilder
         Services.AddSingleton<INativeNotifications, DesktopNativeNotifications>();
 
         var host = _hostBuilder.Build();
+        if (_smoke is not null)
+            HermesSmokeHosting.RequireRegisteredGates(host.Services, _smoke.Session);
 
         var staticRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, _frontendOptions.StaticFilesPath));
         var source = FrontendResolver.Resolve(
             Environment.IsDevelopment(), _devServer, staticRoot, _frontendOptions.DevServerProbeTimeout, ProbeDevServer);
         LoadFrontend(window, source);
 
-        return new HermesWebApp(host, window, bridge);
+        return new HermesWebApp(host, window, bridge, _smoke);
     }
 
     private void LoadFrontend(HermesWindow window, FrontendSource source)
