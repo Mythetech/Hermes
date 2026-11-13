@@ -25,6 +25,8 @@ public sealed class SingleInstanceGuard : IDisposable
     /// </summary>
     public bool IsFirstInstance => _isFirstInstance;
 
+    internal string PipeName => _pipeName;
+
     /// <summary>
     /// Raised when a second instance launches and sends its command-line arguments.
     /// This event fires on a background thread. Use <c>window.Invoke()</c> to marshal to the UI thread.
@@ -43,7 +45,8 @@ public sealed class SingleInstanceGuard : IDisposable
         ValidateApplicationId(applicationId);
 
         var mutexName = $"Hermes_SI_{applicationId}";
-        _pipeName = $"Hermes_SI_{applicationId}";
+        // Scoped like the mutex, so two users' copies never share a socket in /tmp or a Windows pipe name.
+        _pipeName = $"Hermes_SI_{applicationId}_{UserScope.Current}";
 
         // A Unix session is one terminal tab or launchd, so Unix scopes the lock to the user; Windows keeps its per-login scope.
         var unix = !OperatingSystem.IsWindows();
@@ -80,7 +83,7 @@ public sealed class SingleInstanceGuard : IDisposable
 
         try
         {
-            using var client = new NamedPipeClientStream(".", _pipeName, PipeDirection.Out);
+            using var client = new NamedPipeClientStream(".", _pipeName, PipeDirection.Out, PipeOptions.CurrentUserOnly);
             client.Connect(timeout: 5000);
 
             var json = JsonSerializer.Serialize(args, SingleInstanceJsonContext.Default.StringArray);
@@ -116,7 +119,7 @@ public sealed class SingleInstanceGuard : IDisposable
                 PipeDirection.In,
                 NamedPipeServerStream.MaxAllowedServerInstances,
                 PipeTransmissionMode.Byte,
-                PipeOptions.None);
+                PipeOptions.CurrentUserOnly);
 
             while (!_disposed)
             {
@@ -188,7 +191,7 @@ public sealed class SingleInstanceGuard : IDisposable
         {
             try
             {
-                using var unblock = new NamedPipeClientStream(".", _pipeName, PipeDirection.Out);
+                using var unblock = new NamedPipeClientStream(".", _pipeName, PipeDirection.Out, PipeOptions.CurrentUserOnly);
                 unblock.Connect(timeout: 1000);
             }
             catch

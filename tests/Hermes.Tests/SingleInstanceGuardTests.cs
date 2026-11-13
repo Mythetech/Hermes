@@ -1,4 +1,7 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
+using System.Diagnostics;
+using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using Hermes.SingleInstance;
 using Xunit;
 
@@ -222,4 +225,36 @@ public sealed class SingleInstanceGuardTests
         Assert.True(bothReceived.Wait(TimeSpan.FromSeconds(10)), "Second notification was lost while the first was being processed");
         Assert.Equal(2, receivedCount);
     }
+
+    [Fact]
+    public void PipeName_IncludesTheUserScope()
+    {
+        var id = $"t{Guid.NewGuid().ToString("N")[..8]}";
+        using var guard = new SingleInstanceGuard(id);
+
+        var scope = OperatingSystem.IsWindows() ? Process.GetCurrentProcess().SessionId.ToString() : geteuid().ToString();
+        Assert.Equal($"Hermes_SI_{id}_{scope}", guard.PipeName);
+    }
+
+    /// <summary>Another user's app with the same id holds the unscoped name; this user's instances must not meet it.</summary>
+    [Fact]
+    public void NotifyFirstInstance_IgnoresAPipeWithTheUnscopedName()
+    {
+        var id = $"t{Guid.NewGuid().ToString("N")[..8]}";
+        using var decoy = new NamedPipeServerStream($"Hermes_SI_{id}", PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+        var decoyConnected = decoy.WaitForConnectionAsync();
+
+        using var first = new SingleInstanceGuard(id);
+        var received = new ManualResetEventSlim(false);
+        first.SecondInstanceLaunched += _ => received.Set();
+
+        using var second = new SingleInstanceGuard(id);
+        second.NotifyFirstInstance(["--file", "test.txt"]);
+
+        Assert.True(received.Wait(TimeSpan.FromSeconds(5)), "The first instance never received the args");
+        Assert.False(decoyConnected.IsCompleted, "The args went to the unscoped pipe");
+    }
+
+    [DllImport("libc")]
+    private static extern uint geteuid();
 }
