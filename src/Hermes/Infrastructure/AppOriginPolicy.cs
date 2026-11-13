@@ -23,6 +23,10 @@ internal static class AppOriginPolicy
     /// <summary>Whether two URLs share a scheme, host and port.</summary>
     public static bool IsSameOrigin(string? first, string? second)
     {
+        // Identical URLs share an origin even when Uri can't parse them, such as a data: URL over its length limit.
+        if (first is not null && string.Equals(first, second, StringComparison.Ordinal))
+            return true;
+
         if (!Uri.TryCreate(first, UriKind.Absolute, out var a) || !Uri.TryCreate(second, UriKind.Absolute, out var b))
             return false;
 
