@@ -113,6 +113,12 @@ internal sealed class LinuxWindowBackend : IHermesWindowBackend
                 AttachDragDrop(options.DropCustomTypes);
 
             _initialized = true;
+
+            // The native window ignores its start page, so the first load is issued here, before the window shows.
+            if (!string.IsNullOrEmpty(options.StartUrl))
+                LinuxNative.WindowNavigateToUrl(_windowHandle, options.StartUrl);
+            else if (!string.IsNullOrEmpty(options.StartHtml))
+                LinuxNative.WindowNavigateToString(_windowHandle, options.StartHtml);
         }
         finally
         {
