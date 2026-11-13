@@ -1,5 +1,6 @@
 // Copyright (c) Mythetech. Licensed under the MIT License.
 using Hermes;
+using Hermes.Diagnostics;
 using Hermes.Web;
 
 namespace WebHelloWorld;
@@ -24,6 +25,10 @@ internal static class Program
         });
 
         builder.UseFrontend(devServer: "http://localhost:5173");
+
+        builder.Services.AddHermesSmokeCheck<BridgeEchoCheck>();
+        if (Environment.GetEnvironmentVariable("WEB_SAMPLE_FAULT") == "page")
+            builder.Services.AddHermesSmokeCheck<PageFaultCheck>();
 
         var app = builder.Build();
 
