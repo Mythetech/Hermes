@@ -404,7 +404,7 @@ internal sealed class MacWindowBackend : IHermesWindowBackend
         {
             try
             {
-                _invokeQueue.Drain();
+                _invokeQueue.Drain(PostDrain);
             }
             finally
             {

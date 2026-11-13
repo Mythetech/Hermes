@@ -11,6 +11,10 @@ public class UiInvokeQueueTests
         return new UiInvokeQueue(ex => unhandled?.Add(ex));
     }
 
+    private static void NoWakeup()
+    {
+    }
+
     private static TaskCompletionSource CreateCompletion()
     {
         return new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -50,7 +54,7 @@ public class UiInvokeQueueTests
         queue.TryEnqueue(() => executed.Add(2), completion: null, out _);
         queue.TryEnqueue(() => executed.Add(3), completion: null, out _);
 
-        queue.Drain();
+        queue.Drain(NoWakeup);
 
         Assert.Equal(new[] { 1, 2, 3 }, executed);
     }
@@ -61,7 +65,7 @@ public class UiInvokeQueueTests
         using var queue = CreateQueue();
 
         queue.TryEnqueue(() => { }, completion: null, out _);
-        queue.Drain();
+        queue.Drain(NoWakeup);
         queue.TryEnqueue(() => { }, completion: null, out bool wakeupNeeded);
 
         Assert.True(wakeupNeeded);
@@ -74,7 +78,7 @@ public class UiInvokeQueueTests
         var completion = CreateCompletion();
 
         queue.TryEnqueue(() => { }, completion, out _);
-        queue.Drain();
+        queue.Drain(NoWakeup);
 
         Assert.True(completion.Task.IsCompletedSuccessfully);
     }
@@ -89,7 +93,7 @@ public class UiInvokeQueueTests
         queue.TryEnqueue(() => throw new InvalidOperationException("boom"), completion, out _);
         queue.TryEnqueue(() => laterItemRan = true, completion: null, out _);
 
-        queue.Drain();
+        queue.Drain(NoWakeup);
 
         Assert.True(completion.Task.IsFaulted);
         Assert.IsType<InvalidOperationException>(completion.Task.Exception!.GetBaseException());
@@ -103,7 +107,7 @@ public class UiInvokeQueueTests
         using var queue = CreateQueue(unhandled);
 
         queue.TryEnqueue(() => throw new InvalidOperationException("async boom"), completion: null, out _);
-        queue.Drain();
+        queue.Drain(NoWakeup);
 
         var exception = Assert.Single(unhandled);
         Assert.Equal("async boom", exception.Message);
@@ -115,7 +119,7 @@ public class UiInvokeQueueTests
         var queue = new UiInvokeQueue(_ => throw new InvalidOperationException("handler boom"));
         queue.TryEnqueue(() => throw new InvalidOperationException("original"), completion: null, out _);
 
-        var drainException = Record.Exception(() => queue.Drain());
+        var drainException = Record.Exception(() => queue.Drain(NoWakeup));
 
         Assert.Null(drainException);
         queue.Dispose();
@@ -183,6 +187,45 @@ public class UiInvokeQueueTests
         bool unblocked = waiter.Wait(TimeSpan.FromSeconds(5));
         Assert.True(unblocked);
         Assert.IsType<ObjectDisposedException>(waiter.Result);
+    }
+
+    [Fact]
+    public void Drain_ItemQueuedWhileDraining_WaitsForTheNextWakeup()
+    {
+        using var queue = CreateQueue();
+        var executed = new List<string>();
+        var wakeups = 0;
+
+        queue.TryEnqueue(() =>
+        {
+            executed.Add("first");
+            if (queue.TryEnqueue(() => executed.Add("queued while draining"), completion: null, out var wakeupNeeded) && wakeupNeeded)
+                wakeups++;
+        }, completion: null, out _);
+
+        queue.Drain(() => wakeups++);
+
+        Assert.Equal(["first"], executed);
+        Assert.Equal(1, wakeups);
+
+        queue.Drain(() => wakeups++);
+
+        Assert.Equal(["first", "queued while draining"], executed);
+    }
+
+    [Fact]
+    public void Drain_RequestsAWakeupBeforeRunningAnItemWithWorkBehindIt()
+    {
+        using var queue = CreateQueue();
+        var wakeups = 0;
+        var wakeupsWhenFirstRan = -1;
+
+        queue.TryEnqueue(() => wakeupsWhenFirstRan = wakeups, completion: null, out _);
+        queue.TryEnqueue(() => { }, completion: null, out _);
+
+        queue.Drain(() => wakeups++);
+
+        Assert.Equal(1, wakeupsWhenFirstRan);
     }
 }
 
