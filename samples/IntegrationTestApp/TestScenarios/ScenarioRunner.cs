@@ -574,13 +574,18 @@ public sealed class ScenarioRunner : IDisposable
             await faulted.ContinueWith(_ => { }, TaskContinuationOptions.OnlyOnFaulted);
             faulted = null;
 
-            // Force GC to trigger UnobservedTaskException
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
-
+            // The faulted task can still be reachable for a moment after its continuation runs, so collect until it is finalized.
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var context = await crashReceived.Task.WaitAsync(cts.Token);
+            while (!crashReceived.Task.IsCompleted)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+                if (!crashReceived.Task.IsCompleted)
+                    await Task.Delay(TimeSpan.FromMilliseconds(20), cts.Token);
+            }
+
+            var context = await crashReceived.Task;
 
             var passed = context.Source == CrashSource.UnobservedTask
                 && context.Exception.ExceptionType == "System.InvalidOperationException"
