@@ -9,11 +9,14 @@ using Xunit;
 
 namespace Hermes.Tests.Platforms;
 
-// These register real system-wide hotkeys on F13 and up, which few keyboards have, so nothing else owns them.
+// These register real system-wide hotkeys on F13 and up, which few keyboards have, so only these tests use them.
 [SupportedOSPlatform("windows")]
-public sealed class WindowsGlobalHotkeyBackendTests
+public sealed class WindowsGlobalHotkeyBackendTests : IDisposable
 {
     private static readonly TimeSpan s_timeout = TimeSpan.FromSeconds(5);
+    private readonly SystemHotkeyLock _systemHotkeys = new();
+
+    public void Dispose() => _systemHotkeys.Dispose();
 
     [Fact]
     public void NativeModifiers_AlwaysAddNoRepeat()

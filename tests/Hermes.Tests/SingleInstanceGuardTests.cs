@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using Hermes.SingleInstance;
+using Hermes.Tests.Smoke;
 using Xunit;
 
 namespace Hermes.Tests;
@@ -172,12 +173,10 @@ public sealed class SingleInstanceGuardTests
             // Allow the pipe server to restart between connections
             Thread.Sleep(200);
             using var second = new SingleInstanceGuard(id);
-            second.NotifyFirstInstance([$"batch-{i}"]);
+            Assert.True(second.NotifyFirstInstance([$"batch-{i}"]), $"Notification {i} failed to send");
         }
 
-        // The pipe server loop is scheduled on the thread pool; on loaded 2-core
-        // CI runners delivery has measured over 8 seconds while still correct,
-        // so the wait needs generous headroom to stay load-insensitive.
+        // On Unix delivery waits for a thread pool thread, which loaded CI runners have taken over 8 seconds to free.
         Assert.True(allReceived.Wait(TimeSpan.FromSeconds(30)), "Timed out waiting for all notifications");
         Assert.Equal(3, receivedCount);
     }
@@ -276,5 +275,48 @@ public sealed class SingleInstanceGuardTests
 
         Assert.True(second.NotifyFirstInstance(["--file", "test.txt"]));
         Assert.True(received.Wait(TimeSpan.FromSeconds(5)), "The first instance never received the args");
+    }
+}
+
+/// <summary>Holds the whole thread pool, so it runs alone.</summary>
+[Collection(nameof(ProcessWideEventsCollection))]
+public sealed class SingleInstanceGuardBusyPoolTests
+{
+    /// <summary>On Unix a busy pool only delays delivery, since the connection waits in the socket's backlog.</summary>
+    [Fact]
+    public void NotifyFirstInstance_ReachesTheFirstInstanceAgain_WhileTheThreadPoolIsBusy()
+    {
+        var id = $"t{Guid.NewGuid().ToString("N")[..8]}";
+        var firstArrived = new ManualResetEventSlim(false);
+        var poolBusy = new ManualResetEventSlim(false);
+        var secondArrived = new ManualResetEventSlim(false);
+        using var first = new SingleInstanceGuard(id);
+        first.SecondInstanceLaunched += args =>
+        {
+            if (args[0] != "one")
+            {
+                secondArrived.Set();
+                return;
+            }
+
+            firstArrived.Set();
+            // The listener waits for its next client once this returns, so it starts waiting with the pool full.
+            poolBusy.Wait(TimeSpan.FromSeconds(10));
+        };
+
+        using (var second = new SingleInstanceGuard(id))
+            Assert.True(second.NotifyFirstInstance(["one"]));
+        Assert.True(firstArrived.Wait(TimeSpan.FromSeconds(5)), "The first instance never received the first notification");
+
+        bool notified;
+        using (new ThreadPoolHold())
+        {
+            poolBusy.Set();
+            using var third = new SingleInstanceGuard(id);
+            notified = third.NotifyFirstInstance(["two"]);
+        }
+
+        Assert.True(notified, "The second notification could not reach the first instance");
+        Assert.True(secondArrived.Wait(TimeSpan.FromSeconds(5)), "The first instance never received the second notification");
     }
 }

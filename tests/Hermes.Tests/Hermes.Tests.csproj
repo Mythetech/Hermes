@@ -5,7 +5,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- Tests block pool threads while they wait, which on 3 and 4 core runners holds up the pool work other tests wait on. -->
+    <ThreadPoolMinThreads>32</ThreadPoolMinThreads>
   </PropertyGroup>
+
+  <!-- The child builds do not depend on the test host's framework, so one test process runs them instead of one per framework. -->
+  <ItemGroup Condition="'$(TargetFramework)' != '$(TargetFrameworks.Split(`;`)[0])'">
+    <Compile Remove="Web/FrontendTargets/**" />
+  </ItemGroup>
 
   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
     <DefineConstants>$(DefineConstants);LINUX</DefineConstants>
