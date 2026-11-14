@@ -16,7 +16,6 @@ public sealed class SingleInstanceGuard : IDisposable
     private readonly Mutex _mutex;
     private readonly string _pipeName;
     private readonly bool _isFirstInstance;
-    private readonly CancellationTokenSource? _listenerCts;
     private readonly Thread? _listenerThread;
     private volatile bool _disposed;
 
@@ -55,7 +54,6 @@ public sealed class SingleInstanceGuard : IDisposable
 
         if (_isFirstInstance)
         {
-            _listenerCts = new CancellationTokenSource();
             _listenerThread = new Thread(ListenForSecondInstances)
             {
                 IsBackground = true,
@@ -103,8 +101,6 @@ public sealed class SingleInstanceGuard : IDisposable
 
     private void ListenForSecondInstances()
     {
-        var ct = _listenerCts!.Token;
-
         // One server instance for the guard's lifetime, disconnected between
         // connections rather than disposed. On Unix, named pipes are domain
         // sockets: a client connecting while a previous message is still being
@@ -125,7 +121,8 @@ public sealed class SingleInstanceGuard : IDisposable
             {
                 try
                 {
-                    server.WaitForConnectionAsync(ct).GetAwaiter().GetResult();
+                    // Blocks this thread, not the thread pool; on Windows the async form cannot accept a client until a pool thread is free.
+                    server.WaitForConnection();
 
                     if (_disposed) break;
 
@@ -142,10 +139,6 @@ public sealed class SingleInstanceGuard : IDisposable
                             SecondInstanceLaunched?.Invoke(args);
                         }
                     }
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
                 }
                 catch (Exception ex)
                 {
@@ -184,9 +177,7 @@ public sealed class SingleInstanceGuard : IDisposable
         if (_disposed) return;
         _disposed = true;
 
-        _listenerCts?.Cancel();
-
-        // Unblock WaitForConnectionAsync by creating a brief client connection
+        // Unblock WaitForConnection by creating a brief client connection
         if (_isFirstInstance)
         {
             try
@@ -201,7 +192,6 @@ public sealed class SingleInstanceGuard : IDisposable
         }
 
         _listenerThread?.Join(timeout: TimeSpan.FromSeconds(3));
-        _listenerCts?.Dispose();
 
         if (_isFirstInstance)
         {
