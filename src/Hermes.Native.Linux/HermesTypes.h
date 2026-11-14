@@ -3,6 +3,7 @@
 #define HERMES_TYPES_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 // Callback function pointer types
@@ -79,7 +80,17 @@ typedef struct {
     // Custom URL schemes to register (must be set before WebView creation)
     const char* CustomSchemeNames[16];
 
+    // Secret the top frame's bridge prefixes to every message (HERMES_BRIDGE_TOKEN_LENGTH hex chars)
+    const char* BridgeToken;
+
 } HermesWindowParams;
+
+_Static_assert(offsetof(HermesWindowParams, OnClosing) == 80, "HermesWindowParams no longer matches its managed mirror");
+_Static_assert(offsetof(HermesWindowParams, CustomSchemeNames) == 152, "HermesWindowParams no longer matches its managed mirror");
+_Static_assert(offsetof(HermesWindowParams, BridgeToken) == 280, "HermesWindowParams no longer matches its managed mirror");
+_Static_assert(sizeof(HermesWindowParams) == 288, "HermesWindowParams no longer matches its managed mirror");
+
+#define HERMES_BRIDGE_TOKEN_LENGTH 32
 
 // Dialog button configurations
 typedef enum {

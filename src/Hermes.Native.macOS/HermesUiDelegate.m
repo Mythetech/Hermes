@@ -8,15 +8,15 @@
 
 - (void)userContentController:(WKUserContentController*)userContentController
       didReceiveScriptMessage:(WKScriptMessage*)message {
+    // WebKit exposes these handlers to every frame, cross-origin iframes included.
+    if (!message.frameInfo.isMainFrame) {
+        return;
+    }
+
     if ([message.name isEqualToString:@"hermesinterop"]) {
         if (_hermesWindow && _hermesWindow.onWebMessage) {
             NSString* body = message.body;
             if ([body isKindOfClass:[NSString class]]) {
-                // Iframes keep the WebView's own drop handling, so they may not report or reset drops.
-                if (_hermesWindow.dragDrop && !message.frameInfo.isMainFrame &&
-                    ([body hasPrefix:@"{\"type\":\"hermes-drop\""] || [body hasPrefix:@"{\"type\":\"hermes-drop-"])) {
-                    return;
-                }
                 const char* messageUtf8 = [body UTF8String];
                 _hermesWindow.onWebMessage(messageUtf8);
             }

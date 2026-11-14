@@ -80,6 +80,15 @@
             background: Canvas;
             color: CanvasText;
         }
+
+        .subframe-probe {
+            position: fixed;
+            right: 16px;
+            bottom: 16px;
+            width: 240px;
+            height: 120px;
+            border: 1px solid rgba(128, 128, 128, 0.4);
+        }
     </style>
 </head>
 <body>
@@ -128,6 +137,20 @@
                             window.external.sendMessage(JSON.stringify({ type: 'request-handler', loaded: false }));
                         };
                         img.src = '/hermes-test/pixel.png?probe=' + Date.now();
+                    }
+
+                    // Loads a page from another origin in an iframe; see SubframeProbeServer
+                    if (msg.type === 'subframe-probe') {
+                        var frame = document.createElement('iframe');
+                        frame.className = 'subframe-probe';
+                        frame.src = msg.url;
+                        document.body.appendChild(frame);
+                    }
+                });
+
+                window.addEventListener('message', function(event) {
+                    if (event.data && event.data.type === 'subframe-report') {
+                        window.external.sendMessage(JSON.stringify(event.data));
                     }
                 });
 
