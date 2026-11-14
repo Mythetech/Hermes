@@ -55,6 +55,20 @@ public sealed class DevServerProbeTests
         Assert.True(DevServerProbe.IsListening(new Uri($"http://localhost:{port}"), Timeout));
     }
 
+    [Fact]
+    public void IsListening_TrueForAListener_WhenResolvingTakesLongerThanTheTimeout()
+    {
+        using var listener = Listen(IPAddress.Loopback, out var port);
+
+        var listening = DevServerProbe.IsListening(new Uri($"http://localhost:{port}"), Timeout, _ =>
+        {
+            Thread.Sleep(Timeout + TimeSpan.FromMilliseconds(200));
+            return [IPAddress.Loopback];
+        });
+
+        Assert.True(listening);
+    }
+
     internal static TcpListener Listen(IPAddress address, out int port)
     {
         var listener = new TcpListener(address, 0);
