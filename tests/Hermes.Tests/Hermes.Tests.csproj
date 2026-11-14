@@ -5,6 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- Tests block pool threads while they wait, which on 3 and 4 core runners holds up the pool work other tests wait on. -->
+    <ThreadPoolMinThreads>32</ThreadPoolMinThreads>
   </PropertyGroup>
 
   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
