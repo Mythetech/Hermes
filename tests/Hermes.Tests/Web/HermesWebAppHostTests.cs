@@ -62,8 +62,8 @@ public sealed class HermesWebAppHostTests
         var handlerEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         CancellationToken handlerToken = default;
         var cancelledWhenStopping = (bool?)null;
-        var (app, backend) = Build(builder =>
-            builder.Services.AddSingleton<IHostedService>(new StopProbe(() => cancelledWhenStopping = handlerToken.IsCancellationRequested)));
+        var probe = new StopProbe(() => cancelledWhenStopping = handlerToken.IsCancellationRequested);
+        var (app, backend) = Build(builder => builder.Services.AddSingleton<IHostedService>(probe));
         app.Bridge.HandleAsync("wait", async (CancellationToken token) =>
         {
             handlerToken = token;
@@ -74,6 +74,7 @@ public sealed class HermesWebAppHostTests
         WebAppRunner.Run(app);
         backend.SimulateWebMessage("""{"type":"invoke","id":"1","method":"wait","args":[]}""");
         await handlerEntered.Task.WaitAsync(Wait);
+        await probe.Started.Task.WaitAsync(Wait);
         await app.DisposeAsync();
 
         Assert.True(cancelledWhenStopping);
@@ -84,15 +85,16 @@ public sealed class HermesWebAppHostTests
     {
         RecordingWindowBackend? backend = null;
         var windowDisposedWhenStopping = (bool?)null;
-        var (app, recording) = Build(builder =>
-            builder.Services.AddSingleton<IHostedService>(new StopProbe(async () =>
-            {
-                await Task.Delay(50);
-                windowDisposedWhenStopping = backend!.Recording.MethodWasCalled("Dispose");
-            })));
+        var probe = new StopProbe(async () =>
+        {
+            await Task.Delay(50);
+            windowDisposedWhenStopping = backend!.Recording.MethodWasCalled("Dispose");
+        });
+        var (app, recording) = Build(builder => builder.Services.AddSingleton<IHostedService>(probe));
         backend = recording;
 
         WebAppRunner.Run(app);
+        await probe.Started.Task.WaitAsync(Wait);
         var thread = Environment.CurrentManagedThreadId;
         await app.DisposeAsync().AsTask().WaitAsync(Wait);
 
@@ -156,7 +158,13 @@ public sealed class HermesWebAppHostTests
 
         public StopProbe(Func<Task> onStop) => _onStop = onStop;
 
-        public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            Started.TrySetResult();
+            return Task.CompletedTask;
+        }
 
         public Task StopAsync(CancellationToken cancellationToken) => _onStop();
     }
