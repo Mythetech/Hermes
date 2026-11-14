@@ -11,9 +11,15 @@ namespace Hermes.Tests.Platforms;
 [SupportedOSPlatform("windows")]
 public sealed class WindowsGlobalHotkeysFacadeTests : IDisposable
 {
+    private readonly SystemHotkeyLock _systemHotkeys = new();
+
     public WindowsGlobalHotkeysFacadeTests() => GlobalHotkeys.SetBackendForTesting(null);
 
-    public void Dispose() => GlobalHotkeys.SetBackendForTesting(null);
+    public void Dispose()
+    {
+        GlobalHotkeys.SetBackendForTesting(null);
+        _systemHotkeys.Dispose();
+    }
 
     [Fact]
     public async Task TheFacade_RegistersThroughWindows()
