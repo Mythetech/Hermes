@@ -9,6 +9,11 @@
     <ThreadPoolMinThreads>32</ThreadPoolMinThreads>
   </PropertyGroup>
 
+  <!-- The child builds do not depend on the test host's framework, so one test process runs them instead of one per framework. -->
+  <ItemGroup Condition="'$(TargetFramework)' != '$(TargetFrameworks.Split(`;`)[0])'">
+    <Compile Remove="Web/FrontendTargets/**" />
+  </ItemGroup>
+
   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
     <DefineConstants>$(DefineConstants);LINUX</DefineConstants>
   </PropertyGroup>
