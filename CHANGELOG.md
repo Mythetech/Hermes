@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.8] - 2026-11-22
+
+### Changed
+
+- Windows: a handler registered for `http` or `https` only sees requests for `localhost` on the default port. It used to see every `http` request the WebView made, so an iframe on a loopback server got a 404 for its own page
+- Windows: responses the app serves, `MapRequestHandler` routes included, carry `Access-Control-Allow-Origin` with the app's own origin (`http://localhost`) instead of `*`, so a page from another origin cannot read them
+- Linux and Windows: a second instance built on 1.4.8 cannot forward its arguments to a running first instance built on an earlier version, because the pipe names differ. `NotifyFirstInstance` returns false after its 5 second timeout; the lock itself still holds
+
+### Fixed
+
+- Only the top frame of a window can reach the host. A cross-origin iframe could post messages into Blazor and zoom or drag the window; it can no longer send web messages, start a window drag or report a drop. See [Frames](SECURITY.md#frames)
+  - macOS: script messages from every frame but the main frame are ignored
+  - Linux: the bridge is injected into the top frame only and prefixes each message with a random token created per window. Messages without it are dropped
+  - Windows: a message whose sender does not have the top-level document's origin is dropped, and the bridge script runs in the top frame only
+- macOS: `Invoke` and `BeginInvoke` from another thread could use the native window while it was being released on the UI thread
+- macOS and Linux: an `Invoke` from another thread after the message loop had ended waited forever. It now throws `ObjectDisposedException` once the window is disposed
+- Work that keeps queueing more work, such as a `Task.Yield` loop, no longer keeps the window from painting or handling input until it ends
+- Linux: `Load` and `LoadHtml` called before the window exists, and the `ShowWithLoadingState` page, are shown. The window used to stay blank
+- Linux and Windows: two users running the same single-instance app no longer collide on the pipe that forwards arguments, and another user cannot connect to it
+- Windows: a later instance's arguments are no longer dropped while the first instance's thread pool is busy
+
 ## [1.4.7] - 2026-11-12
 
 ### Changed
