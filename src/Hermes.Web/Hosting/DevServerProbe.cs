@@ -14,13 +14,14 @@ internal static class DevServerProbe
     /// Connects to every resolved address at once, since a dev server may listen on only 127.0.0.1 or ::1, and
     /// runs on the calling thread, so a busy thread pool cannot hold up startup.
     /// </summary>
-    public static bool IsListening(Uri url, TimeSpan timeout)
+    public static bool IsListening(Uri url, TimeSpan timeout) => IsListening(url, timeout, ResolveAddresses);
+
+    internal static bool IsListening(Uri url, TimeSpan timeout, Func<string, IPAddress[]> resolve)
     {
-        var deadline = Stopwatch.GetTimestamp() + (long)(timeout.TotalSeconds * Stopwatch.Frequency);
         var pending = new List<Socket>();
         try
         {
-            foreach (var address in ResolveAddresses(url.Host))
+            foreach (var address in resolve(url.Host))
             {
                 var socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp) { Blocking = false };
                 pending.Add(socket);
@@ -39,6 +40,8 @@ internal static class DevServerProbe
                 }
             }
 
+            // The timeout is for the connection only, so a slow name lookup cannot use it up.
+            var deadline = Stopwatch.GetTimestamp() + (long)(timeout.TotalSeconds * Stopwatch.Frequency);
             return WaitForAnyConnection(pending, deadline);
         }
         catch (SocketException)
@@ -61,16 +64,17 @@ internal static class DevServerProbe
         while (waiting.Count > 0)
         {
             var remaining = Stopwatch.GetElapsedTime(Stopwatch.GetTimestamp(), deadline);
-            if (remaining <= TimeSpan.Zero)
-                return false;
-
             var writable = new List<Socket>(waiting);
             var failed = new List<Socket>(waiting);
-            Socket.Select(null, writable, failed, (int)Math.Min(remaining.TotalMicroseconds, int.MaxValue));
+            Socket.Select(null, writable, failed, (int)Math.Clamp(remaining.TotalMicroseconds, 0, int.MaxValue));
 
             // A failed connect shows up as writable on Unix, with the error in SO_ERROR, and in the error list on Windows.
             if (writable.Exists(socket => !failed.Contains(socket) && socket.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Error) is 0))
                 return true;
+
+            // Checked after the sockets, so a connection made while this thread waited to run still counts.
+            if (remaining <= TimeSpan.Zero)
+                return false;
 
             waiting.RemoveAll(socket => writable.Contains(socket) || failed.Contains(socket));
         }
